@@ -20,17 +20,14 @@ export async function POST(req: NextRequest) {
     const cleanId = safePhone.replace('+', '');
     const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 10)}`;
 
-    const host = process.env.LIVEKIT_URL ? 
-      (process.env.LIVEKIT_URL.startsWith('http') ? process.env.LIVEKIT_URL : `https://${process.env.LIVEKIT_URL.replace(/^[a-zA-Z]+:\/\//, '')}`)
-      : VERIFIED_HOST;
-
-    const apiKey = process.env.LIVEKIT_API_KEY || VERIFIED_KEY;
-    const apiSecret = process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET;
-    const trunkId = process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK;
+    const host = VERIFIED_HOST;
+    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).trim();
+    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).trim();
+    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).trim();
 
     console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host}`);
 
-    const sipClient = new SipClient(host.trim(), apiKey.trim(), apiSecret.trim());
+    const sipClient = new SipClient(host, apiKey, apiSecret);
 
     const metadata = JSON.stringify({
       customer_name: customerName,
