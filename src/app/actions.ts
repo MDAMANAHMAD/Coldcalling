@@ -599,7 +599,7 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
       {
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
-        roomMetadata: metadata,
+        participantMetadata: metadata,
         playRingtone: true,
         hidePhoneNumber: false,
       }
