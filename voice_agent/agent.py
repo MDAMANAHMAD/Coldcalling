@@ -1,12 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sub-Second Turn Detection & Low-Latency Hindi Specialist)
-======================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Natural Hindi Real Estate Specialist)
+==============================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
-- Google Gemini Live Realtime Speech (gemini-2.5-flash-native-audio-latest)
-- Silero VAD Neural Turn Detection (0.25s silence cutoff for instant response)
-- Preemptive Generation for sub-1.5s human turn-taking
-- Female Voice ("Aoede") with relaxed, natural conversational Hindi
+- Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
+- Immediate Spoken Speech Trigger on Handshake
+- Natural Female Voice ("Aoede") with Short 10-12 Word Human Bursts
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -31,12 +30,8 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
-    TurnHandlingOptions,
-    EndpointingOptions,
-    PreemptiveGenerationOptions,
 )
 from livekit.plugins.google import realtime
-from livekit.plugins import silero
 from livekit import rtc
 
 # Load environment variables
@@ -59,7 +54,7 @@ You are on a live phone call with a customer in India.
 
 CRITICAL VOICE & SPEED RULES:
 1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush or speak too fast.
-2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 10 to 15 words (1 short sentence only). This guarantees sub-2-second voice response time.
+2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 10 to 12 words (1 short sentence only). This guarantees instant sub-2-second voice response time.
 3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
 
 CONVERSATION FLOW:
@@ -117,7 +112,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Silero VAD + Preemptive Turn Detection)
+# 3. AGENT ENTRYPOINT (Instant Voice Connection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Real Estate Voice Agent for Room: {ctx.room.name}")
@@ -144,34 +139,20 @@ async def entrypoint(ctx: JobContext):
         api_key=google_api_key
     )
 
-    # Ultra-Fast Silero Voice Activity Detector (0.25s silence threshold)
-    vad_model = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.1
-    )
-
-    # Sub-Second Turn Detection & Preemptive Generation
-    turn_opts = TurnHandlingOptions(
-        endpointing=EndpointingOptions(min_delay=0.25, max_delay=0.5),
-        preemptive_generation=PreemptiveGenerationOptions(enabled=True)
-    )
-
     session = AgentSession(
         llm=model,
-        vad=vad_model,
-        turn_handling=turn_opts
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
     await session.start(room=ctx.room, agent=agent)
 
-    # Initial spoken greeting dispatched with natural pacing
+    # Initial spoken greeting dispatched
     async def delayed_greeting():
         await asyncio.sleep(1.0)
         logger.info("🎙️ [DISPATCHING SPOKEN GREETING]")
         try:
             session.generate_reply(
-                user_input=f"Please greet {customer_name} warmly in relaxed, natural Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
+                user_input=f"Namaste! Please speak immediately to {customer_name} in relaxed, natural Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
             )
         except Exception as e:
             logger.warning(f"Greeting error: {e}")
