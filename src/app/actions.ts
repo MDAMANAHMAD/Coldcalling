@@ -570,13 +570,14 @@ import { SipClient } from 'livekit-server-sdk';
 
 export async function triggerLiveKitOutboundCall(phoneNumber: string, customerName: string, company: string = ""): Promise<{ success: boolean; message: string; output?: string }> {
   try {
-    const livekitUrl = process.env.LIVEKIT_URL || 'wss://cold-calling-j7qhnkas.livekit.cloud';
-    const apiKey = process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP';
-    const apiSecret = process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
-    const trunkId = process.env.SIP_OUTBOUND_TRUNK_ID || 'ST_TEGVYguUkfe9';
-
-    // Convert ws/wss to http/https for LiveKit REST/Twirp API
-    const httpUrl = livekitUrl.replace('wss://', 'https://').replace('ws://', 'http://');
+    let rawUrl = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').trim().replace(/['"]/g, '');
+    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('ws://') && !rawUrl.startsWith('wss://')) {
+      rawUrl = `https://${rawUrl}`;
+    }
+    const httpUrl = rawUrl.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+    const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').trim().replace(/['"]/g, '');
+    const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').trim().replace(/['"]/g, '');
+    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || 'ST_TEGVYguUkfe9').trim().replace(/['"]/g, '');
 
     const sipClient = new SipClient(httpUrl, apiKey, apiSecret);
 
