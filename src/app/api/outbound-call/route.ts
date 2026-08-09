@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: `Outbound call successfully ringing ${safePhone}!`,
-      participantId: participant.participantId || participant.sid,
+      participantId: participant.participantId,
       roomName: uniqueRoom
     });
   } catch (error: any) {
