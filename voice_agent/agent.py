@@ -4,7 +4,6 @@ LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Hindi Real Estate Spec
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live (gemini-2.5-flash-native-audio-latest Realtime Speech)
-- Synchronous Event Listener with Background Speech Dispatch
 - Female Voice ("Aoede") with Two-Stage Presentation & Crisp Q&A
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
@@ -53,7 +52,7 @@ You are Priya Sharma (प्रिया शर्मा), a polite, charming, a
 You are on a live outbound phone call with a client in India.
 
 CRITICAL VOICE & SPEED GUIDELINES:
-1. ULTRA-CRISP BURSTS: Speak in short, snappy, conversational bursts (1 to 2 sentences only, under 15 words). Never speak long monologues.
+1. ULTRA-CRISP BURSTS: Speak in short, snappy, conversational bursts (1 to 2 sentences only, under 15 words).
 2. LANGUAGE: Natural, polite Hindi/Hinglish (e.g. "Namaste Aman ji!", "Main Priya baat kar rahi hoon Skyline Realty se").
 3. PERMISSION FIRST: In the beginning, ask if you can share details of the new luxury 2BHK/3BHK flats.
 4. ON PERMISSION: Give a quick, attractive 2-sentence highlight:
@@ -109,7 +108,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Clean Sync Handler & Immediate Speech)
+# 3. AGENT ENTRYPOINT (Instant Voice Connection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Hindi Real Estate Voice Agent for Room: {ctx.room.name}")
@@ -125,11 +124,15 @@ async def entrypoint(ctx: JobContext):
             logger.warning(f"Metadata error: {err}")
 
     # Google Gemini Live Realtime Model (Tier-1 Paid)
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        logger.error("GOOGLE_API_KEY environment variable is not set!")
+
     model = realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-latest",
         voice="Aoede",
         temperature=0.6,
-        api_key=os.getenv("GOOGLE_API_KEY")
+        api_key=google_api_key
     )
 
     session = AgentSession(
@@ -145,26 +148,25 @@ async def entrypoint(ctx: JobContext):
         f"Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
     )
 
-    # Synchronous track listener
+    # Trigger spoken greeting
+    async def speak_greeting():
+        await asyncio.sleep(0.5)
+        try:
+            logger.info("🎙️ [DISPATCHING SPOKEN GREETING]")
+            session.generate_reply(instructions=initial_instructions)
+        except Exception as e:
+            logger.warning(f"Greeting error: {e}")
+
+    # 1. Listen for new audio track subscriptions
     def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
-            logger.info(f"🎙️ [AUDIO STREAM READY] -> Speaking greeting now!")
-            async def speak():
-                await asyncio.sleep(0.3)
-                try:
-                    session.generate_reply(instructions=initial_instructions)
-                except Exception as e:
-                    logger.warning(f"Greeting error: {e}")
-            asyncio.create_task(speak())
+            logger.info(f"🎙️ [AUDIO STREAM DETECTED FOR {participant.identity}]")
+            asyncio.create_task(speak_greeting())
 
     ctx.room.on("track_subscribed", on_track_subscribed)
 
-    # Backup instant trigger
-    await asyncio.sleep(1.0)
-    try:
-        session.generate_reply(instructions=initial_instructions)
-    except Exception as e:
-        pass
+    # 2. Trigger greeting immediately
+    asyncio.create_task(speak_greeting())
 
 
 # ==============================================================================
