@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Zero-Buffer Micro-Burst Hindi Specialist)
-====================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Natural Hindi Real Estate Specialist)
+==============================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
-- Strict Micro-Burst Rule (Under 10 words per response) to eliminate telephony buffer lag
-- Warm Natural Female Voice ("Aoede")
+- Immediate Speech Trigger on Connection (Zero-Delay Audio Track Publishing)
+- Strict Micro-Burst Responses (8-10 words) for zero lag
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -52,20 +52,16 @@ HINDI_REAL_ESTATE_PROMPT = """
 You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
 You are on a live mobile phone call.
 
-CRITICAL VOICE & SPEED RULE (ZERO TELEPHONY LAG):
-1. MICRO-BURSTS ONLY: Never speak more than 8 to 10 words in a single reply (1 short sentence only). Long sentences cause telephone audio lag.
+CRITICAL VOICE & SPEED RULES:
+1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only).
 2. NATURAL & WARM: Speak naturally in polite Hindi with gentle female tone.
 3. CONVERSATIONAL TURNS: Answer briefly, then let the customer speak.
 
-EXACT CONVERSATIONAL RESPONSES (Under 10 words):
+RESPONSES:
 - Greeting: "Namaste Aman ji! Main Priya baat kar rahi hoon Skyline Realty se."
-- When they say Haan / Hello: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
-- Pricing question: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
-- Location question: "Project metro station se sirf do minute door hai."
-- Booking confirmation: "Bahut badiya! Main aapka VIP visit schedule kar deti hoon."
-
-TOOL USAGE:
-As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
+- When they agree: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
+- Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
+- Location: "Project metro station se sirf do minute door hai."
 """
 
 
@@ -90,7 +86,6 @@ class HindiRealEstateAgent(Agent):
         logger.info(f"👤 Client Name     : {customer_name}")
         logger.info(f"📅 Preferred Day   : {preferred_day}")
         logger.info(f"🏢 Flat Type       : {flat_type}")
-        logger.info(f"📝 Notes           : {notes}")
         logger.info("=" * 60)
 
         visit_record = {
@@ -113,10 +108,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Instant Voice Connection)
+# 3. AGENT ENTRYPOINT (Immediate Audio Track Publication)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Micro-Burst Real Estate Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -147,18 +142,14 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(room=ctx.room, agent=agent)
 
-    # Initial short greeting (Under 10 words)
-    async def delayed_greeting():
-        await asyncio.sleep(0.8)
-        logger.info("🎙️ [DISPATCHING SHORT GREETING]")
-        try:
-            session.generate_reply(
-                user_input=f"Speak in under 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
-            )
-        except Exception as e:
-            logger.warning(f"Greeting error: {e}")
-
-    asyncio.create_task(delayed_greeting())
+    # Immediately trigger speech so audio track is published instantly
+    logger.info("🎙️ [DISPATCHING IMMEDIATE SPOKEN GREETING]")
+    try:
+        session.generate_reply(
+            user_input=f"Speak in 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
+        )
+    except Exception as e:
+        logger.warning(f"Greeting error: {e}")
 
 
 # ==============================================================================
