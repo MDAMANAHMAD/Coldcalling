@@ -1,11 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Natural Human Pacing & Low-Latency Hindi Specialist)
-================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Sub-Second Turn Detection & Low-Latency Hindi Specialist)
+======================================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
-- Google Gemini Live (gemini-2.5-flash-native-audio-latest Realtime Speech)
-- Natural Human Conversational Pacing & Warm Female Voice ("Aoede")
-- Ultra-Fast Turn-Taking (Short 10-15 Word Sentences)
+- Google Gemini Live Realtime Speech (gemini-2.5-flash-native-audio-latest)
+- Silero VAD Neural Turn Detection (0.25s silence cutoff for instant response)
+- Preemptive Generation for sub-1.5s human turn-taking
+- Female Voice ("Aoede") with relaxed, natural conversational Hindi
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -30,8 +31,12 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
+    TurnHandlingOptions,
+    EndpointingOptions,
+    PreemptiveGenerationOptions,
 )
 from livekit.plugins.google import realtime
+from livekit.plugins import silero
 from livekit import rtc
 
 # Load environment variables
@@ -49,7 +54,7 @@ logger = logging.getLogger("hindi_real_estate_agent")
 # 1. NATURAL HUMAN HINDI VOICE PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a friendly, polite, and charming female Property Advisor at Skyline Luxury Realty.
+You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and charming female Property Advisor at Skyline Luxury Realty.
 You are on a live phone call with a customer in India.
 
 CRITICAL VOICE & SPEED RULES:
@@ -112,7 +117,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Instant Voice Connection)
+# 3. AGENT ENTRYPOINT (Silero VAD + Preemptive Turn Detection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Real Estate Voice Agent for Room: {ctx.room.name}")
@@ -139,8 +144,22 @@ async def entrypoint(ctx: JobContext):
         api_key=google_api_key
     )
 
+    # Ultra-Fast Silero Voice Activity Detector (0.25s silence threshold)
+    vad_model = silero.VAD.load(
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
+    )
+
+    # Sub-Second Turn Detection & Preemptive Generation
+    turn_opts = TurnHandlingOptions(
+        endpointing=EndpointingOptions(min_delay=0.25, max_delay=0.5),
+        preemptive_generation=PreemptiveGenerationOptions(enabled=True)
+    )
+
     session = AgentSession(
         llm=model,
+        vad=vad_model,
+        turn_handling=turn_opts
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
