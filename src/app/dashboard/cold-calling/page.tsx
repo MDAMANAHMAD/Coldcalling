@@ -94,8 +94,21 @@ export default function ColdCallingDashboard() {
     setLivekitDialing(true);
     setLivekitResult(null);
     try {
-      const res = await triggerLiveKitOutboundCall(livekitTargetPhone, livekitTargetName, "Aman Corp");
-      setLivekitResult(res);
+      const response = await fetch('/api/outbound-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: livekitTargetPhone,
+          customerName: livekitTargetName,
+          company: "Aman Corp"
+        })
+      });
+      const data = await response.json();
+      setLivekitResult({
+        success: data.success,
+        message: data.message || (data.success ? 'Call dispatched successfully!' : 'Call failed.'),
+        output: data.roomName ? `Room: ${data.roomName}` : data.error
+      });
       await loadDashboardData();
     } catch (e: any) {
       setLivekitResult({ success: false, message: e.message || "Failed to trigger call." });
