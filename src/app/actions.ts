@@ -570,11 +570,14 @@ import { SipClient } from 'livekit-server-sdk';
 
 export async function triggerLiveKitOutboundCall(phoneNumber: string, customerName: string, company: string = ""): Promise<{ success: boolean; message: string; output?: string }> {
   try {
-    let rawUrl = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').trim().replace(/['"]/g, '');
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('ws://') && !rawUrl.startsWith('wss://')) {
-      rawUrl = `https://${rawUrl}`;
-    }
-    const httpUrl = rawUrl.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+    const rawEnvUrl = process.env.LIVEKIT_URL || 'cold-calling-j7qhnkas.livekit.cloud';
+    const cleanHost = rawEnvUrl
+      .replace(/^[a-zA-Z]+:\/\//, '') // strip any protocol (wss://, ws://, https://, http://)
+      .replace(/\/+$/, '')            // strip trailing slashes
+      .trim()
+      .replace(/['"]/g, '');
+
+    const httpUrl = `https://${cleanHost || 'cold-calling-j7qhnkas.livekit.cloud'}`;
     const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').trim().replace(/['"]/g, '');
     const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').trim().replace(/['"]/g, '');
     const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || 'ST_TEGVYguUkfe9').trim().replace(/['"]/g, '');
