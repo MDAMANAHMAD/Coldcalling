@@ -1,0 +1,19 @@
+services:
+  - type: worker
+    name: livekit-voice-agent-worker
+    env: python
+    region: singapore # Closest low-latency region to India (or oregon/frankfurt)
+    plan: starter # or free web service
+    buildCommand: pip install -r voice_agent/requirements.txt
+    startCommand: python voice_agent/agent.py start
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: SIP_OUTBOUND_TRUNK_ID
+        sync: false

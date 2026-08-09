@@ -1,0 +1,13 @@
+# LiveKit Agent Core & Server APIs
+livekit-agents>=1.0.0
+livekit-api>=1.0.0
+
+# Google Gemini Realtime (Speech-to-Speech) Plugin
+livekit-plugins-google>=1.0.0
+
+# Silero Voice Activity Detection (VAD) for fast barge-in
+livekit-plugins-silero>=1.0.0
+
+# Environment and Data Validation
+python-dotenv>=1.0.1
+pydantic>=2.7.0
