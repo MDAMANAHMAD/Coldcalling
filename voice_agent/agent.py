@@ -4,6 +4,7 @@ LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Hindi Real Estate Spec
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live (gemini-2.5-flash-native-audio-latest Realtime Speech)
+- Immediate Spoken Audio Trigger (user_input dispatch)
 - Female Voice ("Aoede") with Two-Stage Presentation & Crisp Q&A
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
@@ -54,7 +55,7 @@ You are on a live outbound phone call with a client in India.
 CRITICAL VOICE & SPEED GUIDELINES:
 1. ULTRA-CRISP BURSTS: Speak in short, snappy, conversational bursts (1 to 2 sentences only, under 15 words).
 2. LANGUAGE: Natural, polite Hindi/Hinglish (e.g. "Namaste Aman ji!", "Main Priya baat kar rahi hoon Skyline Realty se").
-3. PERMISSION FIRST: In the beginning, ask if you can share details of the new luxury 2BHK/3BHK flats.
+3. PERMISSION FIRST: In the beginning, greet the customer warmly and ask if you can share details of the new luxury 2BHK/3BHK flats.
 4. ON PERMISSION: Give a quick, attractive 2-sentence highlight:
    - "Skyline Royal Palms metro ke paas hai. 2 BHK ₹85 Lakhs aur 3 BHK ₹1.25 Cr se shuru hai with rooftop pool, zero brokerage aur 10% discount! Kya aap sample flat dekhna chahenge?"
 5. Q&A: Answer any question directly in 1 short sentence and invite for a free VIP site visit.
@@ -142,31 +143,26 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(room=ctx.room, agent=agent)
 
-    # Initial spoken greeting
-    initial_instructions = (
-        f"Immediately greet {customer_name} in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. "
-        f"Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
+    # Initial spoken greeting dispatched as user_input so Gemini speaks out loud immediately
+    greeting_prompt = (
+        f"GREETING TRIGGER: Greet {customer_name} immediately in warm Hindi: "
+        f"'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. "
+        f"Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein poori details bata doon?'"
     )
 
     # Trigger spoken greeting
-    async def speak_greeting():
-        await asyncio.sleep(0.5)
-        try:
-            logger.info("🎙️ [DISPATCHING SPOKEN GREETING]")
-            session.generate_reply(instructions=initial_instructions)
-        except Exception as e:
-            logger.warning(f"Greeting error: {e}")
+    logger.info("🎙️ [DISPATCHING IMMEDIATE SPOKEN GREETING]")
+    try:
+        session.generate_reply(user_input=greeting_prompt)
+    except Exception as e:
+        logger.warning(f"Greeting error: {e}")
 
-    # 1. Listen for new audio track subscriptions
+    # Listen for audio track
     def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
-            logger.info(f"🎙️ [AUDIO STREAM DETECTED FOR {participant.identity}]")
-            asyncio.create_task(speak_greeting())
+            logger.info(f"🎙️ [AUDIO STREAM ACTIVE FOR {participant.identity}]")
 
     ctx.room.on("track_subscribed", on_track_subscribed)
-
-    # 2. Trigger greeting immediately
-    asyncio.create_task(speak_greeting())
 
 
 # ==============================================================================
