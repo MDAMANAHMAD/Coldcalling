@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Ultra-Fast Natural Spoken Hindi Specialist)
-======================================================================================
-Optimized with:
-- Natural Human Conversational Pace (0.92x speaking rate with human pauses)
-- Telephony-Class Audio Enhancement for Crystal-Clear Mobile Sound
-- Sub-2-Second First-Byte Speech Latency (Chunked Streaming)
-- Voice: Google Neural2 Indian Female (hi-IN-Neural2-A)
+LiveKit Voice AI Cold Calling Agent Worker (Natural Human Pacing & Low-Latency Hindi Specialist)
+================================================================================================
+Engineered with:
+- LiveKit Agent Framework v1.6+ (Agent & AgentSession)
+- Google Gemini Live (gemini-2.5-flash-native-audio-latest Realtime Speech)
+- Natural Human Conversational Pacing & Warm Female Voice ("Aoede")
+- Ultra-Fast Turn-Taking (Short 10-15 Word Sentences)
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -24,14 +24,15 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from livekit.agents import (
+    Agent,
     AgentSession,
     JobContext,
     WorkerOptions,
     cli,
-    llm,
+    function_tool,
 )
-from livekit.agents.pipeline import VoicePipelineAgent
-from livekit.plugins import google, silero
+from livekit.plugins.google import realtime
+from livekit import rtc
 
 # Load environment variables
 load_dotenv()
@@ -48,27 +49,73 @@ logger = logging.getLogger("hindi_real_estate_agent")
 # 1. NATURAL HUMAN HINDI VOICE PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and charming female Property Advisor at Skyline Luxury Realty.
-You are talking to a customer on a live mobile phone call.
+You are Priya Sharma (प्रिया शर्मा), a friendly, polite, and charming female Property Advisor at Skyline Luxury Realty.
+You are on a live phone call with a customer in India.
 
 CRITICAL VOICE & SPEED RULES:
-1. NATURAL HUMAN PACE: Speak warmly, politely, and casually like a real person talking on the phone. Use natural conversational expressions (e.g. "Ji bilkul", "Achha suniye", "Haanji").
-2. SHORT CRISP REPLIES: Keep each answer strictly between 10 to 15 words (1 short sentence). This ensures speech starts immediately in under 1 second.
-3. MODULATION & PAUSES: Speak with gentle modulation, not like a robot. Never read long paragraphs.
+1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush or speak too fast.
+2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 10 to 15 words (1 short sentence only). This guarantees sub-2-second voice response time.
+3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
 
 CONVERSATION FLOW:
-- Greeting: "Namaste Aman ji! Main Priya baat kar rahi hoon Skyline Realty se. Kya main aapse 1 minute baat kar sakti hoon?"
-- When they agree / say Haan: "Hamare naye project Skyline Royal Palms mein 2BHK 85 Lakhs se shuru hai metro ke paas. Kya aap sample flat dekhna chahenge?"
-- Pricing: "Ji, sirf 10% down payment par easy EMI available hai. Kya main aapke liye free VIP site visit arrange kar doon?"
-- Location: "Project metro station se sirf 2 minute ki doori par hai."
+- Greeting: Greet the customer warmly and ask if you can share details of the new luxury 2BHK/3BHK flats.
+- When they agree / say Haan: "Skyline Royal Palms metro ke paas hai, 2BHK 85 Lakhs se shuru hai with rooftop pool. Kya aap sample flat dekhna chahenge?"
+- Pricing: "Ji, sirf 10% down payment par easy EMI available hai. Kya main aapke liye VIP site visit arrange kar doon?"
+- Location: "Project metro station aur highway se sirf 2 minute ki doori par hai."
+
+TOOL USAGE:
+As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
 """
 
 
 # ==============================================================================
-# 2. AGENT ENTRYPOINT (Optimized Streaming Pipeline)
+# 2. AGENT CLASS & FUNCTION TOOLS
+# ==============================================================================
+class HindiRealEstateAgent(Agent):
+    def __init__(self, customer_name: str = "Aman ji"):
+        instructions = f"{HINDI_REAL_ESTATE_PROMPT}\n\nAap abhi {customer_name} se call par baat kar rahi hain."
+        super().__init__(instructions=instructions)
+
+    @function_tool(description="Schedule a free VIP property site visit for the client.")
+    async def schedule_site_visit(
+        self,
+        customer_name: str,
+        preferred_day: str,
+        flat_type: str = "2BHK / 3BHK",
+        notes: str = ""
+    ) -> str:
+        logger.info("=" * 60)
+        logger.info("🏠 [HINDI REAL ESTATE SITE VISIT BOOKED]")
+        logger.info(f"👤 Client Name     : {customer_name}")
+        logger.info(f"📅 Preferred Day   : {preferred_day}")
+        logger.info(f"🏢 Flat Type       : {flat_type}")
+        logger.info(f"📝 Notes           : {notes}")
+        logger.info("=" * 60)
+
+        visit_record = {
+            "customer_name": customer_name,
+            "preferred_day": preferred_day,
+            "flat_type": flat_type,
+            "notes": notes,
+            "timestamp": datetime.utcnow().isoformat(),
+            "status": "site_visit_confirmed"
+        }
+
+        try:
+            os.makedirs("bookings", exist_ok=True)
+            with open("bookings/property_visits.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(visit_record) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to save visit record: {e}")
+
+        return f"Bahut badiya! Maine {customer_name} ke liye {preferred_day} ko VIP site visit confirm kar diya hai. Hamari team location aur brochure WhatsApp kar degi."
+
+
+# ==============================================================================
+# 3. AGENT ENTRYPOINT (Instant Voice Connection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Natural Human Real Estate Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Real Estate Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -80,74 +127,41 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
+    # Google Gemini Live Realtime Model (Tier-1 Paid)
     google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        logger.error("GOOGLE_API_KEY environment variable is not set!")
 
-    # Low-latency Indian Hindi / Hinglish Speech-to-Text
-    stt = google.STT(
-        languages=["hi-IN", "en-IN"],
+    model = realtime.RealtimeModel(
+        model="gemini-2.5-flash-native-audio-latest",
+        voice="Aoede",
+        temperature=0.4,
         api_key=google_api_key
     )
 
-    # Ultra-Fast Gemini 2.5 Flash Streaming LLM
-    gemini_llm = google.LLM(
-        model="gemini-2.5-flash",
-        api_key=google_api_key,
-        temperature=0.5
+    session = AgentSession(
+        llm=model,
     )
+    agent = HindiRealEstateAgent(customer_name=customer_name)
 
-    # Natural Human-Like Hindi Female TTS (Telephony Optimized, 0.92x Speed)
-    tts = google.TTS(
-        language="hi-IN",
-        gender="female",
-        voice_name="hi-IN-Neural2-A",
-        speaking_rate=0.92,                          # Natural, warm, relaxed human pace (not fast)
-        pitch=0.4,                                   # Warm melodic female tone
-        effects_profile_id="telephony-class-application", # Crystal clear on mobile phone speakers
-        use_streaming=True,                          # Instant word-by-word streaming
-        api_key=google_api_key
-    )
+    await session.start(room=ctx.room, agent=agent)
 
-    # Silero VAD tuned for ultra-fast response (<200ms silence threshold)
-    vad = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.1
-    )
+    # Initial spoken greeting dispatched with natural pacing
+    async def delayed_greeting():
+        await asyncio.sleep(1.0)
+        logger.info("🎙️ [DISPATCHING SPOKEN GREETING]")
+        try:
+            session.generate_reply(
+                user_input=f"Please greet {customer_name} warmly in relaxed, natural Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
+            )
+        except Exception as e:
+            logger.warning(f"Greeting error: {e}")
 
-    initial_prompt = f"{HINDI_REAL_ESTATE_PROMPT}\n\nAap abhi {customer_name} se call par baat kar rahi hain."
-
-    # Build Voice Pipeline Agent
-    pipeline_agent = VoicePipelineAgent(
-        vad=vad,
-        stt=stt,
-        llm=gemini_llm,
-        tts=tts,
-        chat_ctx=llm.ChatContext().append(
-            role="system",
-            text=initial_prompt
-        ),
-        allow_interruptions=True,
-        interrupt_min_words=1,
-        min_endpointing_delay=0.15                   # Replies immediately (150ms) when you stop talking
-    )
-
-    pipeline_agent.start(ctx.room)
-
-    # Natural Spoken Greeting
-    greeting_text = (
-        f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
-        f"Kya main aapko hamare naye luxury flats ke baare mein bata doon?"
-    )
-
-    await asyncio.sleep(0.8)
-    logger.info("🎙️ [SPEAKING NATURAL HUMAN GREETING]")
-    try:
-        await pipeline_agent.say(greeting_text, allow_interruptions=True)
-    except Exception as e:
-        logger.warning(f"Greeting dispatch error: {e}")
+    asyncio.create_task(delayed_greeting())
 
 
 # ==============================================================================
-# 3. CLI RUNNER
+# 4. CLI RUNNER
 # ==============================================================================
 if __name__ == "__main__":
     cli.run_app(
