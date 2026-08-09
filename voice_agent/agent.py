@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Natural Hindi Real Estate Specialist)
-==============================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Zero-Buffer Micro-Burst Hindi Specialist)
+====================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
-- Immediate Spoken Speech Trigger on Handshake
-- Natural Female Voice ("Aoede") with Short 10-12 Word Human Bursts
+- Strict Micro-Burst Rule (Under 10 words per response) to eliminate telephony buffer lag
+- Warm Natural Female Voice ("Aoede")
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -46,22 +46,23 @@ logger = logging.getLogger("hindi_real_estate_agent")
 
 
 # ==============================================================================
-# 1. NATURAL HUMAN HINDI VOICE PERSONA
+# 1. ZERO-BUFFER MICRO-BURST HINDI VOICE PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and charming female Property Advisor at Skyline Luxury Realty.
-You are on a live phone call with a customer in India.
+You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
+You are on a live mobile phone call.
 
-CRITICAL VOICE & SPEED RULES:
-1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush or speak too fast.
-2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 10 to 12 words (1 short sentence only). This guarantees instant sub-2-second voice response time.
-3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
+CRITICAL VOICE & SPEED RULE (ZERO TELEPHONY LAG):
+1. MICRO-BURSTS ONLY: Never speak more than 8 to 10 words in a single reply (1 short sentence only). Long sentences cause telephone audio lag.
+2. NATURAL & WARM: Speak naturally in polite Hindi with gentle female tone.
+3. CONVERSATIONAL TURNS: Answer briefly, then let the customer speak.
 
-CONVERSATION FLOW:
-- Greeting: Greet the customer warmly and ask if you can share details of the new luxury 2BHK/3BHK flats.
-- When they agree / say Haan: "Skyline Royal Palms metro ke paas hai, 2BHK 85 Lakhs se shuru hai with rooftop pool. Kya aap sample flat dekhna chahenge?"
-- Pricing: "Ji, sirf 10% down payment par easy EMI available hai. Kya main aapke liye VIP site visit arrange kar doon?"
-- Location: "Project metro station aur highway se sirf 2 minute ki doori par hai."
+EXACT CONVERSATIONAL RESPONSES (Under 10 words):
+- Greeting: "Namaste Aman ji! Main Priya baat kar rahi hoon Skyline Realty se."
+- When they say Haan / Hello: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
+- Pricing question: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
+- Location question: "Project metro station se sirf do minute door hai."
+- Booking confirmation: "Bahut badiya! Main aapka VIP visit schedule kar deti hoon."
 
 TOOL USAGE:
 As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
@@ -108,14 +109,14 @@ class HindiRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
-        return f"Bahut badiya! Maine {customer_name} ke liye {preferred_day} ko VIP site visit confirm kar diya hai. Hamari team location aur brochure WhatsApp kar degi."
+        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."
 
 
 # ==============================================================================
 # 3. AGENT ENTRYPOINT (Instant Voice Connection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Real Estate Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Micro-Burst Real Estate Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -135,7 +136,7 @@ async def entrypoint(ctx: JobContext):
     model = realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-latest",
         voice="Aoede",
-        temperature=0.4,
+        temperature=0.3,
         api_key=google_api_key
     )
 
@@ -146,13 +147,13 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(room=ctx.room, agent=agent)
 
-    # Initial spoken greeting dispatched
+    # Initial short greeting (Under 10 words)
     async def delayed_greeting():
-        await asyncio.sleep(1.0)
-        logger.info("🎙️ [DISPATCHING SPOKEN GREETING]")
+        await asyncio.sleep(0.8)
+        logger.info("🎙️ [DISPATCHING SHORT GREETING]")
         try:
             session.generate_reply(
-                user_input=f"Namaste! Please speak immediately to {customer_name} in relaxed, natural Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Luxury Realty se. Kya main aapko hamare naye 2BHK aur 3BHK luxury flats ke baare mein details bata doon?'"
+                user_input=f"Speak in under 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
             )
         except Exception as e:
             logger.warning(f"Greeting error: {e}")
