@@ -565,38 +565,60 @@ export async function triggerAIOutboundCampaign(leadIds: string[], agentPrompt: 
   return { dispatchedCount };
 }
 
-// --- LIVEKIT + GEMINI LIVE + VOBIZ AUTOMATIC OUTBOUND CALL ACTION ---
-import { exec } from 'child_process';
-import path from 'path';
+// --- LIVEKIT + GEMINI LIVE + VOBIZ AUTOMATIC OUTBOUND CALL ACTION (100% NATIVE NODE.JS) ---
+import { SipClient } from 'livekit-server-sdk';
 
 export async function triggerLiveKitOutboundCall(phoneNumber: string, customerName: string, company: string = ""): Promise<{ success: boolean; message: string; output?: string }> {
-  return new Promise((resolve) => {
-    const scriptPath = path.join(process.cwd(), 'voice_agent', 'outbound_dialer.py');
+  try {
+    const livekitUrl = process.env.LIVEKIT_URL || 'wss://cold-calling-j7qhnkas.livekit.cloud';
+    const apiKey = process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP';
+    const apiSecret = process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
+    const trunkId = process.env.SIP_OUTBOUND_TRUNK_ID || 'ST_TEGVYguUkfe9';
+
+    // Convert ws/wss to http/https for LiveKit REST/Twirp API
+    const httpUrl = livekitUrl.replace('wss://', 'https://').replace('ws://', 'http://');
+
+    const sipClient = new SipClient(httpUrl, apiKey, apiSecret);
+
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
-    const safeName = customerName.replace(/"/g, '');
-    const safeCompany = company.replace(/"/g, '');
+    const cleanId = safePhone.replace('+', '');
+    const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Math.random().toString(36).substring(2, 10)}`;
 
-    const command = `python "${scriptPath}" --phone "${safePhone}" --name "${safeName}" --company "${safeCompany}"`;
-
-    console.log(`[LIVEKIT OUTBOUND DIALER TRIGGER]: Executing ${command}`);
-
-    exec(command, { cwd: path.join(process.cwd(), 'voice_agent') }, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`[LIVEKIT DIALER ERROR]:`, error, stderr);
-        resolve({
-          success: false,
-          message: error.message || 'Failed to execute dialer script.',
-          output: stderr || stdout
-        });
-      } else {
-        console.log(`[LIVEKIT DIALER SUCCESS]:`, stdout);
-        resolve({
-          success: true,
-          message: `Outbound SIP call successfully dispatched to ${safePhone}!`,
-          output: stdout
-        });
-      }
+    const metadata = JSON.stringify({
+      customer_name: customerName,
+      phone_number: safePhone,
+      company: company || 'Client'
     });
-  });
+
+    console.log(`[LIVEKIT NODE SDK TRIGGER]: Dialing ${safePhone} in room ${uniqueRoom} with Trunk ${trunkId}`);
+
+    const participant = await sipClient.createSipParticipant(
+      trunkId,
+      safePhone,
+      uniqueRoom,
+      {
+        participantIdentity: `sip-${cleanId}`,
+        participantName: customerName,
+        roomMetadata: metadata,
+        playRingtone: true,
+        hidePhoneNumber: false,
+      }
+    );
+
+    console.log(`[LIVEKIT NODE SDK SUCCESS]: Participant created:`, participant);
+
+    return {
+      success: true,
+      message: `Outbound SIP call successfully dispatched to ${safePhone}! Phone is ringing now.`,
+      output: `Room: ${uniqueRoom}`
+    };
+  } catch (error: any) {
+    console.error(`[LIVEKIT NODE SDK ERROR]:`, error);
+    return {
+      success: false,
+      message: error?.message || 'Failed to dispatch outbound SIP call via LiveKit.',
+      output: error?.stack || String(error)
+    };
+  }
 }
 
