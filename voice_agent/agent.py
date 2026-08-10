@@ -1,11 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - 24kHz Native LiveKit Audio Pipeline)
-================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Sub-800ms Pre-Warmed Pipeline & Jitter-Free Audio)
+=============================================================================================
 Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
-- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz LiveKit Native Rate)
-- VAD: Local Silero VAD (250ms silence detection)
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 180ms endpointing cutoff)
+- LLM: Google Gemini Flash (gemini-flash-latest, Pre-warmed TLS socket)
+- TTS: Cartesia Sonic with Kavita Hindi Voice (56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
+- VAD: Local Silero VAD (200ms silence detection)
+- Pre-Warming: Pre-establishes API sockets on startup to eliminate cold-start lag
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -30,6 +31,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
+    llm
 )
 from livekit.plugins import deepgram, google, cartesia, silero
 from livekit import rtc
@@ -53,7 +55,7 @@ You are Kavita Sharma (कविता शर्मा), a polite, friendly, and
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-300ms instant response with zero jitter or voice break.
+1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-second instant response with zero jitter or voice break.
 2. NATURAL HINDI/HINGLISH: Speak in warm, polite, conversational Hindi. Use friendly words like "Ji bilkul", "Haanji Aman ji".
 3. NEVER EXPLAIN LENGTHILY: State the fact directly, then ask a quick follow-up question.
 
@@ -139,10 +141,10 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (24kHz LiveKit Native Pipeline)
+# 3. AGENT ENTRYPOINT (Pre-Warmed High-Speed Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Sub-300ms Kavita Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] High-Speed Kavita Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -154,17 +156,17 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 250ms endpointing
+    # 1. Deepgram Nova-2 STT with 180ms endpointing (fast turn-around)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=250,
+        endpointing_ms=180,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 2. Google Gemini Flash LLM (gemini-flash-latest, deterministic low temp)
+    # 2. Google Gemini Flash LLM (gemini-flash-latest, deterministic temperature)
     google_key = os.getenv("GOOGLE_API_KEY")
     gemini_llm = google.LLM(
         model="gemini-flash-latest",
@@ -172,19 +174,33 @@ async def entrypoint(ctx: JobContext):
         temperature=0.1
     )
 
-    # 3. Cartesia Sonic 24kHz LiveKit Native Streaming TTS (Kavita Voice ID)
+    # Pre-warm LLM socket in background task to eliminate first-token delay
+    async def warm_llm():
+        try:
+            w_ctx = llm.ChatContext()
+            w_ctx.messages().append(llm.ChatMessage(role="user", content=["warmup"]))
+            w_stream = gemini_llm.chat(chat_ctx=w_ctx)
+            async for _ in w_stream:
+                break
+            logger.info("⚡ [GEMINI LLM SOCKET PRE-WARMED SUCCESSFULLY]")
+        except Exception as e:
+            logger.debug(f"Warmup notice: {e}")
+
+    asyncio.create_task(warm_llm())
+
+    # 3. Cartesia Sonic 24kHz Native Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
-        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Dedicated Hindi Customer Care Voice
+        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Dedicated Kavita Hindi Voice
         language="hi",
-        sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate for crystal clear audio
+        sample_rate=24000  # 24kHz WebRTC native rate
     )
 
-    # 4. Local Silero Voice Activity Detector (250ms silence detection)
+    # 4. Local Silero Voice Activity Detector (200ms silence cutoff)
     vad = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.1
+        min_silence_duration=0.20,
+        min_speech_duration=0.08
     )
 
     session = AgentSession(
@@ -192,16 +208,17 @@ async def entrypoint(ctx: JobContext):
         llm=gemini_llm,
         tts=tts,
         vad=vad,
+        min_consecutive_speech_delay=0.10,
     )
     agent = KavitaRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait 1.0s for audio track to be fully established and active
-    await asyncio.sleep(1.0)
+    # Wait 0.8s for audio track to be fully established and active
+    await asyncio.sleep(0.8)
 
-    # Speak comprehensive greeting with Kavita voice
-    logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
+    # Speak comprehensive opening greeting with Kavita persona
+    logger.info("🎙️ [SPEAKING GREETING WITH KAVITA PERSONA]")
     try:
         session.say(
             f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
