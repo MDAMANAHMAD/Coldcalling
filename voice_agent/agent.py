@@ -1,6 +1,6 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Stable Kavita Voice Pipeline)
-=========================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Awaited Spoken Greeting + Stable Kavita Pipeline)
+=============================================================================================
 Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
@@ -119,7 +119,7 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Stable Pipeline)
+# 3. AGENT ENTRYPOINT (Awaited Spoken Greeting)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Stable Voice Agent for Room: {ctx.room.name}")
@@ -179,10 +179,10 @@ async def entrypoint(ctx: JobContext):
     # Wait 1.0s for audio track to be fully established and active
     await asyncio.sleep(1.0)
 
-    # Speak greeting with Kavita voice
+    # Await spoken greeting with Kavita voice
     logger.info("🎙️ [SPEAKING GREETING WITH KAVITA VOICE]")
     try:
-        session.say(
+        await session.say(
             f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamare naye luxury flats ke baare mein bata doon?",
             allow_interruptions=True
         )
