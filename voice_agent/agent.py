@@ -172,8 +172,11 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Speak greeting immediately so audio track is live
-    logger.info("🎙️ [SPEAKING NATURAL HUMAN GREETING]")
+    # Wait for audio track publication to be active
+    await asyncio.sleep(1.0)
+
+    # Speak greeting
+    logger.info("🎙️ [SPEAKING NATURAL HUMAN GREETING OVER ACTIVE AUDIO TRACK]")
     try:
         session.say(
             f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se... Hamare naye luxury flats ke baare mein bata doon?",
