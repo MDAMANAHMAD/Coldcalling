@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Ultra-Fast 8kHz Native Telephony Pipeline)
-======================================================================================
-Optimizations:
-- STT: Deepgram Nova-2 (180ms endpointing cutoff for lightning-fast turn-taking)
-- LLM: Google Gemini Flash (gemini-flash-latest, temperature=0.1 for instant token streaming)
-- TTS: Cartesia Sonic (8kHz native PSTN telephony rate - zero resampling jitter, perfectly smooth)
-- VAD: Local Silero VAD (200ms silence detection)
+LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - 24kHz Native LiveKit Audio Pipeline)
+================================================================================================
+Architecture:
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
+- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
+- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz LiveKit Native Rate)
+- VAD: Local Silero VAD (250ms silence detection)
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -139,7 +139,7 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (8kHz Native Telephony Pipeline)
+# 3. AGENT ENTRYPOINT (24kHz LiveKit Native Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Sub-300ms Kavita Voice Agent for Room: {ctx.room.name}")
@@ -154,12 +154,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 180ms endpointing (fastest turn-around)
+    # 1. Deepgram Nova-2 STT with 250ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=180,
+        endpointing_ms=250,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -172,19 +172,19 @@ async def entrypoint(ctx: JobContext):
         temperature=0.1
     )
 
-    # 3. Cartesia Sonic 8kHz Native Telephony Streaming TTS (Kavita Voice ID)
+    # 3. Cartesia Sonic 24kHz LiveKit Native Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
         voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Dedicated Hindi Customer Care Voice
         language="hi",
-        sample_rate=8000  # 8kHz native G.711u telephony rate for crystal clear jitter-free audio
+        sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate for crystal clear audio
     )
 
-    # 4. Local Silero Voice Activity Detector (200ms silence detection)
+    # 4. Local Silero Voice Activity Detector (250ms silence detection)
     vad = silero.VAD.load(
-        min_silence_duration=0.20,
-        min_speech_duration=0.08
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
     )
 
     session = AgentSession(
@@ -197,8 +197,8 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait 0.8s for audio track to be fully established and active
-    await asyncio.sleep(0.8)
+    # Wait 1.0s for audio track to be fully established and active
+    await asyncio.sleep(1.0)
 
     # Speak comprehensive greeting with Kavita voice
     logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
