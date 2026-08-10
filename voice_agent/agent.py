@@ -53,12 +53,11 @@ You are Priya Sharma (प्रिया शर्मा), a polite and friendly
 You are on a live mobile phone call with a customer.
 
 CRITICAL VOICE & SPEED RULES:
-1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush or speak too fast.
+1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush.
 2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 8 to 12 words (1 short sentence only). This guarantees sub-500ms voice response time.
 3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
 
 CONVERSATION FLOW:
-- Greeting: Greet the customer warmly and ask if you can share details of the new luxury 2BHK/3BHK flats.
 - When they agree / say Haan: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
 - Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
 - Location: "Project metro station se sirf do minute door hai."
@@ -134,7 +133,7 @@ async def entrypoint(ctx: JobContext):
         api_key=deepgram_key
     )
 
-    # 2. Google Gemini Flash LLM (~80ms first token, consumes your ₹1,000 credit)
+    # 2. Google Gemini Flash LLM (gemini-flash-latest)
     google_key = os.getenv("GOOGLE_API_KEY")
     gemini_llm = google.LLM(
         model="gemini-flash-latest",
@@ -172,24 +171,26 @@ async def entrypoint(ctx: JobContext):
         if greeting_dispatched:
             return
         greeting_dispatched = True
-        logger.info("🎙️ [CALL PICKED UP -> SPEAKING INSTANT GREETING]")
+        logger.info("🎙️ [CALL PICKED UP -> SPEAKING INSTANT GREETING VIA TTS]")
         try:
-            session.generate_reply(
-                user_input=f"Speak in 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
+            session.say(
+                f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamare naye luxury flats ke baare mein bata doon?",
+                allow_interruptions=True
             )
         except Exception as e:
             logger.warning(f"Greeting error: {e}")
 
-    # If phone is already answered
+    # 1. If phone participant is already connected
     if len(ctx.room.remote_participants) > 0:
         trigger_greeting()
 
-    # When phone answers
+    # 2. When phone answers
     @ctx.room.on("participant_connected")
     def on_participant_connected(participant: rtc.RemoteParticipant):
         logger.info(f"📞 [CALL ANSWERED BY {participant.identity}]")
         trigger_greeting()
 
+    # 3. When audio track starts streaming
     @ctx.room.on("track_subscribed")
     def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
