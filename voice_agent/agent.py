@@ -3,8 +3,8 @@ LiveKit Voice AI Cold Calling Agent Worker (Ultra-Low Latency ~400ms Streaming P
 ========================================================================================
 Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, ~100ms latency)
-- LLM: Google Gemini 2.5 Flash (Streaming Reasoning Engine, ~80ms first token)
-- TTS: Cartesia Sonic (Ultra-Realistic Natural Voice, ~120ms audio streaming)
+- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
+- TTS: Cartesia Sonic (Ultra-Realistic Natural Hindi Voice, streaming audio)
 - VAD: Silero VAD (250ms silence cutoff for instant interruption and turn-taking)
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
@@ -134,10 +134,10 @@ async def entrypoint(ctx: JobContext):
         api_key=deepgram_key
     )
 
-    # 2. Google Gemini 2.5 Flash LLM (~80ms first token, consumes your ₹1,000 credit)
+    # 2. Google Gemini Flash LLM (~80ms first token, consumes your ₹1,000 credit)
     google_key = os.getenv("GOOGLE_API_KEY")
     gemini_llm = google.LLM(
-        model="gemini-2.5-flash",
+        model="gemini-flash-latest",
         api_key=google_key,
         temperature=0.3
     )
