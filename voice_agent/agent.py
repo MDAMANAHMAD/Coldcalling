@@ -1,11 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (250ms High-Speed Turn-Detection Hindi Specialist)
-=============================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Zero-Delay Pickup-Triggered Hindi Specialist)
+========================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
-- RealtimeInputConfig with 250ms Silence Duration & High Speech Sensitivity
-- Short Micro-Burst Responses (8-10 words) for zero lag
+- 250ms High-Speed Turn Detection (silence_duration_ms=250)
+- Accurate Call Pickup Trigger (Speaks the exact moment you answer the phone)
+- Strict Micro-Burst Responses (8-10 words) for zero telephony lag
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -51,16 +52,16 @@ logger = logging.getLogger("hindi_real_estate_agent")
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
 You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
-You are on a live mobile phone call with a customer.
+You are on a live mobile phone call.
 
 CRITICAL VOICE & SPEED RULES:
-1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only). Long sentences cause phone lag.
+1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only).
 2. NATURAL & WARM: Speak naturally in polite Hindi with gentle female tone.
 3. CONVERSATIONAL TURNS: Answer briefly, then let the customer speak.
 
 RESPONSES:
 - Greeting: "Namaste Aman ji! Main Priya baat kar rahi hoon Skyline Realty se."
-- When they agree: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
+- When they agree / say Haan: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
 - Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
 - Location: "Project metro station se sirf do minute door hai."
 """
@@ -110,7 +111,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (250ms Turn Detection Configuration)
+# 3. AGENT ENTRYPOINT (Accurate Call Pickup Trigger)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Voice Agent for Room: {ctx.room.name}")
@@ -130,7 +131,7 @@ async def entrypoint(ctx: JobContext):
     if not google_api_key:
         logger.error("GOOGLE_API_KEY environment variable is not set!")
 
-    # Configure ultra-fast 250ms silence detection and high speech sensitivity
+    # Configure 250ms silence detection
     activity_detection = types.AutomaticActivityDetection(
         silence_duration_ms=250,
         start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
@@ -154,16 +155,39 @@ async def entrypoint(ctx: JobContext):
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
-    await session.start(room=ctx.room, agent=agent)
+    await session.start(agent=agent, room=ctx.room)
 
-    # Immediately trigger speech so audio track is published instantly
-    logger.info("🎙️ [DISPATCHING IMMEDIATE SPOKEN GREETING]")
-    try:
-        session.generate_reply(
-            user_input=f"Speak in 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
-        )
-    except Exception as e:
-        logger.warning(f"Greeting error: {e}")
+    greeting_dispatched = False
+
+    def trigger_greeting():
+        nonlocal greeting_dispatched
+        if greeting_dispatched:
+            return
+        greeting_dispatched = True
+        logger.info("🎙️ [CALL PICKED UP -> DISPATCHING SPOKEN GREETING]")
+        try:
+            session.generate_reply(
+                user_input=f"Speak in 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
+            )
+        except Exception as e:
+            logger.warning(f"Greeting error: {e}")
+
+    # 1. If phone participant is already connected in room
+    if len(ctx.room.remote_participants) > 0:
+        trigger_greeting()
+
+    # 2. When phone participant answers and connects
+    @ctx.room.on("participant_connected")
+    def on_participant_connected(participant: rtc.RemoteParticipant):
+        logger.info(f"📞 [CALL ANSWERED BY {participant.identity}]")
+        trigger_greeting()
+
+    # 3. When audio track becomes active
+    @ctx.room.on("track_subscribed")
+    def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
+        if track.kind == rtc.TrackKind.KIND_AUDIO:
+            logger.info(f"🎙️ [AUDIO STREAM ACTIVE FOR {participant.identity}]")
+            trigger_greeting()
 
 
 # ==============================================================================
