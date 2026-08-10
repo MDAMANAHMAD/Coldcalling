@@ -114,7 +114,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Ultra-Natural Human Voice)
+# 3. AGENT ENTRYPOINT (Clean Initialization)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] ~400ms Natural Human Voice Agent for Room: {ctx.room.name}")
@@ -166,13 +166,12 @@ async def entrypoint(ctx: JobContext):
         llm=gemini_llm,
         tts=tts,
         vad=vad,
-        turn_detector=None,
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait for audio track publication to be active
+    # Wait 1.0s for audio track to be fully established and active
     await asyncio.sleep(1.0)
 
     # Speak greeting
