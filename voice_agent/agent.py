@@ -172,38 +172,15 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    greeting_dispatched = False
-
-    def trigger_greeting():
-        nonlocal greeting_dispatched
-        if greeting_dispatched:
-            return
-        greeting_dispatched = True
-        logger.info("🎙️ [CALL PICKED UP -> SPEAKING NATURAL GREETING VIA TTS]")
-        try:
-            session.say(
-                f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se... Hamare naye luxury flats ke baare mein bata doon?",
-                allow_interruptions=True
-            )
-        except Exception as e:
-            logger.warning(f"Greeting error: {e}")
-
-    # 1. If phone participant is already connected
-    if len(ctx.room.remote_participants) > 0:
-        trigger_greeting()
-
-    # 2. When phone answers
-    @ctx.room.on("participant_connected")
-    def on_participant_connected(participant: rtc.RemoteParticipant):
-        logger.info(f"📞 [CALL ANSWERED BY {participant.identity}]")
-        trigger_greeting()
-
-    # 3. When audio track starts streaming
-    @ctx.room.on("track_subscribed")
-    def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
-        if track.kind == rtc.TrackKind.KIND_AUDIO:
-            logger.info(f"🎙️ [AUDIO STREAM ACTIVE FOR {participant.identity}]")
-            trigger_greeting()
+    # Speak greeting immediately so audio track is live
+    logger.info("🎙️ [SPEAKING NATURAL HUMAN GREETING]")
+    try:
+        session.say(
+            f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se... Hamare naye luxury flats ke baare mein bata doon?",
+            allow_interruptions=True
+        )
+    except Exception as e:
+        logger.warning(f"Greeting error: {e}")
 
 
 # ==============================================================================
