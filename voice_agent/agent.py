@@ -1,13 +1,13 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Full Real Estate Knowledge Base + Zero-Lag Kavita Voice)
-====================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - 16kHz Zero-Jitter Telephony Voice)
+=============================================================================================
 Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094)
+- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 16kHz Telephony Rate)
 - VAD: Local Silero VAD (250ms silence detection)
 
-Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
+Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
 
 import os
@@ -42,14 +42,14 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-logger = logging.getLogger("hindi_real_estate_agent")
+logger = logging.getLogger("kavita_real_estate_agent")
 
 
 # ==============================================================================
-# 1. COMPREHENSIVE HINDI REAL ESTATE KNOWLEDGE BASE & PERSONA
+# 1. KAVITA SHARMA HINDI VOICE PERSONA & KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and expert Property Advisor at Skyline Luxury Realty.
+You are Kavita Sharma (कविता शर्मा), a polite, friendly, and expert Property Advisor at Skyline Luxury Realty.
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
@@ -101,7 +101,7 @@ As soon as the client agrees for a site visit or gives a preferred day/time, imm
 # ==============================================================================
 # 2. AGENT CLASS & FUNCTION TOOLS
 # ==============================================================================
-class HindiRealEstateAgent(Agent):
+class KavitaRealEstateAgent(Agent):
     def __init__(self, customer_name: str = "Aman ji"):
         instructions = f"{HINDI_REAL_ESTATE_PROMPT}\n\nAap abhi {customer_name} se call par baat kar rahi hain."
         super().__init__(instructions=instructions)
@@ -142,10 +142,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Kavita Voice + Comprehensive Knowledge)
+# 3. AGENT ENTRYPOINT (16kHz Native Telephony Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] ~400ms Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] ~400ms Kavita Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -175,12 +175,13 @@ async def entrypoint(ctx: JobContext):
         temperature=0.2
     )
 
-    # 3. Cartesia Sonic Streaming TTS (Kavita - Hindi Customer Care Voice)
+    # 3. Cartesia Sonic 16kHz Telephony Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
-        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Indian Hindi Customer Care Voice
-        language="hi"
+        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Dedicated Hindi Customer Care Voice
+        language="hi",
+        sample_rate=16000  # 16kHz native rate for zero-jitter telephony streaming
     )
 
     # 4. Local Silero Voice Activity Detector (250ms silence detection)
@@ -195,18 +196,18 @@ async def entrypoint(ctx: JobContext):
         tts=tts,
         vad=vad,
     )
-    agent = HindiRealEstateAgent(customer_name=customer_name)
+    agent = KavitaRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
 
     # Wait 1.0s for audio track to be fully established and active
     await asyncio.sleep(1.0)
 
-    # Comprehensive spoken greeting giving project details upfront and asking query
+    # Speak comprehensive greeting with Kavita voice
     logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
     try:
         session.say(
-            f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
+            f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
             allow_interruptions=True
         )
     except Exception as e:
