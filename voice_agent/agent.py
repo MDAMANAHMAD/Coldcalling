@@ -1,10 +1,10 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Crystal-Clear ~400ms Indian Hindi Pipeline)
-========================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Ultra-Natural Human Voice with Breathing Pauses)
+=============================================================================================
 Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094)
+- TTS: Cartesia Sonic with Sneha Empathetic Voice ID (6b02ffe5-e3cb-48c0-a023-c72f85953375)
 - VAD: Local Silero VAD (250ms silence detection)
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
@@ -46,23 +46,24 @@ logger = logging.getLogger("hindi_real_estate_agent")
 
 
 # ==============================================================================
-# 1. NATURAL HUMAN HINDI VOICE PERSONA
+# 1. 100% NATURAL HUMAN HINDI VOICE PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
-You are on a live mobile phone call with a customer.
+You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and natural female Property Advisor at Skyline Luxury Realty.
+You are talking directly to a client on a mobile phone call.
 
-CRITICAL VOICE & SPEED RULES:
-1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush.
-2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 8 to 12 words (1 short sentence only). This guarantees sub-500ms voice response time.
-3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
+CRITICAL VOICE & HUMAN MODULATION RULES:
+1. NATURAL HUMAN PAUSES: Use commas (,) and natural pauses so you sound completely human with realistic breathing and warm vocal modulation. Never sound robotic or flat.
+2. WARM & CONVERSATIONAL: Speak in a relaxed, friendly Indian conversational tone. Use natural phrases like "Ji bilkul...", "Arey haanji Aman ji...", "Aap bataiye...".
+3. SHORT HUMAN BURSTS: Keep every response strictly between 8 to 12 words (1 short natural sentence).
+4. NEVER SOUND LIKE AN IVR / MACHINE: Talk like a real person having a quick, friendly conversation over the phone.
 
 CONVERSATION FLOW:
-- When they agree / say Haan: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
-- Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
-- Location: "Project metro station se sirf do minute door hai."
-- 1BHK: "1BHK ka area lagbhag 650 square feet hai, 45 Lakhs se shuru."
-- 2BHK: "2BHK ka area lagbhag 1100 square feet hai, 85 Lakhs se shuru."
+- When they agree / say Haan: "Ji bilkul... hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
+- Pricing: "Sirf 10% down payment hai, Aman ji. Kya main sample flat dikha doon?"
+- Location: "Project metro station se sirf do minute ki doori par hai."
+- 1BHK: "1BHK ka area lagbhag 650 square feet hai... 45 Lakhs se shuru hai."
+- 2BHK: "2BHK lagbhag 1100 square feet ka spacious flat hai, 85 Lakhs mein."
 
 TOOL USAGE:
 As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
@@ -113,10 +114,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Ultra-Low Latency & High Clarity Pipeline)
+# 3. AGENT ENTRYPOINT (Ultra-Natural Human Voice)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] ~400ms Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] ~400ms Natural Human Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -143,14 +144,14 @@ async def entrypoint(ctx: JobContext):
     gemini_llm = google.LLM(
         model="gemini-flash-latest",
         api_key=google_key,
-        temperature=0.3
+        temperature=0.4
     )
 
-    # 3. Cartesia Sonic Streaming TTS (Kavita - Hindi Customer Care Voice)
+    # 3. Cartesia Sonic Streaming TTS (Sneha - Empathetic Natural Human Voice)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
-        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",
+        voice="6b02ffe5-e3cb-48c0-a023-c72f85953375",  # Sneha: Warm, natural female modulation
         language="hi"
     )
 
@@ -178,10 +179,10 @@ async def entrypoint(ctx: JobContext):
         if greeting_dispatched:
             return
         greeting_dispatched = True
-        logger.info("🎙️ [CALL PICKED UP -> SPEAKING INSTANT GREETING VIA TTS]")
+        logger.info("🎙️ [CALL PICKED UP -> SPEAKING NATURAL GREETING VIA TTS]")
         try:
             session.say(
-                f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamare naye luxury flats ke baare mein bata doon?",
+                f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se... Hamare naye luxury flats ke baare mein bata doon?",
                 allow_interruptions=True
             )
         except Exception as e:
