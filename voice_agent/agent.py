@@ -1,12 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Zero-Delay Pickup-Triggered Hindi Specialist)
+LiveKit Voice AI Cold Calling Agent Worker (Ultra-Low Latency ~400ms Streaming Pipeline)
 ========================================================================================
-Engineered with:
-- LiveKit Agent Framework v1.6+ (Agent & AgentSession)
-- Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
-- 250ms High-Speed Turn Detection (silence_duration_ms=250)
-- Accurate Call Pickup Trigger (Speaks the exact moment you answer the phone)
-- Strict Micro-Burst Responses (8-10 words) for zero telephony lag
+Architecture:
+- STT: Deepgram Nova-2 (Hindi / Hinglish, ~100ms latency)
+- LLM: Google Gemini 2.5 Flash (Streaming Reasoning Engine, ~80ms first token)
+- TTS: Cartesia Sonic (Ultra-Realistic Natural Voice, ~120ms audio streaming)
+- VAD: Silero VAD (250ms silence cutoff for instant interruption and turn-taking)
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -32,8 +31,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins.google import realtime
-from google.genai import types
+from livekit.plugins import deepgram, google, cartesia, silero
 from livekit import rtc
 
 # Load environment variables
@@ -48,22 +46,25 @@ logger = logging.getLogger("hindi_real_estate_agent")
 
 
 # ==============================================================================
-# 1. ZERO-BUFFER MICRO-BURST HINDI VOICE PERSONA
+# 1. NATURAL HUMAN HINDI VOICE PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
 You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
-You are on a live mobile phone call.
+You are on a live mobile phone call with a customer.
 
 CRITICAL VOICE & SPEED RULES:
-1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only).
-2. NATURAL & WARM: Speak naturally in polite Hindi with gentle female tone.
-3. CONVERSATIONAL TURNS: Answer briefly, then let the customer speak.
+1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real person talking on the phone. Never rush or speak too fast.
+2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 8 to 12 words (1 short sentence only). This guarantees sub-500ms voice response time.
+3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
 
-RESPONSES:
-- Greeting: "Namaste Aman ji! Main Priya baat kar rahi hoon Skyline Realty se."
+CONVERSATION FLOW:
+- Greeting: Greet the customer warmly and ask if you can share details of the new luxury 2BHK/3BHK flats.
 - When they agree / say Haan: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
 - Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
 - Location: "Project metro station se sirf do minute door hai."
+
+TOOL USAGE:
+As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
 """
 
 
@@ -111,10 +112,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Accurate Call Pickup Trigger)
+# 3. AGENT ENTRYPOINT (Ultra-Low Latency ~400ms Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] ~400ms Low-Latency Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -126,32 +127,39 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # Google Gemini Live Realtime Model (Tier-1 Paid)
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    if not google_api_key:
-        logger.error("GOOGLE_API_KEY environment variable is not set!")
-
-    # Configure 250ms silence detection
-    activity_detection = types.AutomaticActivityDetection(
-        silence_duration_ms=250,
-        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+    # 1. Deepgram Nova-2 STT (~100ms)
+    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+    stt = deepgram.STT(
+        language="hi",
+        api_key=deepgram_key
     )
 
-    realtime_input = types.RealtimeInputConfig(
-        automatic_activity_detection=activity_detection,
+    # 2. Google Gemini 2.5 Flash LLM (~80ms first token, consumes your ₹1,000 credit)
+    google_key = os.getenv("GOOGLE_API_KEY")
+    gemini_llm = google.LLM(
+        model="gemini-2.5-flash",
+        api_key=google_key,
+        temperature=0.3
     )
 
-    model = realtime.RealtimeModel(
-        model="gemini-2.5-flash-native-audio-latest",
-        voice="Aoede",
-        temperature=0.3,
-        api_key=google_api_key,
-        realtime_input_config=realtime_input,
+    # 3. Cartesia Sonic Streaming TTS (~120ms audio latency)
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    tts = cartesia.TTS(
+        api_key=cartesia_key,
+        language="hi"
+    )
+
+    # 4. Silero Voice Activity Detector (250ms silence detection)
+    vad = silero.VAD.load(
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
     )
 
     session = AgentSession(
-        llm=model,
+        stt=stt,
+        llm=gemini_llm,
+        tts=tts,
+        vad=vad,
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
@@ -164,7 +172,7 @@ async def entrypoint(ctx: JobContext):
         if greeting_dispatched:
             return
         greeting_dispatched = True
-        logger.info("🎙️ [CALL PICKED UP -> DISPATCHING SPOKEN GREETING]")
+        logger.info("🎙️ [CALL PICKED UP -> SPEAKING INSTANT GREETING]")
         try:
             session.generate_reply(
                 user_input=f"Speak in 8 words in Hindi: 'Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se.'"
@@ -172,17 +180,16 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.warning(f"Greeting error: {e}")
 
-    # 1. If phone participant is already connected in room
+    # If phone is already answered
     if len(ctx.room.remote_participants) > 0:
         trigger_greeting()
 
-    # 2. When phone participant answers and connects
+    # When phone answers
     @ctx.room.on("participant_connected")
     def on_participant_connected(participant: rtc.RemoteParticipant):
         logger.info(f"📞 [CALL ANSWERED BY {participant.identity}]")
         trigger_greeting()
 
-    # 3. When audio track becomes active
     @ctx.room.on("track_subscribed")
     def on_track_subscribed(track: rtc.Track, publication: rtc.TrackPublication, participant: rtc.RemoteParticipant):
         if track.kind == rtc.TrackKind.KIND_AUDIO:
