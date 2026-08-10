@@ -1,11 +1,13 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - 24kHz Native LiveKit Audio Pipeline)
-================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Preemptive Token Generation Pipeline - Sub-250ms Latency)
+======================================================================================================
 Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 200ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz LiveKit Native Rate)
-- VAD: Local Silero VAD (250ms silence detection)
+- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
+- VAD: Local Silero VAD (200ms silence detection)
+- Preemptive Generation: Enabled (Warms up and predicts tokens while user finishes speech)
+- Min Endpointing Delay: 0.10s (Instant turn transition)
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -53,7 +55,7 @@ You are Kavita Sharma (कविता शर्मा), a polite, friendly, and
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-300ms instant response with zero jitter or voice break.
+1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-250ms instant response with zero jitter or voice break.
 2. NATURAL HINDI/HINGLISH: Speak in warm, polite, conversational Hindi. Use friendly words like "Ji bilkul", "Haanji Aman ji".
 3. NEVER EXPLAIN LENGTHILY: State the fact directly, then ask a quick follow-up question.
 
@@ -64,6 +66,7 @@ PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
    - 1BHK: "1BHK 45 Lakhs se shuru hai. Carpet area 650 square feet."
    - 2BHK: "2BHK 85 Lakhs se shuru hai. Carpet area 1100 square feet."
    - 3BHK: "3BHK 1.25 Crore se shuru hai. Carpet area 1550 square feet."
+   - Penthouse: "Luxury Penthouse 2.10 Crore se shuru hai."
 
 2. PAYMENT & LOANS:
    - Down Payment: "Sirf 10% down payment hai, baaki bank loan ho jayega."
@@ -85,6 +88,7 @@ PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
 
 6. SITE VISIT BOOKING:
    - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
+   - Timings: "Site visit subah 10 baje se shaam 7 baje tak khuli hai."
 
 7. NEGATIVE / BUSY CUSTOMER:
    - Not Interested: "Koi baat nahi sir, kya main WhatsApp par brochure bhej doon?"
@@ -139,10 +143,10 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (24kHz LiveKit Native Pipeline)
+# 3. AGENT ENTRYPOINT (Preemptive Token Generation)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Sub-300ms Kavita Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Sub-250ms Preemptive Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -154,12 +158,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 250ms endpointing
+    # 1. Deepgram Nova-2 STT with 200ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=250,
+        endpointing_ms=200,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -172,7 +176,7 @@ async def entrypoint(ctx: JobContext):
         temperature=0.1
     )
 
-    # 3. Cartesia Sonic 24kHz LiveKit Native Streaming TTS (Kavita Voice ID)
+    # 3. Cartesia Sonic 24kHz Native Telephony Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
@@ -181,17 +185,22 @@ async def entrypoint(ctx: JobContext):
         sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate for crystal clear audio
     )
 
-    # 4. Local Silero Voice Activity Detector (250ms silence detection)
+    # 4. Local Silero Voice Activity Detector (200ms silence detection)
     vad = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.1
+        min_silence_duration=0.20,
+        min_speech_duration=0.08
     )
 
+    # Session with Preemptive Token Generation enabled
     session = AgentSession(
         stt=stt,
         llm=gemini_llm,
         tts=tts,
         vad=vad,
+        preemptive_generation=True,
+        min_endpointing_delay=0.10,
+        max_endpointing_delay=0.40,
+        allow_interruptions=True,
     )
     agent = KavitaRealEstateAgent(customer_name=customer_name)
 
