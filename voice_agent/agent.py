@@ -1,13 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Preemptive Token Generation Pipeline - Sub-250ms Latency)
-======================================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Stable Kavita Voice Pipeline)
+=========================================================================
 Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 200ms endpointing cutoff)
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
-- VAD: Local Silero VAD (200ms silence detection)
-- Preemptive Generation: Enabled (Warms up and predicts tokens while user finishes speech)
-- Min Endpointing Delay: 0.10s (Instant turn transition)
+- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094)
+- VAD: Local Silero VAD (250ms silence detection)
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -51,51 +49,29 @@ logger = logging.getLogger("kavita_real_estate_agent")
 # 1. KAVITA SHARMA HINDI VOICE PERSONA & KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Kavita Sharma (कविता शर्मा), a polite, friendly, and expert Property Advisor at Skyline Luxury Realty.
-You are on a live phone call with a prospective client.
+You are Kavita Sharma (कविता शर्मा), a polite, friendly, and professional female Property Advisor at Skyline Luxury Realty.
+You are talking directly to a client on a live mobile phone call.
 
-CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-250ms instant response with zero jitter or voice break.
-2. NATURAL HINDI/HINGLISH: Speak in warm, polite, conversational Hindi. Use friendly words like "Ji bilkul", "Haanji Aman ji".
-3. NEVER EXPLAIN LENGTHILY: State the fact directly, then ask a quick follow-up question.
+CRITICAL VOICE & SPEED RULES:
+1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real customer advisor on the phone. Never rush or sound robotic.
+2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 8 to 12 words (1 short sentence only). This guarantees sub-500ms voice response time with zero voice breaks.
+3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
 
-==================================================
-PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
-==================================================
-1. PRICING:
-   - 1BHK: "1BHK 45 Lakhs se shuru hai. Carpet area 650 square feet."
-   - 2BHK: "2BHK 85 Lakhs se shuru hai. Carpet area 1100 square feet."
-   - 3BHK: "3BHK 1.25 Crore se shuru hai. Carpet area 1550 square feet."
-   - Penthouse: "Luxury Penthouse 2.10 Crore se shuru hai."
-
-2. PAYMENT & LOANS:
-   - Down Payment: "Sirf 10% down payment hai, baaki bank loan ho jayega."
-   - Bank Loans: "HDFC, SBI aur ICICI bank se pre-approved home loan hai."
-   - Offers: "Abhi booking par zero stamp duty aur modular kitchen free hai."
-
-3. LOCATION & CONNECTIVITY:
-   - Metro: "Project metro station se sirf do minute ki walking distance par hai."
-   - Airport/Highway: "Highway se 5 minute aur airport se sirf 25 minute door hai."
-   - Schools/Hospitals: "Top international schools aur hospitals 2 kilometer ke andar hain."
-
-4. AMENITIES:
-   - Facilities: "Clubhouse, swimming pool, gym, badminton court aur play area hai."
-   - Parking: "Har flat ke sath dedicated covered car parking milti hai."
-   - Security: "24/7 CCTV surveillance aur gated 3-tier security hai."
-
-5. POSSESSION & RERA:
-   - Possession Date: "Possession December 2026 tak mil jayegi, RERA approved project hai."
-
-6. SITE VISIT BOOKING:
-   - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
-   - Timings: "Site visit subah 10 baje se shaam 7 baje tak khuli hai."
-
-7. NEGATIVE / BUSY CUSTOMER:
-   - Not Interested: "Koi baat nahi sir, kya main WhatsApp par brochure bhej doon?"
-   - Call Later: "Ji bilkul, main aapko shaam ko 6 baje call karti hoon."
+CONVERSATION FLOW:
+- When they agree / say Haan: "Ji bilkul, hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
+- Pricing: "Sirf 10% down payment hai, Aman ji. Kya main sample flat dikha doon?"
+- Location: "Project metro station se sirf do minute door hai."
+- 1BHK: "1BHK ka area lagbhag 650 square feet hai, 45 Lakhs se shuru."
+- 2BHK: "2BHK ka area lagbhag 1100 square feet hai, 85 Lakhs se shuru."
+- 3BHK: "3BHK 1.25 Crore se shuru hai, 1550 square feet area."
+- Down Payment: "Sirf 10% down payment hai, baaki bank loan ho jayega."
+- Metro: "Project metro station se sirf do minute ki walking distance par hai."
+- Amenities: "Clubhouse, swimming pool, gym, badminton court aur play area hai."
+- Possession: "Possession December 2026 tak mil jayegi, RERA approved project hai."
+- Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
 
 TOOL USAGE:
-As soon as the client agrees for a site visit or gives a preferred day/time, immediately trigger `schedule_site_visit`.
+As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
 """
 
 
@@ -143,10 +119,10 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Preemptive Token Generation)
+# 3. AGENT ENTRYPOINT (Stable Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Sub-250ms Preemptive Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Stable Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -158,49 +134,43 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 200ms endpointing
+    # 1. Deepgram Nova-2 STT with 250ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=200,
+        endpointing_ms=250,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 2. Google Gemini Flash LLM (gemini-flash-latest, deterministic low temp)
+    # 2. Google Gemini Flash LLM (gemini-flash-latest)
     google_key = os.getenv("GOOGLE_API_KEY")
     gemini_llm = google.LLM(
         model="gemini-flash-latest",
         api_key=google_key,
-        temperature=0.1
+        temperature=0.3
     )
 
-    # 3. Cartesia Sonic 24kHz Native Telephony Streaming TTS (Kavita Voice ID)
+    # 3. Cartesia Sonic Streaming TTS (Kavita - Hindi Customer Care Voice)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
         voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Dedicated Hindi Customer Care Voice
-        language="hi",
-        sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate for crystal clear audio
+        language="hi"
     )
 
-    # 4. Local Silero Voice Activity Detector (200ms silence detection)
+    # 4. Local Silero Voice Activity Detector (250ms silence detection)
     vad = silero.VAD.load(
-        min_silence_duration=0.20,
-        min_speech_duration=0.08
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
     )
 
-    # Session with Preemptive Token Generation enabled
     session = AgentSession(
         stt=stt,
         llm=gemini_llm,
         tts=tts,
         vad=vad,
-        preemptive_generation=True,
-        min_endpointing_delay=0.10,
-        max_endpointing_delay=0.40,
-        allow_interruptions=True,
     )
     agent = KavitaRealEstateAgent(customer_name=customer_name)
 
@@ -209,11 +179,11 @@ async def entrypoint(ctx: JobContext):
     # Wait 1.0s for audio track to be fully established and active
     await asyncio.sleep(1.0)
 
-    # Speak comprehensive greeting with Kavita voice
-    logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
+    # Speak greeting with Kavita voice
+    logger.info("🎙️ [SPEAKING GREETING WITH KAVITA VOICE]")
     try:
         session.say(
-            f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
+            f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamare naye luxury flats ke baare mein bata doon?",
             allow_interruptions=True
         )
     except Exception as e:
