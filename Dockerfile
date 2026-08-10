@@ -16,7 +16,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY voice_agent/ ./voice_agent/
 
+# Memory optimization environment variables for 512MB Render instances
 ENV PYTHONUNBUFFERED=1
+ENV MALLOC_ARENA_MAX=2
+ENV PYTHONMALLOC=malloc
 
 # Run the LiveKit Agent in start mode
 CMD ["python", "voice_agent/agent.py", "start"]
