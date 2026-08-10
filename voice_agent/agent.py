@@ -1,12 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sub-800ms Pre-Warmed Pipeline & Jitter-Free Audio)
-=============================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Permanent Crash Fix & Stable Kavita Pipeline)
+==========================================================================================
 Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 180ms endpointing cutoff)
-- LLM: Google Gemini Flash (gemini-flash-latest, Pre-warmed TLS socket)
-- TTS: Cartesia Sonic with Kavita Hindi Voice (56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
-- VAD: Local Silero VAD (200ms silence detection)
-- Pre-Warming: Pre-establishes API sockets on startup to eliminate cold-start lag
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
+- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
+- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
+- VAD: Local Silero VAD (min_silence_duration=0.25s strictly matching LiveKit TurnDetector requirement)
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -31,7 +30,6 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
-    llm
 )
 from livekit.plugins import deepgram, google, cartesia, silero
 from livekit import rtc
@@ -141,10 +139,10 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Pre-Warmed High-Speed Pipeline)
+# 3. AGENT ENTRYPOINT (Zero-Crash Stable Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] High-Speed Kavita Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Stable Kavita Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -156,12 +154,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 180ms endpointing (fast turn-around)
+    # 1. Deepgram Nova-2 STT with 250ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=180,
+        endpointing_ms=250,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -174,21 +172,7 @@ async def entrypoint(ctx: JobContext):
         temperature=0.1
     )
 
-    # Pre-warm LLM socket in background task to eliminate first-token delay
-    async def warm_llm():
-        try:
-            w_ctx = llm.ChatContext()
-            w_ctx.messages().append(llm.ChatMessage(role="user", content=["warmup"]))
-            w_stream = gemini_llm.chat(chat_ctx=w_ctx)
-            async for _ in w_stream:
-                break
-            logger.info("⚡ [GEMINI LLM SOCKET PRE-WARMED SUCCESSFULLY]")
-        except Exception as e:
-            logger.debug(f"Warmup notice: {e}")
-
-    asyncio.create_task(warm_llm())
-
-    # 3. Cartesia Sonic 24kHz Native Streaming TTS (Kavita Voice ID)
+    # 3. Cartesia Sonic 24kHz Native Telephony Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
@@ -197,10 +181,10 @@ async def entrypoint(ctx: JobContext):
         sample_rate=24000  # 24kHz WebRTC native rate
     )
 
-    # 4. Local Silero Voice Activity Detector (200ms silence cutoff)
+    # 4. Local Silero Voice Activity Detector (min_silence_duration=0.25s required by TurnDetector)
     vad = silero.VAD.load(
-        min_silence_duration=0.20,
-        min_speech_duration=0.08
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
     )
 
     session = AgentSession(
@@ -208,14 +192,13 @@ async def entrypoint(ctx: JobContext):
         llm=gemini_llm,
         tts=tts,
         vad=vad,
-        min_consecutive_speech_delay=0.10,
     )
     agent = KavitaRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait 0.8s for audio track to be fully established and active
-    await asyncio.sleep(0.8)
+    # Wait 1.0s for audio track to be fully established and active
+    await asyncio.sleep(1.0)
 
     # Speak comprehensive opening greeting with Kavita persona
     logger.info("🎙️ [SPEAKING GREETING WITH KAVITA PERSONA]")
