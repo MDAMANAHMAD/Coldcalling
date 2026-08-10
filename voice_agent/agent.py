@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Ultra-Fast 0.4s Local Turn-Detection)
-=================================================================================
-Optimizations:
-- Deepgram Nova-2: endpointing_ms=250 (Commits speech in 250ms instead of 27s backlog)
-- Disabled Remote Cloud Turn Detector (Zero remote gateway round-trip lag)
-- Silero VAD: Local 250ms silence detection
-- Google Gemini Flash + Cartesia Sonic TTS
+LiveKit Voice AI Cold Calling Agent Worker (Crystal-Clear ~400ms Indian Hindi Pipeline)
+========================================================================================
+Architecture:
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
+- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
+- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094)
+- VAD: Local Silero VAD (250ms silence detection)
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -113,10 +113,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Zero Remote Gateway Lag & 250ms STT Endpointing)
+# 3. AGENT ENTRYPOINT (Ultra-Low Latency & High Clarity Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] ~400ms Ultra-Fast Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] ~400ms Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -128,7 +128,7 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 250ms endpointing (prevents 27s buffering backlog)
+    # 1. Deepgram Nova-2 STT with 250ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
@@ -146,10 +146,11 @@ async def entrypoint(ctx: JobContext):
         temperature=0.3
     )
 
-    # 3. Cartesia Sonic Streaming TTS (~120ms audio latency)
+    # 3. Cartesia Sonic Streaming TTS (Kavita - Hindi Customer Care Voice)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
+        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",
         language="hi"
     )
 
@@ -159,7 +160,6 @@ async def entrypoint(ctx: JobContext):
         min_speech_duration=0.1
     )
 
-    # Disable remote cloud turn detector to eliminate 3-second gateway lag
     session = AgentSession(
         stt=stt,
         llm=gemini_llm,
