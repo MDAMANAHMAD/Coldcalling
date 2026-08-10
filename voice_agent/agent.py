@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Instant-Start Natural Hindi Real Estate Specialist)
-==============================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (250ms High-Speed Turn-Detection Hindi Specialist)
+=============================================================================================
 Engineered with:
 - LiveKit Agent Framework v1.6+ (Agent & AgentSession)
 - Google Gemini Live Native Speech (gemini-2.5-flash-native-audio-latest)
-- Immediate Speech Trigger on Connection (Zero-Delay Audio Track Publishing)
-- Strict Micro-Burst Responses (8-10 words) for zero lag
+- RealtimeInputConfig with 250ms Silence Duration & High Speech Sensitivity
+- Short Micro-Burst Responses (8-10 words) for zero lag
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -32,6 +32,7 @@ from livekit.agents import (
     function_tool,
 )
 from livekit.plugins.google import realtime
+from google.genai import types
 from livekit import rtc
 
 # Load environment variables
@@ -50,10 +51,10 @@ logger = logging.getLogger("hindi_real_estate_agent")
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
 You are Priya Sharma (प्रिया शर्मा), a polite and friendly female Property Advisor at Skyline Luxury Realty.
-You are on a live mobile phone call.
+You are on a live mobile phone call with a customer.
 
 CRITICAL VOICE & SPEED RULES:
-1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only).
+1. MICRO-BURSTS ONLY: Speak strictly 8 to 10 words per reply (1 short sentence only). Long sentences cause phone lag.
 2. NATURAL & WARM: Speak naturally in polite Hindi with gentle female tone.
 3. CONVERSATIONAL TURNS: Answer briefly, then let the customer speak.
 
@@ -86,6 +87,7 @@ class HindiRealEstateAgent(Agent):
         logger.info(f"👤 Client Name     : {customer_name}")
         logger.info(f"📅 Preferred Day   : {preferred_day}")
         logger.info(f"🏢 Flat Type       : {flat_type}")
+        logger.info(f"📝 Notes           : {notes}")
         logger.info("=" * 60)
 
         visit_record = {
@@ -108,7 +110,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Immediate Audio Track Publication)
+# 3. AGENT ENTRYPOINT (250ms Turn Detection Configuration)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Voice Agent for Room: {ctx.room.name}")
@@ -128,11 +130,23 @@ async def entrypoint(ctx: JobContext):
     if not google_api_key:
         logger.error("GOOGLE_API_KEY environment variable is not set!")
 
+    # Configure ultra-fast 250ms silence detection and high speech sensitivity
+    activity_detection = types.AutomaticActivityDetection(
+        silence_duration_ms=250,
+        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+    )
+
+    realtime_input = types.RealtimeInputConfig(
+        automatic_activity_detection=activity_detection,
+    )
+
     model = realtime.RealtimeModel(
         model="gemini-2.5-flash-native-audio-latest",
         voice="Aoede",
         temperature=0.3,
-        api_key=google_api_key
+        api_key=google_api_key,
+        realtime_input_config=realtime_input,
     )
 
     session = AgentSession(
