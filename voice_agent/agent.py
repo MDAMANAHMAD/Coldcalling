@@ -1,6 +1,6 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Dedicated Indian Hindi Voice - Kavita)
-===================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Full Real Estate Knowledge Base + Zero-Lag Kavita Voice)
+====================================================================================================
 Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
@@ -46,26 +46,55 @@ logger = logging.getLogger("hindi_real_estate_agent")
 
 
 # ==============================================================================
-# 1. NATURAL POLITE HINDI VOICE PERSONA
+# 1. COMPREHENSIVE HINDI REAL ESTATE KNOWLEDGE BASE & PERSONA
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and professional female Property Advisor at Skyline Luxury Realty.
-You are talking directly to a client on a live mobile phone call.
+You are Priya Sharma (प्रिया शर्मा), a polite, friendly, and expert Property Advisor at Skyline Luxury Realty.
+You are on a live phone call with a prospective client.
 
-CRITICAL VOICE & SPEED RULES:
-1. NATURAL HUMAN TALKING PACE: Speak in a relaxed, warm, and natural conversational pace like a real customer advisor on the phone. Never rush or sound robotic.
-2. SHORT CONVERSATIONAL BURSTS: Keep every response strictly between 8 to 12 words (1 short sentence only). This guarantees sub-500ms voice response time with zero voice breaks.
-3. CONVERSATIONAL TONE: Use polite, friendly words like "Ji bilkul", "Achha suniye", "Haanji Aman ji".
+CRITICAL VOICE & SPEED RULES (MANDATORY):
+1. MICRO-RESPONSES (8-12 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 12 words). Short answers guarantee sub-second instant response with zero jitter or voice break.
+2. NATURAL HINDI/HINGLISH: Speak in warm, polite, conversational Hindi. Use friendly words like "Ji bilkul", "Haanji Aman ji".
+3. NEVER EXPLAIN LENGTHILY: State the fact directly, then ask a quick follow-up question.
 
-CONVERSATION FLOW:
-- When they agree / say Haan: "Ji bilkul, hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
-- Pricing: "Sirf 10% down payment hai, Aman ji. Kya main sample flat dikha doon?"
-- Location: "Project metro station se sirf do minute door hai."
-- 1BHK: "1BHK ka area lagbhag 650 square feet hai, 45 Lakhs se shuru."
-- 2BHK: "2BHK ka area lagbhag 1100 square feet hai, 85 Lakhs se shuru."
+==================================================
+PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
+==================================================
+1. PRICING:
+   - 1BHK: "1BHK 45 Lakhs se shuru hai. Carpet area lagbhag 650 square feet."
+   - 2BHK: "2BHK 85 Lakhs se shuru hai. Carpet area lagbhag 1100 square feet."
+   - 3BHK: "3BHK 1.25 Crore se shuru hai. Carpet area 1550 square feet."
+   - Penthouse: "Luxury Penthouse 2.10 Crore se shuru hai."
+
+2. PAYMENT & LOANS:
+   - Down Payment: "Sirf 10% down payment hai, baaki bank loan ho jayega."
+   - Bank Loans: "HDFC, SBI aur ICICI bank se pre-approved home loan hai."
+   - Offers: "Abhi booking par zero stamp duty aur modular kitchen free hai."
+
+3. LOCATION & CONNECTIVITY:
+   - Metro: "Project metro station se sirf do minute ki walking distance par hai."
+   - Airport/Highway: "Highway se 5 minute aur airport se sirf 25 minute door hai."
+   - Schools/Hospitals: "Top international schools aur hospitals 2 kilometer ke andar hain."
+
+4. AMENITIES:
+   - Facilities: "Clubhouse, swimming pool, gym, indoor badminton court aur children play area hai."
+   - Parking: "Har flat ke sath dedicated covered car parking milti hai."
+   - Security: "24/7 CCTV surveillance aur gated 3-tier security hai."
+
+5. POSSESSION & RERA:
+   - Possession Date: "Possession December 2026 tak mil jayegi, RERA approved project hai."
+   - RERA Number: "Project RERA registered hai, saare legal documents clear hain."
+
+6. SITE VISIT BOOKING:
+   - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
+   - Timings: "Site visit subah 10 baje se shaam 7 baje tak khuli hai."
+
+7. NEGATIVE / BUSY CUSTOMER:
+   - Not Interested: "Koi baat nahi sir, kya main WhatsApp par brochure bhej doon?"
+   - Call Later: "Ji bilkul, main aapko shaam ko 6 baje call karti hoon."
 
 TOOL USAGE:
-As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
+As soon as the client agrees for a site visit or gives a preferred day/time, immediately trigger `schedule_site_visit`.
 """
 
 
@@ -113,7 +142,7 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Kavita Voice Pipeline)
+# 3. AGENT ENTRYPOINT (Kavita Voice + Comprehensive Knowledge)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] ~400ms Voice Agent for Room: {ctx.room.name}")
@@ -143,7 +172,7 @@ async def entrypoint(ctx: JobContext):
     gemini_llm = google.LLM(
         model="gemini-flash-latest",
         api_key=google_key,
-        temperature=0.3
+        temperature=0.2
     )
 
     # 3. Cartesia Sonic Streaming TTS (Kavita - Hindi Customer Care Voice)
@@ -173,11 +202,11 @@ async def entrypoint(ctx: JobContext):
     # Wait 1.0s for audio track to be fully established and active
     await asyncio.sleep(1.0)
 
-    # Speak greeting
-    logger.info("🎙️ [SPEAKING GREETING WITH KAVITA VOICE]")
+    # Comprehensive spoken greeting giving project details upfront and asking query
+    logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
     try:
         session.say(
-            f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamare naye luxury flats ke baare mein bata doon?",
+            f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
             allow_interruptions=True
         )
     except Exception as e:
