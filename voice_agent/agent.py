@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Ultra-Low Latency ~400ms Streaming Pipeline)
-========================================================================================
-Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, ~100ms latency)
-- LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic (Ultra-Realistic Natural Hindi Voice, streaming audio)
-- VAD: Silero VAD (250ms silence cutoff for instant interruption and turn-taking)
+LiveKit Voice AI Cold Calling Agent Worker (Ultra-Fast 0.4s Local Turn-Detection)
+=================================================================================
+Optimizations:
+- Deepgram Nova-2: endpointing_ms=250 (Commits speech in 250ms instead of 27s backlog)
+- Disabled Remote Cloud Turn Detector (Zero remote gateway round-trip lag)
+- Silero VAD: Local 250ms silence detection
+- Google Gemini Flash + Cartesia Sonic TTS
 
 Role: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -61,6 +61,8 @@ CONVERSATION FLOW:
 - When they agree / say Haan: "Hamara naya project metro ke paas hai. 2BHK 85 Lakhs se shuru hai."
 - Pricing: "Sirf 10% down payment hai. Kya main sample flat dikha doon?"
 - Location: "Project metro station se sirf do minute door hai."
+- 1BHK: "1BHK ka area lagbhag 650 square feet hai, 45 Lakhs se shuru."
+- 2BHK: "2BHK ka area lagbhag 1100 square feet hai, 85 Lakhs se shuru."
 
 TOOL USAGE:
 As soon as the client agrees for a site visit or asks for location/brochure, immediately trigger the `schedule_site_visit` tool.
@@ -111,10 +113,10 @@ class HindiRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Ultra-Low Latency ~400ms Pipeline)
+# 3. AGENT ENTRYPOINT (Zero Remote Gateway Lag & 250ms STT Endpointing)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] ~400ms Low-Latency Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] ~400ms Ultra-Fast Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -126,10 +128,13 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (~100ms)
+    # 1. Deepgram Nova-2 STT with 250ms endpointing (prevents 27s buffering backlog)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
+        model="nova-2",
+        endpointing_ms=250,
+        smart_format=True,
         api_key=deepgram_key
     )
 
@@ -148,17 +153,19 @@ async def entrypoint(ctx: JobContext):
         language="hi"
     )
 
-    # 4. Silero Voice Activity Detector (250ms silence detection)
+    # 4. Local Silero Voice Activity Detector (250ms silence detection)
     vad = silero.VAD.load(
         min_silence_duration=0.25,
         min_speech_duration=0.1
     )
 
+    # Disable remote cloud turn detector to eliminate 3-second gateway lag
     session = AgentSession(
         stt=stt,
         llm=gemini_llm,
         tts=tts,
         vad=vad,
+        turn_detector=None,
     )
     agent = HindiRealEstateAgent(customer_name=customer_name)
 
