@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - Sub-400ms Ultra-Fast Pipeline)
-==========================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Kavita Sharma - 24kHz Native LiveKit Audio Pipeline)
+================================================================================================
 Architecture:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 200ms endpointing cutoff)
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 250ms endpointing cutoff)
 - LLM: Google Gemini Flash (gemini-flash-latest, streaming reasoning engine)
-- TTS: Cartesia Sonic with Kavita Hindi Voice ID (56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz Native Rate)
-- VAD: Local Silero VAD (200ms silence detection)
+- TTS: Cartesia Sonic (Kavita Hindi Voice ID: 56e35e2d-6eb6-4226-ab8b-9776515a7094, 24kHz LiveKit Native Rate)
+- VAD: Local Silero VAD (250ms silence detection)
 
 Role: Kavita Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
 """
@@ -53,7 +53,7 @@ You are Kavita Sharma (कविता शर्मा), a polite, friendly, and
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-400ms instant response with zero jitter or voice break.
+1. MICRO-RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-300ms instant response with zero jitter or voice break.
 2. NATURAL HINDI/HINGLISH: Speak in warm, polite, conversational Hindi. Use friendly words like "Ji bilkul", "Haanji Aman ji".
 3. NEVER EXPLAIN LENGTHILY: State the fact directly, then ask a quick follow-up question.
 
@@ -139,10 +139,10 @@ class KavitaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Kavita Sharma Pipeline)
+# 3. AGENT ENTRYPOINT (24kHz LiveKit Native Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Sub-400ms Kavita Voice Agent for Room: {ctx.room.name}")
+    logger.info(f"[JOB STARTED] Sub-300ms Kavita Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
     customer_name = "Aman ji"
@@ -154,12 +154,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT with 200ms endpointing
+    # 1. Deepgram Nova-2 STT with 250ms endpointing
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=200,
+        endpointing_ms=250,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -172,19 +172,19 @@ async def entrypoint(ctx: JobContext):
         temperature=0.1
     )
 
-    # 3. Cartesia Sonic 24kHz Native Telephony Streaming TTS (Kavita Voice ID)
+    # 3. Cartesia Sonic 24kHz LiveKit Native Streaming TTS (Kavita Voice ID)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     tts = cartesia.TTS(
         api_key=cartesia_key,
-        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Dedicated Kavita Voice
+        voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",  # Kavita: Dedicated Hindi Customer Care Voice
         language="hi",
-        sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate
+        sample_rate=24000  # 24kHz native LiveKit WebRTC pipeline rate for crystal clear audio
     )
 
-    # 4. Local Silero Voice Activity Detector (200ms silence detection)
+    # 4. Local Silero Voice Activity Detector (250ms silence detection)
     vad = silero.VAD.load(
-        min_silence_duration=0.20,
-        min_speech_duration=0.08
+        min_silence_duration=0.25,
+        min_speech_duration=0.1
     )
 
     session = AgentSession(
@@ -197,13 +197,13 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait 0.8s for audio track to be fully established and active
-    await asyncio.sleep(0.8)
+    # Wait 1.0s for audio track to be fully established and active
+    await asyncio.sleep(1.0)
 
-    # Await opening greeting with Kavita Sharma persona
-    logger.info("🎙️ [SPEAKING GREETING WITH KAVITA SHARMA PERSONA]")
+    # Speak comprehensive greeting with Kavita voice
+    logger.info("🎙️ [SPEAKING COMPREHENSIVE GREETING WITH KAVITA VOICE]")
     try:
-        await session.say(
+        session.say(
             f"Namaste {customer_name}! Main Kavita baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
             allow_interruptions=True
         )
