@@ -1,11 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Groq LPU + ElevenLabs Turbo v2.5)
-=============================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Groq LPU + ElevenLabs Turbo v2.5 - Low Memory)
+==========================================================================================
 Production Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 180ms endpointing)
 - LLM: Groq LPU Llama-3.3 70B (<80ms response) with Google Gemini Flash fallback
 - TTS: ElevenLabs Turbo v2.5 (Voice: Bella hpp4J3VqNfWAUOO0d1Us, 0 breaks) with Cartesia fallback
 - VAD: Silero VAD (0.25s TurnDetector compliance)
+- Memory: Low-memory footprint (num_idle_processes=0) for 1GB cloud VPS
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -233,11 +234,12 @@ async def entrypoint(ctx: JobContext):
 
 
 # ==============================================================================
-# 4. CLI RUNNER
+# 4. CLI RUNNER (Optimized for 1GB Cloud VPS)
 # ==============================================================================
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            num_idle_processes=0,  # Prevents OOM memory crash on 1GB VPS
         )
     )
