@@ -2,8 +2,10 @@
 livekit-agents>=1.6.9
 livekit-api>=1.0.0
 
-# Ultra-Low Latency Streaming Plugins (<400ms Pipeline)
+# Ultra-Low Latency Streaming Plugins (<350ms Pipeline)
 livekit-plugins-deepgram>=1.6.9
+livekit-plugins-openai>=1.6.9
+livekit-plugins-elevenlabs>=1.6.9
 livekit-plugins-cartesia>=1.6.9
 livekit-plugins-google>=1.6.9
 livekit-plugins-silero>=1.6.9
@@ -11,3 +13,4 @@ livekit-plugins-silero>=1.6.9
 # Environment and Utilities
 python-dotenv>=1.0.1
 pydantic>=2.7.0
+aiohttp>=3.9.0
