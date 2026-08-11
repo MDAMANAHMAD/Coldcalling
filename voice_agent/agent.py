@@ -1,10 +1,10 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Groq LPU + ElevenLabs Studio Pipeline)
-===================================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Groq LPU + ElevenLabs Turbo v2.5)
+=============================================================================
 Production Architecture:
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 180ms endpointing)
 - LLM: Groq LPU Llama-3.3 70B (<80ms response) with Google Gemini Flash fallback
-- TTS: ElevenLabs Multilingual (Voice: Bella hpp4J3VqNfWAUOO0d1Us, 0 breaks) with Cartesia fallback
+- TTS: ElevenLabs Turbo v2.5 (Voice: Bella hpp4J3VqNfWAUOO0d1Us, 0 breaks) with Cartesia fallback
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
@@ -183,14 +183,14 @@ async def entrypoint(ctx: JobContext):
             temperature=0.1
         )
 
-    # 3. TTS Engine: ElevenLabs Studio Voice (Zero voice breaks)
+    # 3. TTS Engine: ElevenLabs Turbo v2.5 Studio Voice (Zero voice breaks)
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
-        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Studio Voice (Bella)")
+        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 Studio Voice (Bella)")
         tts = elevenlabs.TTS(
             api_key=eleven_key,
             voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella - Studio conversational voice
-            model="eleven_multilingual_v2"
+            model="eleven_turbo_v2_5"
         )
     else:
         logger.info("🎙️ [TTS ENGINE] Using Cartesia Sonic Native 24kHz")
