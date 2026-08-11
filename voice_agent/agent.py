@@ -6,7 +6,7 @@ Production Architecture:
 - LLM: Groq LPU Llama-3.3 70B (<80ms response) with Google Gemini Flash fallback
 - TTS: ElevenLabs Turbo v2.5 (Voice: Bella hpp4J3VqNfWAUOO0d1Us, 0 breaks) with Cartesia fallback
 - VAD: Silero VAD (0.25s TurnDetector compliance)
-- Memory: Low-memory footprint (num_idle_processes=0) for 1GB cloud VPS
+- Worker Options: num_idle_processes=0, load_threshold=0.95 (High availability)
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -234,12 +234,13 @@ async def entrypoint(ctx: JobContext):
 
 
 # ==============================================================================
-# 4. CLI RUNNER (Optimized for 1GB Cloud VPS)
+# 4. CLI RUNNER (Optimized for High-Capacity Cloud VPS)
 # ==============================================================================
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
-            num_idle_processes=0,  # Prevents OOM memory crash on 1GB VPS
+            num_idle_processes=0,     # Prevents fork-bombing RAM
+            load_threshold=0.95,      # Accepts all calls without capacity rejection
         )
     )
