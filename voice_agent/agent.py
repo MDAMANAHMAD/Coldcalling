@@ -1,13 +1,13 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Enterprise Sub-350ms Architecture)
-==============================================================================
-Supported Fast Engines:
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 200ms endpointing)
+LiveKit Voice AI Cold Calling Agent Worker (Groq LPU + ElevenLabs Studio Pipeline)
+===================================================================================
+Production Architecture:
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 180ms endpointing)
 - LLM: Groq LPU Llama-3.3 70B (<80ms response) with Google Gemini Flash fallback
-- TTS: ElevenLabs Flash v2.5 (Studio Indian voice, 0 breaks) with Cartesia Sonic fallback
+- TTS: ElevenLabs Multilingual (Voice: Bella hpp4J3VqNfWAUOO0d1Us, 0 breaks) with Cartesia fallback
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 
-Persona: Priya Sharma - Senior Real Estate Property Advisor (Skyline Luxury Realty)
+Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
 
 import os
@@ -139,7 +139,7 @@ class PriyaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Zero-Crash, Sub-350ms Pipeline)
+# 3. AGENT ENTRYPOINT (Sub-350ms Groq + ElevenLabs Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
@@ -154,12 +154,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (200ms endpointing cutoff)
-    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+    # 1. Deepgram Nova-2 STT (Fast 180ms endpointing cutoff)
+    deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=200,
+        endpointing_ms=180,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -183,13 +183,14 @@ async def entrypoint(ctx: JobContext):
             temperature=0.1
         )
 
-    # 3. TTS Engine: ElevenLabs Flash v2.5 or Cartesia Sonic Fallback
+    # 3. TTS Engine: ElevenLabs Studio Voice (Zero voice breaks)
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
-        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Flash v2.5 Studio Voice")
+        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Studio Voice (Bella)")
         tts = elevenlabs.TTS(
             api_key=eleven_key,
-            model="eleven_flash_v2_5"
+            voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella - Studio conversational voice
+            model="eleven_multilingual_v2"
         )
     else:
         logger.info("🎙️ [TTS ENGINE] Using Cartesia Sonic Native 24kHz")
@@ -217,8 +218,8 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait 1.0s for audio track to be fully established and active
-    await asyncio.sleep(1.0)
+    # Wait 0.8s for audio track to be established
+    await asyncio.sleep(0.8)
 
     # Speak opening project pitch greeting
     logger.info("🎙️ [SPEAKING GREETING WITH PRIYA PERSONA]")
