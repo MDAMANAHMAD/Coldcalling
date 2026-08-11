@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  voice-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: livekit-voice-agent
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./bookings:/app/bookings
