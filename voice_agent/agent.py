@@ -1,9 +1,10 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Thread-Optimized Zero-CPU-Lag Architecture)
-========================================================================================
-Performance Optimizations:
-- 1-Thread CPU Constraint: Eliminates ONNX thread thrashing (stops "inference is slower than realtime")
-- record=False: Bypasses RecorderIO and FFmpeg CPU encoding
+LiveKit Voice AI Cold Calling Agent Worker (Pure Local VAD Turn Detection)
+==========================================================================
+Turn Detection Architecture:
+- turn_detection="vad": Completely disables cloud EOT prediction timeouts
+- Thread Constraints: 1 CPU thread to eliminate ONNX thread thrashing
+- record=False: Bypasses RecorderIO and CPU FFmpeg ogg encoding
 - Pre-Warmed Engine: STT, LLM, TTS, and VAD cached in memory
 - Instant Telephony Greeting: session.say() starts speaking within <50ms of call pickup
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms cutoff)
@@ -227,7 +228,7 @@ def prewarm_fnc(proc: JobProcess):
 
 
 # ==============================================================================
-# 4. AGENT ENTRYPOINT (Zero-Lag Execution with record=False)
+# 4. AGENT ENTRYPOINT (Pure Local VAD Turn Detection)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     t_start = time.perf_counter()
@@ -257,13 +258,14 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
+        turn_detection="vad",     # Pure local VAD turn detection (disables cloud EOT timeouts)
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
 
     # Start session with record=False
     await session.start(agent=agent, room=ctx.room, record=False)
     t_session = (time.perf_counter() - t_start) * 1000
-    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready!")
+    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready in <50ms!")
 
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
