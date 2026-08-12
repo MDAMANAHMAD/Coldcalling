@@ -1,14 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Ultra-Instant Preemptive Architecture)
-==================================================================================
-Speed Optimizations:
-- Preemptive Generation: LLM begins streaming tokens before user finishes the last syllable
-- 50ms Endpointing Delay: min_endpointing_delay=0.05 eliminates silence between turns
-- Prewarm Function (prewarm_fnc): Pre-allocates Deepgram, Groq LPU, ElevenLabs Sarah, and Silero in RAM
-- Voice Persona: Sarah (EXAVITQu4vr4xnSDxMaL) - Warm, Natural, Professional Cadence
+LiveKit Voice AI Cold Calling Agent Worker (Exact Answer Synchronization)
+==========================================================================
+Speed & Telephony Synchronization:
+- Zero-Delay Pickup: Greeting is triggered only when the human callee answers the call (track_subscribed)
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 100ms cutoff)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms TTFT)
-- TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 voice breaks)
+- TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 breaks)
+- Pre-Warmed Engine: prewarm_fnc pre-allocates all AI models in memory
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -209,10 +207,9 @@ def prewarm_fnc(proc: JobProcess):
 
 
 # ==============================================================================
-# 4. AGENT ENTRYPOINT (Preemptive Sub-Second Execution)
+# 4. AGENT ENTRYPOINT (Telephony Synchronized Audio Trigger)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    t_start = asyncio.get_event_loop().time()
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
     await ctx.connect()
 
@@ -236,27 +233,38 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
-        min_endpointing_delay=0.05,       # 50ms instant turn switch
-        max_endpointing_delay=0.35,       # 350ms max turn delay
-        preemptive_generation=True,       # Streams LLM tokens while user speaks
+        min_endpointing_delay=0.05,
+        max_endpointing_delay=0.35,
+        preemptive_generation=True,
         allow_interruptions=True,
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Short, warm opening greeting (under 12 words)
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
         "Hamara naya luxury 2BHK project launch hua hai, kya aap details jaan-na chahenge?"
     )
 
-    t_ready = (asyncio.get_event_loop().time() - t_start) * 1000
-    logger.info(f"🎙️ [SPEAKING GREETING] Engine ready in {t_ready:.1f}ms!")
-    try:
-        session.say(greeting_text, allow_interruptions=True)
-    except Exception as e:
-        logger.warning(f"Greeting error: {e}")
+    greeting_spoken = False
+
+    # Trigger greeting the exact moment the phone's microphone track is subscribed
+    @ctx.room.on("track_subscribed")
+    def on_track_subscribed(track: rtc.Track, publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant):
+        nonlocal greeting_spoken
+        if not greeting_spoken and participant.identity.startswith("sip-"):
+            greeting_spoken = True
+            logger.info(f"📞 [CALL PICKED UP!] Track subscribed for {participant.identity} - Speaking greeting immediately!")
+            session.say(greeting_text, allow_interruptions=True)
+
+    # If the track is already subscribed when entrypoint connects
+    for p in ctx.room.remote_participants.values():
+        if not greeting_spoken and p.identity.startswith("sip-") and len(p.track_publications) > 0:
+            greeting_spoken = True
+            logger.info(f"📞 [CALL ALREADY ACTIVE] Speaking greeting now!")
+            session.say(greeting_text, allow_interruptions=True)
+            break
 
 
 # ==============================================================================
@@ -266,8 +274,8 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
-            prewarm_fnc=prewarm_fnc,   # Pre-loads all models before call starts
-            num_idle_processes=1,      # Always keeps 1 warmed worker in memory
-            load_threshold=0.95,       # High availability
+            prewarm_fnc=prewarm_fnc,
+            num_idle_processes=1,
+            load_threshold=0.95,
         )
     )
