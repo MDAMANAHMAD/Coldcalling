@@ -1,13 +1,14 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (0ms Session Startup with record=False)
-==================================================================================
-Critical Performance Fix:
-- record=False: Bypasses RecorderIO and CPU FFmpeg ogg encoding (eliminates the 13s startup delay)
+LiveKit Voice AI Cold Calling Agent Worker (Thread-Optimized Zero-CPU-Lag Architecture)
+========================================================================================
+Performance Optimizations:
+- 1-Thread CPU Constraint: Eliminates ONNX thread thrashing (stops "inference is slower than realtime")
+- record=False: Bypasses RecorderIO and FFmpeg CPU encoding
+- Pre-Warmed Engine: STT, LLM, TTS, and VAD cached in memory
 - Instant Telephony Greeting: session.say() starts speaking within <50ms of call pickup
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms cutoff)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms TTFT)
 - TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 voice breaks)
-- Pre-Warmed Engine: STT, LLM, and TTS cached in memory
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -26,6 +27,20 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+# Optimize CPU threading to prevent ONNX thread thrashing on 1-vCPU VPS
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
+try:
+    import torch
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+except Exception:
+    pass
+
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -35,7 +50,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, openai, elevenlabs, cartesia, google
+from livekit.plugins import deepgram, openai, elevenlabs, cartesia, google, silero
 from livekit import rtc
 
 # Load environment variables
@@ -146,7 +161,7 @@ class PriyaRealEstateAgent(Agent):
 # 3. PREWARMING FUNCTION (Pre-Loads All AI Engines in Idle Memory)
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
-    """Pre-allocates and caches STT, LLM, and TTS before any call arrives."""
+    """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
@@ -201,12 +216,18 @@ def prewarm_fnc(proc: JobProcess):
             sample_rate=24000
         )
 
+    # 4. Pre-warm Lightweight Silero VAD
+    proc.userdata["vad"] = silero.VAD.load(
+        min_silence_duration=0.25,
+        min_speech_duration=0.08
+    )
+
     t1 = (time.perf_counter() - t0) * 1000
     logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
 
 
 # ==============================================================================
-# 4. AGENT ENTRYPOINT (Instant 0ms Session Startup with record=False)
+# 4. AGENT ENTRYPOINT (Zero-Lag Execution with record=False)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     t_start = time.perf_counter()
@@ -229,25 +250,27 @@ async def entrypoint(ctx: JobContext):
     stt = ctx.proc.userdata.get("stt")
     llm = ctx.proc.userdata.get("llm")
     tts = ctx.proc.userdata.get("tts")
+    vad = ctx.proc.userdata.get("vad")
 
     session = AgentSession(
         stt=stt,
         llm=llm,
         tts=tts,
+        vad=vad,
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
 
-    # Start session with record=False to completely eliminate RecorderIO and FFmpeg CPU encoding delay
+    # Start session with record=False
     await session.start(agent=agent, room=ctx.room, record=False)
     t_session = (time.perf_counter() - t_start) * 1000
-    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready in <50ms!")
+    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready!")
 
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
         "Hamara naya luxury 2BHK project launch hua hai, kya aap details jaan-na chahenge?"
     )
 
-    # Speak greeting immediately upon session start (<0.1s)
+    # Speak greeting immediately upon pickup
     logger.info(f"🎙️ [PERF +{t_session:.1f}ms] Speaking Greeting immediately to caller!")
     try:
         session.say(greeting_text, allow_interruptions=True)
