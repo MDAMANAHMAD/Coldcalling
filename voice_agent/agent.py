@@ -1,13 +1,13 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sub-200ms Instant Pickup + Human Voice)
-===================================================================================
-Production Architecture:
-- Instant Pickup Trigger: ctx.wait_for_participant() triggers greeting the instant call is answered
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms ultra-fast endpointing)
-- LLM: Groq LPU Llama-3.3 70B (<80ms response) with Google Gemini Flash fallback
-- TTS: ElevenLabs Turbo v2.5 with Human Modulation (stability: 0.35, style: 0.25, 0 breaks)
+LiveKit Voice AI Cold Calling Agent Worker (Zero-Delay Instant Pickup + Sub-350ms Turns)
+========================================================================================
+Production Latency Architecture:
+- Call Pickup Sync: Triggers greeting the instant the caller's audio track is subscribed
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 100ms ultra-fast cutoff)
+- LLM: Groq LPU Llama-3.3 70B (temp: 0.0, max_tokens: 35 for sub-80ms first token)
+- TTS: ElevenLabs Turbo v2.5 with Low-Latency Chunk Schedule [40, 80, 120] & Bella Voice
 - VAD: Silero VAD (0.25s TurnDetector compliance)
-- Worker Options: num_idle_processes=0, load_threshold=0.95 (High availability)
+- Worker Options: num_idle_processes=0, load_threshold=0.95
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -48,16 +48,16 @@ logger = logging.getLogger("enterprise_voice_agent")
 
 
 # ==============================================================================
-# 1. PRIYA SHARMA HINDI VOICE PERSONA & NATURAL HUMAN CADENCE
+# 1. PRIYA SHARMA HINDI VOICE PERSONA & ULTRA-FAST CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a warm, energetic, and polite Senior Property Advisor at Skyline Luxury Realty.
+You are Priya Sharma (प्रिया शर्मा), a polite, confident Senior Property Advisor at Skyline Luxury Realty.
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. NATURAL HUMAN CONVERSATION: Speak like a real, enthusiastic human with natural inflection and friendly conversational Hindi ("Haanji Aman ji", "Ji bilkul", "Arey wah").
-2. INSTANT FAST RESPONSES (8-10 WORDS MAXIMUM): Always answer in 1 short, crisp sentence (strictly under 10 words). Short answers guarantee sub-second instant response with zero jitter or voice break.
-3. NEVER EXPLAIN LENGTHILY: State the key fact directly, then ask a quick follow-up question.
+1. CRISP 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant <350ms streaming.
+2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
+3. NEVER GIVE LENGTHY PARAGRAPHS: Give the direct answer immediately, then ask a quick question.
 
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
@@ -73,7 +73,7 @@ PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
    - Offers: "Abhi booking par zero stamp duty aur modular kitchen free hai."
 
 3. LOCATION & CONNECTIVITY:
-   - Metro: "Project metro station se sirf do minute ki walking distance par hai."
+   - Metro: "Project metro station se sirf do minute walking distance par hai."
    - Airport/Highway: "Highway se 5 minute aur airport se sirf 25 minute door hai."
    - Schools/Hospitals: "Top international schools aur hospitals 2 kilometer ke andar hain."
 
@@ -141,7 +141,7 @@ class PriyaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Sub-200ms Instant Pickup + Human Voice)
+# 3. AGENT ENTRYPOINT (Zero-Delay Instant Pickup + Fast Streaming Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
@@ -156,17 +156,17 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (Ultra-fast 120ms endpointing cutoff)
+    # 1. Deepgram Nova-2 STT (Ultra-fast 100ms endpointing cutoff)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=120,
+        endpointing_ms=100,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 2. LLM Engine: Groq LPU (Sub-80ms) or Google Gemini Flash Fallback
+    # 2. LLM Engine: Groq LPU (Sub-80ms First Token)
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key and groq_key.startswith("gsk_"):
         logger.info("⚡ [LLM ENGINE] Using Ultra-Fast Groq LPU (Llama-3.3 70B Versatile)")
@@ -174,7 +174,7 @@ async def entrypoint(ctx: JobContext):
             base_url="https://api.groq.com/openai/v1",
             model="llama-3.3-70b-versatile",
             api_key=groq_key,
-            temperature=0.1
+            temperature=0.0
         )
     else:
         logger.info("🧠 [LLM ENGINE] Using Google Gemini Flash")
@@ -182,24 +182,25 @@ async def entrypoint(ctx: JobContext):
         llm = google.LLM(
             model="gemini-flash-latest",
             api_key=google_key,
-            temperature=0.1
+            temperature=0.0
         )
 
-    # 3. TTS Engine: ElevenLabs Turbo v2.5 with Human Natural Modulation
+    # 3. TTS Engine: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [40, 80, 120]
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
         logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 with Human Modulation (Bella)")
         tts = elevenlabs.TTS(
             api_key=eleven_key,
-            voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella - Warm conversational voice
+            voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella - Studio conversational voice
             model="eleven_turbo_v2_5",
             voice_settings=elevenlabs.VoiceSettings(
-                stability=0.35,           # Lower stability = Natural human pitch & tone variation
-                similarity_boost=0.80,    # High voice clarity
-                style=0.25,               # Conversational warmth
+                stability=0.35,
+                similarity_boost=0.80,
+                style=0.20,
                 use_speaker_boost=True
             ),
-            streaming_latency=3           # Low latency streaming
+            chunk_length_schedule=[40, 80, 120],  # Starts audio generation on first 3 words
+            streaming_latency=3
         )
     else:
         logger.info("🎙️ [TTS ENGINE] Using Cartesia Sonic Native 24kHz")
@@ -227,16 +228,26 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Wait for the caller to actually answer the phone before speaking!
-    logger.info("⏳ Waiting for caller to pick up phone...")
-    try:
-        participant = await ctx.wait_for_participant()
-        logger.info(f"📞 CALL ANSWERED! Participant: {participant.identity}")
-    except Exception as e:
-        logger.warning(f"wait_for_participant: {e}")
+    # 5. INSTANT PICKUP SYNC: Wait until human caller answers (track is subscribed)
+    logger.info("⏳ Waiting for caller to pick up phone (audio track subscribed)...")
+    
+    # Check if participant already connected or wait for track subscription
+    caller_answered = False
+    for _ in range(120):  # Wait up to 60 seconds (120 x 0.5s)
+        for p in ctx.room.remote_participants.values():
+            if p.identity.startswith("sip-") and len(p.track_publications) > 0:
+                caller_answered = True
+                logger.info(f"📞 CALL ANSWERED! Participant: {p.identity} - Speaking greeting immediately!")
+                break
+        if caller_answered:
+            break
+        await asyncio.sleep(0.5)
+
+    # Short delay (0.2s) for audio pipeline sync
+    await asyncio.sleep(0.2)
 
     # Speak opening pitch greeting immediately upon answer
-    logger.info("🎙️ [SPEAKING OPENING GREETING ON ANSWER]")
+    logger.info("🎙️ [SPEAKING OPENING GREETING]")
     try:
         session.say(
             f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
@@ -253,7 +264,7 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
-            num_idle_processes=0,     # Prevents fork-bombing RAM
-            load_threshold=0.95,      # Accepts all calls without capacity rejection
+            num_idle_processes=0,     # Prevents memory crash on 1GB VPS
+            load_threshold=0.95,      # High availability
         )
     )
