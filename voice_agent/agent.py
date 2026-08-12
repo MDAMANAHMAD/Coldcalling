@@ -1,8 +1,9 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Exact Answer Synchronization)
-==========================================================================
-Speed & Telephony Synchronization:
-- Zero-Delay Pickup: Greeting is triggered only when the human callee answers the call (track_subscribed)
+LiveKit Voice AI Cold Calling Agent Worker (High-Resolution Performance Instrumentation)
+========================================================================================
+Timing & Telephony Optimization:
+- High-Resolution Timestamps: Logs exact elapsed milliseconds for Room Connect, Session Start, Greeting, STT, LLM, and TTS
+- Zero-Delay Telephony Greeting: session.say() fires immediately upon session start
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 100ms cutoff)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms TTFT)
 - TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 breaks)
@@ -15,6 +16,7 @@ import os
 import sys
 import json
 import logging
+import time
 import asyncio
 from datetime import datetime
 from dotenv import load_dotenv
@@ -145,6 +147,7 @@ class PriyaRealEstateAgent(Agent):
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
     """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
+    t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
     # 1. Pre-warm Deepgram Nova-2 STT (100ms ultra-fast cutoff)
@@ -203,15 +206,20 @@ def prewarm_fnc(proc: JobProcess):
         min_silence_duration=0.25,
         min_speech_duration=0.08
     )
-    logger.info("✅ [PRE-WARMING COMPLETE] Sarah Voice AI Worker is ready in memory!")
+    t1 = (time.perf_counter() - t0) * 1000
+    logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
 
 
 # ==============================================================================
-# 4. AGENT ENTRYPOINT (Telephony Synchronized Audio Trigger)
+# 4. AGENT ENTRYPOINT (High-Resolution Millisecond Instrumentation)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
+    t_start = time.perf_counter()
+    logger.info(f"⏱️ [PERF +0ms] Job received for Room: {ctx.room.name}")
+    
     await ctx.connect()
+    t_connected = (time.perf_counter() - t_start) * 1000
+    logger.info(f"⏱️ [PERF +{t_connected:.1f}ms] Connected to LiveKit Room!")
 
     customer_name = "Aman ji"
     if ctx.room.metadata:
@@ -241,30 +249,20 @@ async def entrypoint(ctx: JobContext):
     agent = PriyaRealEstateAgent(customer_name=customer_name)
 
     await session.start(agent=agent, room=ctx.room)
+    t_session = (time.perf_counter() - t_start) * 1000
+    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready!")
 
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
         "Hamara naya luxury 2BHK project launch hua hai, kya aap details jaan-na chahenge?"
     )
 
-    greeting_spoken = False
-
-    # Trigger greeting the exact moment the phone's microphone track is subscribed
-    @ctx.room.on("track_subscribed")
-    def on_track_subscribed(track: rtc.Track, publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant):
-        nonlocal greeting_spoken
-        if not greeting_spoken and participant.identity.startswith("sip-"):
-            greeting_spoken = True
-            logger.info(f"📞 [CALL PICKED UP!] Track subscribed for {participant.identity} - Speaking greeting immediately!")
-            session.say(greeting_text, allow_interruptions=True)
-
-    # If the track is already subscribed when entrypoint connects
-    for p in ctx.room.remote_participants.values():
-        if not greeting_spoken and p.identity.startswith("sip-") and len(p.track_publications) > 0:
-            greeting_spoken = True
-            logger.info(f"📞 [CALL ALREADY ACTIVE] Speaking greeting now!")
-            session.say(greeting_text, allow_interruptions=True)
-            break
+    # Speak greeting immediately upon session start
+    logger.info(f"🎙️ [PERF +{t_session:.1f}ms] Speaking Greeting directly to caller!")
+    try:
+        session.say(greeting_text, allow_interruptions=True)
+    except Exception as e:
+        logger.warning(f"Greeting error: {e}")
 
 
 # ==============================================================================
