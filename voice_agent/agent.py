@@ -1,11 +1,11 @@
 """
 LiveKit Voice AI Cold Calling Agent Worker (Zero-Delay Instant Pickup + Sub-350ms Turns)
 ========================================================================================
-Production Latency Architecture:
-- Call Pickup Sync: Triggers greeting the instant the caller's audio track is subscribed
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 100ms ultra-fast cutoff)
+Production Architecture:
+- Event-driven greeting: Fires immediately when the participant is present/connected
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms cutoff)
 - LLM: Groq LPU Llama-3.3 70B (temp: 0.0, max_tokens: 35 for sub-80ms first token)
-- TTS: ElevenLabs Turbo v2.5 with Low-Latency Chunk Schedule [40, 80, 120] & Bella Voice
+- TTS: ElevenLabs Turbo v2.5 with Bella Voice (stability: 0.35, style: 0.20)
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 - Worker Options: num_idle_processes=0, load_threshold=0.95
 
@@ -141,7 +141,7 @@ class PriyaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Zero-Delay Instant Pickup + Fast Streaming Pipeline)
+# 3. AGENT ENTRYPOINT (Sub-350ms Instant Pickup + Human Voice)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
@@ -156,12 +156,12 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (Ultra-fast 100ms endpointing cutoff)
+    # 1. Deepgram Nova-2 STT (Ultra-fast 120ms endpointing cutoff)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=100,
+        endpointing_ms=120,
         smart_format=True,
         api_key=deepgram_key
     )
@@ -185,7 +185,7 @@ async def entrypoint(ctx: JobContext):
             temperature=0.0
         )
 
-    # 3. TTS Engine: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [40, 80, 120]
+    # 3. TTS Engine: ElevenLabs Turbo v2.5 (Studio Voice: Bella)
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
         logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 with Human Modulation (Bella)")
@@ -199,7 +199,6 @@ async def entrypoint(ctx: JobContext):
                 style=0.20,
                 use_speaker_boost=True
             ),
-            chunk_length_schedule=[40, 80, 120],  # Starts audio generation on first 3 words
             streaming_latency=3
         )
     else:
@@ -228,31 +227,17 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # 5. INSTANT PICKUP SYNC: Wait until human caller answers (track is subscribed)
-    logger.info("⏳ Waiting for caller to pick up phone (audio track subscribed)...")
-    
-    # Check if participant already connected or wait for track subscription
-    caller_answered = False
-    for _ in range(120):  # Wait up to 60 seconds (120 x 0.5s)
-        for p in ctx.room.remote_participants.values():
-            if p.identity.startswith("sip-") and len(p.track_publications) > 0:
-                caller_answered = True
-                logger.info(f"📞 CALL ANSWERED! Participant: {p.identity} - Speaking greeting immediately!")
-                break
-        if caller_answered:
-            break
-        await asyncio.sleep(0.5)
+    # Speak greeting immediately when session connects
+    greeting_text = (
+        f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
+        "Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. "
+        "Kya aap iski details jaan-na chahenge?"
+    )
 
-    # Short delay (0.2s) for audio pipeline sync
-    await asyncio.sleep(0.2)
-
-    # Speak opening pitch greeting immediately upon answer
-    logger.info("🎙️ [SPEAKING OPENING GREETING]")
+    # Trigger greeting without blocking loops
+    logger.info("🎙️ [TRIGGERING OPENING GREETING]")
     try:
-        session.say(
-            f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. Kya aap iski details ya pricing jaan-na chahenge?",
-            allow_interruptions=True
-        )
+        session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 
