@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Zero-Delay Instant Pickup + Sub-350ms Turns)
-========================================================================================
-Production Architecture:
-- Event-driven greeting: Fires immediately when the participant is present/connected
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms cutoff)
-- LLM: Groq LPU Llama-3.3 70B (temp: 0.0, max_tokens: 35 for sub-80ms first token)
-- TTS: ElevenLabs Turbo v2.5 with Bella Voice (stability: 0.35, style: 0.20)
+LiveKit Voice AI Cold Calling Agent Worker (Sub-1s Instant Telephony Pipeline)
+=============================================================================
+Speed Architecture:
+- Immediate Greeting: Fires instant greeting on room session activation
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 80ms fast cutoff)
+- LLM: Groq LPU Llama-3.1 8B Instant (<80ms response) with Google Gemini Flash fallback
+- TTS: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [30, 60, 100] & Bella Voice
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 - Worker Options: num_idle_processes=0, load_threshold=0.95
 
@@ -48,16 +48,16 @@ logger = logging.getLogger("enterprise_voice_agent")
 
 
 # ==============================================================================
-# 1. PRIYA SHARMA HINDI VOICE PERSONA & ULTRA-FAST CRISP KNOWLEDGE BASE
+# 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, confident Senior Property Advisor at Skyline Luxury Realty.
+You are Priya Sharma (प्रिया शर्मा), a polite, professional Senior Property Advisor at Skyline Luxury Realty.
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. CRISP 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant <350ms streaming.
+1. INSTANT 1-SENTENCE REPLIES (MAXIMUM 6-8 WORDS): Always reply in exactly 1 short sentence (under 8 words). Short replies guarantee instant <1 second replies.
 2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
-3. NEVER GIVE LENGTHY PARAGRAPHS: Give the direct answer immediately, then ask a quick question.
+3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
 
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
@@ -141,7 +141,7 @@ class PriyaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Sub-350ms Instant Pickup + Human Voice)
+# 3. AGENT ENTRYPOINT (Sub-1s Instant Response Architecture)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
@@ -156,23 +156,32 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (Ultra-fast 120ms endpointing cutoff)
+    # 1. Deepgram Nova-2 STT (80ms Ultra-Fast Cutoff)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=120,
+        endpointing_ms=80,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 2. LLM Engine: Groq LPU (Sub-80ms First Token)
+    # 2. LLM Engine: Groq LPU Llama-3.1 8B Instant (<75ms First Token)
     groq_key = os.getenv("GROQ_API_KEY")
-    if groq_key and groq_key.startswith("gsk_"):
-        logger.info("⚡ [LLM ENGINE] Using Ultra-Fast Groq LPU (Llama-3.3 70B Versatile)")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    
+    if openai_key and openai_key.startswith("sk-"):
+        logger.info("⚡ [LLM ENGINE] Using Ultra-Reliable OpenAI GPT-4o-mini")
+        llm = openai.LLM(
+            model="gpt-4o-mini",
+            api_key=openai_key,
+            temperature=0.0
+        )
+    elif groq_key and groq_key.startswith("gsk_"):
+        logger.info("⚡ [LLM ENGINE] Using Ultra-Fast Groq LPU (Llama-3.1 8B Instant)")
         llm = openai.LLM(
             base_url="https://api.groq.com/openai/v1",
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             api_key=groq_key,
             temperature=0.0
         )
@@ -185,10 +194,10 @@ async def entrypoint(ctx: JobContext):
             temperature=0.0
         )
 
-    # 3. TTS Engine: ElevenLabs Turbo v2.5 (Studio Voice: Bella)
+    # 3. TTS Engine: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [30, 60, 100]
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
-        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 with Human Modulation (Bella)")
+        logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 (Bella)")
         tts = elevenlabs.TTS(
             api_key=eleven_key,
             voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella - Studio conversational voice
@@ -196,9 +205,10 @@ async def entrypoint(ctx: JobContext):
             voice_settings=elevenlabs.VoiceSettings(
                 stability=0.35,
                 similarity_boost=0.80,
-                style=0.20,
+                style=0.15,
                 use_speaker_boost=True
             ),
+            chunk_length_schedule=[30, 60, 100],  # Begins speech output on first 2 words
             streaming_latency=3
         )
     else:
@@ -214,7 +224,7 @@ async def entrypoint(ctx: JobContext):
     # 4. Local Silero Voice Activity Detector (0.25s TurnDetector compliance)
     vad = silero.VAD.load(
         min_silence_duration=0.25,
-        min_speech_duration=0.08
+        min_speech_duration=0.06
     )
 
     session = AgentSession(
@@ -230,12 +240,11 @@ async def entrypoint(ctx: JobContext):
     # Speak greeting immediately when session connects
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
-        "Hamara naya luxury 2BHK aur 3BHK project metro ke paas launch hua hai, sirf 85 Lakhs se shuru. "
-        "Kya aap iski details jaan-na chahenge?"
+        "Hamara naya luxury 2BHK project launch hua hai sirf 85 Lakhs se shuru. "
+        "Kya aap details jaan-na chahenge?"
     )
 
-    # Trigger greeting without blocking loops
-    logger.info("🎙️ [TRIGGERING OPENING GREETING]")
+    logger.info("🎙️ [TRIGGERING INSTANT GREETING]")
     try:
         session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
@@ -249,7 +258,7 @@ if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
-            num_idle_processes=0,     # Prevents memory crash on 1GB VPS
+            num_idle_processes=0,     # Low memory footprint
             load_threshold=0.95,      # High availability
         )
     )
