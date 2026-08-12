@@ -1,12 +1,14 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sarah Ultra-Realistic Voice + 0ms Pre-Warmed)
-========================================================================================
-Production Architecture:
-- Voice Persona: Sarah (EXAVITQu4vr4xnSDxMaL) - Mature, Reassuring, Ultra-Natural Conversational Voice
-- Pre-Warmed Engine: prewarm_fnc pre-loads all models in memory for 0ms cold-start
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms endpointing)
+LiveKit Voice AI Cold Calling Agent Worker (Ultra-Instant Preemptive Architecture)
+==================================================================================
+Speed Optimizations:
+- Preemptive Generation: LLM begins streaming tokens before user finishes the last syllable
+- 50ms Endpointing Delay: min_endpointing_delay=0.05 eliminates silence between turns
+- Prewarm Function (prewarm_fnc): Pre-allocates Deepgram, Groq LPU, ElevenLabs Sarah, and Silero in RAM
+- Voice Persona: Sarah (EXAVITQu4vr4xnSDxMaL) - Warm, Natural, Professional Cadence
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 100ms cutoff)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms TTFT)
-- TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 breaks)
+- TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 voice breaks)
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -147,17 +149,17 @@ def prewarm_fnc(proc: JobProcess):
     """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
-    # 1. Pre-warm Deepgram Nova-2 STT
+    # 1. Pre-warm Deepgram Nova-2 STT (100ms ultra-fast cutoff)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=120,
+        endpointing_ms=100,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 2. Pre-warm Groq LPU LLM
+    # 2. Pre-warm Groq LPU LLM (<75ms First Token)
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key and groq_key.startswith("gsk_"):
         proc.userdata["llm"] = openai.LLM(
@@ -174,7 +176,7 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
 
-    # 3. Pre-warm ElevenLabs Turbo v2.5 with Sarah's Voice (Natural Reassuring Cadence)
+    # 3. Pre-warm ElevenLabs Turbo v2.5 with Sarah's Voice
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
         proc.userdata["tts"] = elevenlabs.TTS(
@@ -207,7 +209,7 @@ def prewarm_fnc(proc: JobProcess):
 
 
 # ==============================================================================
-# 4. AGENT ENTRYPOINT (0ms Execution from Pre-Warmed Memory)
+# 4. AGENT ENTRYPOINT (Preemptive Sub-Second Execution)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     t_start = asyncio.get_event_loop().time()
@@ -234,6 +236,10 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
+        min_endpointing_delay=0.05,       # 50ms instant turn switch
+        max_endpointing_delay=0.35,       # 350ms max turn delay
+        preemptive_generation=True,       # Streams LLM tokens while user speaks
+        allow_interruptions=True,
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
 
@@ -246,7 +252,7 @@ async def entrypoint(ctx: JobContext):
     )
 
     t_ready = (asyncio.get_event_loop().time() - t_start) * 1000
-    logger.info(f"🎙️ [SPEAKING GREETING] Engine started in {t_ready:.1f}ms!")
+    logger.info(f"🎙️ [SPEAKING GREETING] Engine ready in {t_ready:.1f}ms!")
     try:
         session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
