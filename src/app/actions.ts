@@ -606,6 +606,7 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
         participantMetadata: metadata,
         playRingtone: true,
         hidePhoneNumber: false,
+        waitUntilAnswered: true,
       }
     );
 

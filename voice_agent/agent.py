@@ -1,11 +1,11 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Instant Pickup Audio Trigger)
-=========================================================================
+LiveKit Voice AI Cold Calling Agent Worker (Instant Pickup Audio Telephony)
+===========================================================================
 Production Architecture:
-- Callee Pickup Detection: @ctx.room.on("track_subscribed") triggers greeting the exact millisecond phone is answered
+- Callee Answer Synchronization: waitUntilAnswered ensures room starts on phone answer
 - STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms endpointing)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms response) with Google Gemini Flash fallback
-- TTS: ElevenLabs Turbo v2.5 (Voice: Bella, stability: 0.35, style: 0.20)
+- TTS: ElevenLabs Turbo v2.5 (Voice: Bella, stability: 0.35, style: 0.15)
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 - Worker Options: num_idle_processes=0, load_threshold=0.95
 
@@ -227,29 +227,21 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    greeting_spoken = False
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
         "Hamara naya luxury 2BHK project launch hua hai sirf 85 Lakhs se shuru. "
         "Kya aap details jaan-na chahenge?"
     )
 
-    # Trigger greeting the exact millisecond caller's audio track is subscribed (call answered!)
-    @ctx.room.on("track_subscribed")
-    def on_track_subscribed(track: rtc.Track, publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant):
-        nonlocal greeting_spoken
-        if not greeting_spoken and participant.identity.startswith("sip-"):
-            greeting_spoken = True
-            logger.info(f"📞 [CALL PICKED UP!] Audio track subscribed for {participant.identity} - Speaking greeting now!")
-            session.say(greeting_text, allow_interruptions=True)
+    # Wait 0.5s for audio pipe to establish
+    await asyncio.sleep(0.5)
 
-    # Fallback: If track is already subscribed when worker joins
-    for p in ctx.room.remote_participants.values():
-        if not greeting_spoken and p.identity.startswith("sip-") and len(p.track_publications) > 0:
-            greeting_spoken = True
-            logger.info(f"📞 [CALL ALREADY ACTIVE] Speaking greeting to {p.identity}!")
-            session.say(greeting_text, allow_interruptions=True)
-            break
+    # Speak greeting immediately to the caller
+    logger.info("🎙️ [SPEAKING GREETING]")
+    try:
+        session.say(greeting_text, allow_interruptions=True)
+    except Exception as e:
+        logger.warning(f"Greeting error: {e}")
 
 
 # ==============================================================================
