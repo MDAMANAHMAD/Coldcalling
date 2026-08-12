@@ -1,11 +1,10 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sub-1s Instant Telephony Pipeline)
-=============================================================================
-Speed Architecture:
-- Immediate Greeting: Fires instant greeting on room session activation
-- STT: Deepgram Nova-2 (Hindi / Hinglish, 80ms fast cutoff)
-- LLM: Groq LPU Llama-3.1 8B Instant (<80ms response) with Google Gemini Flash fallback
-- TTS: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [30, 60, 100] & Bella Voice
+LiveKit Voice AI Cold Calling Agent Worker (Reliable Zero-Delay Telephony Pipeline)
+===================================================================================
+Production Telephony Architecture:
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 150ms stable endpointing)
+- LLM: Groq LPU Llama-3.1 8B Instant (<75ms response) with Google Gemini Flash fallback
+- TTS: ElevenLabs Turbo v2.5 (Studio Voice: Bella, 0 voice breaks)
 - VAD: Silero VAD (0.25s TurnDetector compliance)
 - Worker Options: num_idle_processes=0, load_threshold=0.95
 
@@ -55,7 +54,7 @@ You are Priya Sharma (प्रिया शर्मा), a polite, professiona
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. INSTANT 1-SENTENCE REPLIES (MAXIMUM 6-8 WORDS): Always reply in exactly 1 short sentence (under 8 words). Short replies guarantee instant <1 second replies.
+1. INSTANT 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant response.
 2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
 3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
 
@@ -141,7 +140,7 @@ class PriyaRealEstateAgent(Agent):
 
 
 # ==============================================================================
-# 3. AGENT ENTRYPOINT (Sub-1s Instant Response Architecture)
+# 3. AGENT ENTRYPOINT (Reliable Sub-1s Telephony Pipeline)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     logger.info(f"[JOB STARTED] Enterprise Voice Agent for Room: {ctx.room.name}")
@@ -156,28 +155,19 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
 
-    # 1. Deepgram Nova-2 STT (80ms Ultra-Fast Cutoff)
+    # 1. Deepgram Nova-2 STT (Reliable 150ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     stt = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=80,
+        endpointing_ms=150,
         smart_format=True,
         api_key=deepgram_key
     )
 
     # 2. LLM Engine: Groq LPU Llama-3.1 8B Instant (<75ms First Token)
     groq_key = os.getenv("GROQ_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    
-    if openai_key and openai_key.startswith("sk-"):
-        logger.info("⚡ [LLM ENGINE] Using Ultra-Reliable OpenAI GPT-4o-mini")
-        llm = openai.LLM(
-            model="gpt-4o-mini",
-            api_key=openai_key,
-            temperature=0.0
-        )
-    elif groq_key and groq_key.startswith("gsk_"):
+    if groq_key and groq_key.startswith("gsk_"):
         logger.info("⚡ [LLM ENGINE] Using Ultra-Fast Groq LPU (Llama-3.1 8B Instant)")
         llm = openai.LLM(
             base_url="https://api.groq.com/openai/v1",
@@ -194,7 +184,7 @@ async def entrypoint(ctx: JobContext):
             temperature=0.0
         )
 
-    # 3. TTS Engine: ElevenLabs Turbo v2.5 with Fast Chunk Schedule [30, 60, 100]
+    # 3. TTS Engine: ElevenLabs Turbo v2.5 (Studio Voice: Bella)
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
         logger.info("🎙️ [TTS ENGINE] Using ElevenLabs Turbo v2.5 (Bella)")
@@ -208,7 +198,6 @@ async def entrypoint(ctx: JobContext):
                 style=0.15,
                 use_speaker_boost=True
             ),
-            chunk_length_schedule=[30, 60, 100],  # Begins speech output on first 2 words
             streaming_latency=3
         )
     else:
@@ -224,7 +213,7 @@ async def entrypoint(ctx: JobContext):
     # 4. Local Silero Voice Activity Detector (0.25s TurnDetector compliance)
     vad = silero.VAD.load(
         min_silence_duration=0.25,
-        min_speech_duration=0.06
+        min_speech_duration=0.08
     )
 
     session = AgentSession(
@@ -237,14 +226,14 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
-    # Speak greeting immediately when session connects
+    # Speak opening pitch greeting immediately upon start
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
         "Hamara naya luxury 2BHK project launch hua hai sirf 85 Lakhs se shuru. "
         "Kya aap details jaan-na chahenge?"
     )
 
-    logger.info("🎙️ [TRIGGERING INSTANT GREETING]")
+    logger.info("🎙️ [SPEAKING GREETING]")
     try:
         session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
