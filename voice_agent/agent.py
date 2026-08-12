@@ -1,13 +1,12 @@
 """
-LiveKit Voice AI Cold Calling Agent Worker (Sub-Second Pre-Warmed Architecture)
-==============================================================================
-Speed Optimizations:
-- Prewarm Function (prewarm_fnc): Pre-allocates Deepgram, Groq LPU, ElevenLabs, and Silero in RAM
-- 0ms Entrypoint Delay: ctx.proc.userdata provides pre-initialized AI instances instantly
-- Immediate Speech: Triggers greeting in <50ms upon room connection
-- STT: Deepgram Nova-2 (120ms endpointing)
+LiveKit Voice AI Cold Calling Agent Worker (Sarah Ultra-Realistic Voice + 0ms Pre-Warmed)
+========================================================================================
+Production Architecture:
+- Voice Persona: Sarah (EXAVITQu4vr4xnSDxMaL) - Mature, Reassuring, Ultra-Natural Conversational Voice
+- Pre-Warmed Engine: prewarm_fnc pre-loads all models in memory for 0ms cold-start
+- STT: Deepgram Nova-2 (Hindi / Hinglish, 120ms endpointing)
 - LLM: Groq LPU Llama-3.1 8B Instant (<75ms TTFT)
-- TTS: ElevenLabs Turbo v2.5 (Studio Voice: Bella, 0 breaks)
+- TTS: ElevenLabs Turbo v2.5 (Sarah Voice, 0 breaks)
 
 Role: Priya Sharma - Senior Property Advisor (Skyline Luxury Realty)
 """
@@ -52,11 +51,11 @@ logger = logging.getLogger("enterprise_voice_agent")
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
-You are Priya Sharma (प्रिया शर्मा), a polite, professional Senior Property Advisor at Skyline Luxury Realty.
+You are Priya Sharma (प्रिया शर्मा), a warm, highly professional Property Advisor at Skyline Luxury Realty.
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. INSTANT 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant response.
+1. CRISP 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant response and ultra-natural human conversation.
 2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
 3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
 
@@ -146,7 +145,7 @@ class PriyaRealEstateAgent(Agent):
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
     """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
-    logger.info("🔥 [PRE-WARMING] Pre-loading all AI voice models into memory...")
+    logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
     # 1. Pre-warm Deepgram Nova-2 STT
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
@@ -175,17 +174,17 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
 
-    # 3. Pre-warm ElevenLabs Turbo v2.5 TTS
+    # 3. Pre-warm ElevenLabs Turbo v2.5 with Sarah's Voice (Natural Reassuring Cadence)
     eleven_key = os.getenv("ELEVENLABS_API_KEY")
     if eleven_key and len(eleven_key) > 10:
         proc.userdata["tts"] = elevenlabs.TTS(
             api_key=eleven_key,
-            voice_id="hpp4J3VqNfWAUOO0d1Us",  # Bella
+            voice_id="EXAVITQu4vr4xnSDxMaL",  # Sarah - Natural, Reassuring, Ultra-Realistic
             model="eleven_turbo_v2_5",
             voice_settings=elevenlabs.VoiceSettings(
-                stability=0.35,
-                similarity_boost=0.80,
-                style=0.15,
+                stability=0.40,
+                similarity_boost=0.85,
+                style=0.20,
                 use_speaker_boost=True
             ),
             streaming_latency=3
@@ -204,7 +203,7 @@ def prewarm_fnc(proc: JobProcess):
         min_silence_duration=0.25,
         min_speech_duration=0.08
     )
-    logger.info("✅ [PRE-WARMING COMPLETE] Worker is primed and ready for 0ms call answers!")
+    logger.info("✅ [PRE-WARMING COMPLETE] Sarah Voice AI Worker is ready in memory!")
 
 
 # ==============================================================================
@@ -240,10 +239,10 @@ async def entrypoint(ctx: JobContext):
 
     await session.start(agent=agent, room=ctx.room)
 
+    # Short, warm opening greeting (under 12 words)
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
-        "Hamara naya luxury 2BHK project launch hua hai sirf 85 Lakhs se shuru. "
-        "Kya aap details jaan-na chahenge?"
+        "Hamara naya luxury 2BHK project launch hua hai, kya aap details jaan-na chahenge?"
     )
 
     t_ready = (asyncio.get_event_loop().time() - t_start) * 1000
