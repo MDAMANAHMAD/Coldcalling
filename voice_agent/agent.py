@@ -43,28 +43,19 @@ except Exception:
     pass
 
 # -----------------------------------------------------------------------------
-# Background Warm Up of OpenAI SDK Lazy Imports
+# Pre-import and compile OpenAI SDK lazy resources at worker startup.
+# We increased initialize_process_timeout to 45.0s to allow these imports
+# to run synchronously during process spawning without causing worker timeouts.
 # -----------------------------------------------------------------------------
-# To prevent the child process from timing out during initialization, we run
-# the heavy imports in a background thread after a 2-second delay. This ensures
-# the process completes its handshake with the supervisor instantly, while
-# warming up the libraries so the first call reply is instant.
-# -----------------------------------------------------------------------------
-import threading
-
-def _background_preimport():
-    time.sleep(2.0)
-    try:
-        import openai
-        import openai.resources.models
-        import openai.resources.admin
-        import openai.types.admin.organization
-        _dummy_client = openai.AsyncOpenAI(api_key="dummy")
-        _ = _dummy_client.models
-    except Exception:
-        pass
-
-threading.Thread(target=_background_preimport, daemon=True).start()
+try:
+    import openai
+    import openai.resources.models
+    import openai.resources.admin
+    import openai.types.admin.organization
+    _dummy_client = openai.AsyncOpenAI(api_key="dummy")
+    _ = _dummy_client.models
+except Exception:
+    pass
 # -----------------------------------------------------------------------------
 
 # Monkey patch livekit's OpenAI LLM prewarm implementation to bypass the
@@ -336,5 +327,6 @@ if __name__ == "__main__":
             prewarm_fnc=prewarm_fnc,
             num_idle_processes=1,
             load_threshold=0.95,
+            initialize_process_timeout=45.0,
         )
     )
