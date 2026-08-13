@@ -248,11 +248,19 @@ async def entrypoint(ctx: JobContext):
             logger.warning(f"Metadata error: {err}")
 
     # Retrieve pre-warmed models from userdata (0ms latency)
+    t_retrieval = time.perf_counter()
     stt = ctx.proc.userdata.get("stt")
     llm = ctx.proc.userdata.get("llm")
     tts = ctx.proc.userdata.get("tts")
     vad = ctx.proc.userdata.get("vad")
+    
+    logger.info(
+        f"⏱️ [PERF] userdata models retrieved: "
+        f"stt={stt is not None}, llm={llm is not None}, "
+        f"tts={tts is not None}, vad={vad is not None} in {(time.perf_counter() - t_retrieval)*1000:.1f}ms"
+    )
 
+    t_session_init = time.perf_counter()
     session = AgentSession(
         stt=stt,
         llm=llm,
@@ -261,11 +269,16 @@ async def entrypoint(ctx: JobContext):
         turn_detection="vad",
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
+    logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
 
     # Start session with record=False
+    t_session_start = time.perf_counter()
+    logger.info("⏱️ [PERF] Calling session.start()...")
     await session.start(agent=agent, room=ctx.room, record=False)
-    t_session = (time.perf_counter() - t_start) * 1000
-    logger.info(f"⏱️ [PERF +{t_session:.1f}ms] Agent Session Started & Ready in <50ms!")
+    t_session_ready = (time.perf_counter() - t_session_start) * 1000
+    t_total_ready = (time.perf_counter() - t_start) * 1000
+    logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
+    logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
     greeting_text = (
         f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
@@ -273,7 +286,7 @@ async def entrypoint(ctx: JobContext):
     )
 
     # Speak greeting immediately using ElevenLabs streaming audio
-    logger.info(f"🎙️ [PERF +{t_session:.1f}ms] Speaking Greeting immediately to caller!")
+    logger.info(f"🎙️ [PERF +{t_total_ready:.1f}ms] Speaking Greeting immediately to caller!")
     try:
         session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
