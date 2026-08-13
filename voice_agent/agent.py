@@ -216,28 +216,29 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
 
-    # 3. Pre-warm ElevenLabs Turbo v2.5 with Sarah's Voice
-    eleven_key = os.getenv("ELEVENLABS_API_KEY")
-    if eleven_key and len(eleven_key) > 10:
+    # 3. Pre-warm Cartesia TTS with Native Hindi Esha Calm Voice
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    if cartesia_key and len(cartesia_key) > 10:
+        logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
+        proc.userdata["tts"] = cartesia.TTS(
+            api_key=cartesia_key,
+            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha - Calm, soft, reassuring native Hindi female
+            language="hi",
+            sample_rate=24000
+        )
+    else:
+        eleven_key = os.getenv("ELEVENLABS_API_KEY")
         proc.userdata["tts"] = elevenlabs.TTS(
             api_key=eleven_key,
-            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Highly natural, calm, and realistic multilingual voice
+            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Fallback multilingual
             model="eleven_turbo_v2_5",
             voice_settings=elevenlabs.VoiceSettings(
-                stability=0.65,          # Higher stability removes jitter and robotic artifacts
+                stability=0.65,
                 similarity_boost=0.75,
-                style=0.00,              # Disabled (0.0) to ensure perfect Hindi pronunciation without English accent distortion
+                style=0.00,
                 use_speaker_boost=True
             ),
             streaming_latency=3
-        )
-    else:
-        cartesia_key = os.getenv("CARTESIA_API_KEY")
-        proc.userdata["tts"] = cartesia.TTS(
-            api_key=cartesia_key,
-            voice="56e35e2d-6eb6-4226-ab8b-9776515a7094",
-            language="hi",
-            sample_rate=24000
         )
 
     # 4. Pre-warm Lightweight Silero VAD
