@@ -42,24 +42,12 @@ try:
 except Exception:
     pass
 
-# -----------------------------------------------------------------------------
-# Warm up OpenAI SDK lazy imports and monkey-patch prewarm to prevent startup delays
-# -----------------------------------------------------------------------------
-try:
-    import openai
-    import openai.resources.models
-    import openai.resources.admin
-    import openai.types.admin.organization
-    _dummy_client = openai.AsyncOpenAI(api_key="dummy")
-    _ = _dummy_client.models
-except Exception:
-    pass
-
+# Monkey patch livekit's OpenAI LLM prewarm implementation to bypass the
+# slow models.list() API request, enabling instant session startup.
 from livekit.plugins import openai as lk_openai
 async def _fast_prewarm_impl(self):
     pass
 lk_openai.LLM._prewarm_impl = _fast_prewarm_impl
-# -----------------------------------------------------------------------------
 
 from livekit.agents import (
     Agent,
