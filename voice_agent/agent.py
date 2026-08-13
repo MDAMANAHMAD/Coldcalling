@@ -28,7 +28,7 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Optimize CPU threading to prevent ONNX thread thrashing on 1-vCPU VPS
+# optimize CPU threading to prevent ONNX thread thrashing on 1-vCPU VPS
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -41,6 +41,31 @@ try:
     torch.set_num_interop_threads(1)
 except Exception:
     pass
+
+# -----------------------------------------------------------------------------
+# Background Warm Up of OpenAI SDK Lazy Imports
+# -----------------------------------------------------------------------------
+# To prevent the child process from timing out during initialization, we run
+# the heavy imports in a background thread after a 2-second delay. This ensures
+# the process completes its handshake with the supervisor instantly, while
+# warming up the libraries so the first call reply is instant.
+# -----------------------------------------------------------------------------
+import threading
+
+def _background_preimport():
+    time.sleep(2.0)
+    try:
+        import openai
+        import openai.resources.models
+        import openai.resources.admin
+        import openai.types.admin.organization
+        _dummy_client = openai.AsyncOpenAI(api_key="dummy")
+        _ = _dummy_client.models
+    except Exception:
+        pass
+
+threading.Thread(target=_background_preimport, daemon=True).start()
+# -----------------------------------------------------------------------------
 
 # Monkey patch livekit's OpenAI LLM prewarm implementation to bypass the
 # slow models.list() API request, enabling instant session startup.
