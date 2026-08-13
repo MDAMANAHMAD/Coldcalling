@@ -275,25 +275,31 @@ async def entrypoint(ctx: JobContext):
     t_session_start = time.perf_counter()
     logger.info("⏱️ [PERF] Calling session.start()...")
     
-    # Start a background task to dump stack traces after 5 seconds
-    async def dump_tasks_after_delay():
-        await asyncio.sleep(5.0)
+    # Start a background thread to dump main thread stack trace after 5 seconds
+    import threading
+    import sys
+    import traceback
+    
+    def dump_main_thread_stack():
+        time.sleep(5.0)
         logger.info("==========================================")
-        logger.info("🚨 [DIAGNOSTIC] ACTIVE asyncio TASKS STACK TRACES:")
+        logger.info("🚨 [DIAGNOSTIC] MAIN THREAD STACK TRACE DURING DELAY:")
         logger.info("==========================================")
-        import traceback
-        for task in asyncio.all_tasks():
-            logger.info(f"Task: {task.get_name()}")
-            stack = task.get_stack()
-            if stack:
-                tb = "".join(traceback.format_list(traceback.extract_stack(stack[-1].f_back)))
-                logger.info(f"Stack:\n{tb}")
+        for thread_id, frame in sys._current_frames().items():
+            thread_name = "Unknown"
+            for t in threading.enumerate():
+                if t.ident == thread_id:
+                    thread_name = t.name
+                    break
+            logger.info(f"Thread: {thread_name} (ID: {thread_id})")
+            tb = "".join(traceback.format_stack(frame))
+            logger.info(f"Stack:\n{tb}")
         logger.info("==========================================")
 
-    dumper_task = asyncio.create_task(dump_tasks_after_delay())
+    dumper_thread = threading.Thread(target=dump_main_thread_stack, daemon=True)
+    dumper_thread.start()
     
     await session.start(agent=agent, room=ctx.room, record=False)
-    dumper_task.cancel()
     
     t_session_ready = (time.perf_counter() - t_session_start) * 1000
     t_total_ready = (time.perf_counter() - t_start) * 1000
