@@ -99,7 +99,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 1. CRISP 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant response and ultra-natural human conversation.
 2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
 3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
-
+4. SPEAK CALMLY & SLOWLY: Maintain a calm, warm, and unhurried pace. Use punctuation like commas `,` and ellipses `...` to force the voice synthesizer to insert natural human breathing pauses.
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
 ==================================================
@@ -221,12 +221,12 @@ def prewarm_fnc(proc: JobProcess):
     if eleven_key and len(eleven_key) > 10:
         proc.userdata["tts"] = elevenlabs.TTS(
             api_key=eleven_key,
-            voice_id="EXAVITQu4vr4xnSDxMaL",  # Sarah - Natural, Reassuring, Ultra-Realistic
+            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Highly natural, calm, and realistic multilingual voice
             model="eleven_turbo_v2_5",
             voice_settings=elevenlabs.VoiceSettings(
-                stability=0.40,
-                similarity_boost=0.85,
-                style=0.20,
+                stability=0.65,          # Higher stability removes jitter and robotic artifacts
+                similarity_boost=0.75,
+                style=0.00,              # Disabled (0.0) to ensure perfect Hindi pronunciation without English accent distortion
                 use_speaker_boost=True
             ),
             streaming_latency=3
@@ -305,8 +305,8 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
     greeting_text = (
-        f"Namaste {customer_name}! Main Priya baat kar rahi hoon Skyline Realty se. "
-        "Hamara naya luxury 2BHK project launch hua hai, kya aap details jaan-na chahenge?"
+        f"Namaste {customer_name}... Main Priya baat kar rahi hoon Skyline Realty se... "
+        "Hamara naya luxury 2BHK project launch hua hai... Kya aap details jaan-na chahenge?"
     )
 
     # Speak greeting immediately using ElevenLabs streaming audio
