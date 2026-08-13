@@ -42,6 +42,25 @@ try:
 except Exception:
     pass
 
+# -----------------------------------------------------------------------------
+# Warm up OpenAI SDK lazy imports and monkey-patch prewarm to prevent startup delays
+# -----------------------------------------------------------------------------
+try:
+    import openai
+    import openai.resources.models
+    import openai.resources.admin
+    import openai.types.admin.organization
+    _dummy_client = openai.AsyncOpenAI(api_key="dummy")
+    _ = _dummy_client.models
+except Exception:
+    pass
+
+from livekit.plugins import openai as lk_openai
+async def _fast_prewarm_impl(self):
+    pass
+lk_openai.LLM._prewarm_impl = _fast_prewarm_impl
+# -----------------------------------------------------------------------------
+
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -274,31 +293,6 @@ async def entrypoint(ctx: JobContext):
     # Start session with record=False
     t_session_start = time.perf_counter()
     logger.info("⏱️ [PERF] Calling session.start()...")
-    
-    # Start a background thread to dump main thread stack trace after 5 seconds
-    import threading
-    import sys
-    import traceback
-    
-    def dump_main_thread_stack():
-        time.sleep(5.0)
-        logger.info("==========================================")
-        logger.info("🚨 [DIAGNOSTIC] MAIN THREAD STACK TRACE DURING DELAY:")
-        logger.info("==========================================")
-        for thread_id, frame in sys._current_frames().items():
-            thread_name = "Unknown"
-            for t in threading.enumerate():
-                if t.ident == thread_id:
-                    thread_name = t.name
-                    break
-            logger.info(f"Thread: {thread_name} (ID: {thread_id})")
-            tb = "".join(traceback.format_stack(frame))
-            logger.info(f"Stack:\n{tb}")
-        logger.info("==========================================")
-
-    dumper_thread = threading.Thread(target=dump_main_thread_stack, daemon=True)
-    dumper_thread.start()
-    
     await session.start(agent=agent, room=ctx.room, record=False)
     
     t_session_ready = (time.perf_counter() - t_session_start) * 1000
