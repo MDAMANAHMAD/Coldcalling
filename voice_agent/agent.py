@@ -73,6 +73,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
+    llm,
 )
 from livekit.plugins import deepgram, openai, elevenlabs, cartesia, google, silero
 from livekit import rtc
@@ -97,9 +98,10 @@ You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
 1. CRISP 1-SENTENCE REPLIES (MAXIMUM 8-10 WORDS): Always reply in exactly 1 short sentence (under 10 words). Short replies guarantee instant response and ultra-natural human conversation.
-2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
+2. LANGUAGE ADAPTABILITY (HINDI / MARATHI / ENGLISH): Start the conversation in Hindi/Hinglish. If the client speaks in Marathi or English, or explicitly requests to switch languages, you MUST immediately switch to that language and reply only in that language (Hindi, Marathi, or English) moving forward. Match their tone and language preference naturally.
 3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
 4. SPEAK CALMLY & SLOWLY: Maintain a calm, warm, and unhurried pace. Use punctuation like commas `,` and ellipses `...` to force the voice synthesizer to insert natural human breathing pauses.
+5. DO NOT REPEATEDLY USE CLIENT'S NAME: Never append the client's name (e.g. "Aman ji" or "Aman") to the end of every sentence. Address the client by name only in the initial greeting, or extremely rarely. Do not use it as a sentence filler.
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
 ==================================================
@@ -127,24 +129,87 @@ PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
    - Possession Date: "Possession December 2026 tak mil jayegi, RERA approved project hai."
 
 6. SITE VISIT BOOKING:
-   - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
+   - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Aap kaunsi date aur kis time par aana chahenge?"
+   - Rule: Before booking, always ask the client for their preferred day/date AND time (e.g., "Aap kis din aur kitne baje comfortable hain?"). Do not schedule without confirmation of both day and time.
 
 7. NEGATIVE / BUSY CUSTOMER:
    - Not Interested: "Koi baat nahi sir, kya main WhatsApp par brochure bhej doon?"
    - Call Later: "Ji bilkul, main aapko shaam ko 6 baje call karti hoon."
 
 TOOL USAGE:
-As soon as the client agrees for a site visit or gives a preferred day/time, immediately trigger `schedule_site_visit`.
+As soon as the client agrees for a site visit and provides their preferred day/date and time, immediately trigger `schedule_site_visit`.
 """
 
 
 # ==============================================================================
 # 2. AGENT CLASS & FUNCTION TOOLS
 # ==============================================================================
+def detect_language(text: str) -> str:
+    if not text:
+        return "hi"
+    text_lower = text.lower()
+    
+    # 1. English check: if mostly Latin characters
+    latin_chars = sum(1 for c in text_lower if 'a' <= c <= 'z')
+    total_chars = len(text_lower.replace(" ", ""))
+    if total_chars > 0 and (latin_chars / total_chars) > 0.5:
+        return "en"
+        
+    # 2. Marathi vs Hindi check for Devanagari
+    if "ळ" in text:
+        return "mr"
+        
+    marathi_keywords = {
+        "आहे", "आहेt", "नाही", "का", "करून", "पाहिजे", "करा", "हो", "तुमचे", "तुमचा", "तुमची", 
+        "आमचे", "माझे", "आम्ही", "तुम्ही", "त्यांना", "त्यांच्या", "साठी", "नंतर", "पर्यंत",
+        "नमस्कार", "बाकी", "पाहिजे", "नको", "कसे", "कधी", "कुठे", "कोण", "काय", "करतो",
+        "करते", "केले", "होते", "होती", "होता", "सुरू", "झाले", "झाली", "झाला"
+    }
+    
+    hindi_keywords = {
+        "है", "हैं", "नहीं", "क्या", "करना", "चाहिए", "करो", "हाँ", "आपका", "आपकी", "आपके",
+        "हमारा", "मेरा", "मेरी", "मेरे", "हम", "आप", "उन्हें", "उनके", "उनकी", "लिए", "बाद",
+        "तक", "नमस्ते", "कैसे", "कब", "कहाँ", "कौन", "करता", "करती", "किया", "था", "थी",
+        "थे", "शुरू", "हुआ", "हुई"
+    }
+    
+    words = text_lower.split()
+    marathi_score = sum(1 for w in words if w in marathi_keywords)
+    hindi_score = sum(1 for w in words if w in hindi_keywords)
+    
+    if marathi_score > hindi_score:
+        return "mr"
+    elif hindi_score > marathi_score:
+        return "hi"
+        
+    return "hi"
+
+
 class PriyaRealEstateAgent(Agent):
     def __init__(self, customer_name: str = "Aman ji"):
         instructions = f"{HINDI_REAL_ESTATE_PROMPT}\n\nAap abhi {customer_name} se call par baat kar rahi hain."
         super().__init__(instructions=instructions)
+
+    async def on_user_turn_completed(
+        self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage
+    ) -> None:
+        user_text = new_message.content or ""
+        detected_lang = detect_language(user_text)
+        logger.info(f"🗣️ Detected user language: {detected_lang} for text: '{user_text}'")
+        
+        tts_instance = None
+        if hasattr(self, "tts") and self.tts:
+            tts_instance = self.tts
+        elif hasattr(self, "session") and self.session and hasattr(self.session, "tts"):
+            tts_instance = self.session.tts
+            
+        if tts_instance:
+            try:
+                if detected_lang in ["hi", "mr", "en"]:
+                    tts_instance.update_options(language=detected_lang)
+                    logger.info(f"⚙️ Updated TTS language option to: {detected_lang}")
+            except Exception as e:
+                logger.warning(f"Failed to update TTS options: {e}")
 
     @function_tool(description="Schedule a free VIP property site visit for the client.")
     async def schedule_site_visit(
@@ -189,11 +254,11 @@ def prewarm_fnc(proc: JobProcess):
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
-    # 1. Pre-warm Deepgram Nova-2 STT
+    # 1. Pre-warm Deepgram Nova-3 STT (Multilingual Mode)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        language="hi",
-        model="nova-2",
+        language="multi",
+        model="nova-3",
         endpointing_ms=120,
         smart_format=True,
         api_key=deepgram_key
