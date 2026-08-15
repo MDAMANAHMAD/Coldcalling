@@ -35,16 +35,7 @@ async def main():
     from livekit.agents import llm as agents_llm
     
     chat_ctx = agents_llm.ChatContext()
-    print("ChatContext type:", type(chat_ctx))
-    print("ChatContext dir:", dir(chat_ctx))
-    
-    # Try different common ways to append a message depending on the livekit-agents version
-    if hasattr(chat_ctx, "messages") and callable(chat_ctx.messages):
-        chat_ctx.messages().append(agents_llm.ChatMessage(role="user", text="hello"))
-    elif hasattr(chat_ctx, "messages") and isinstance(chat_ctx.messages, list):
-        chat_ctx.messages.append(agents_llm.ChatMessage(role="user", text="hello"))
-    elif hasattr(chat_ctx, "_messages"):
-        chat_ctx._messages.append(agents_llm.ChatMessage(role="user", text="hello"))
+    chat_ctx.add_message(role="user", content="hello")
     
     # We call llm.chat
     t2 = time.perf_counter()
