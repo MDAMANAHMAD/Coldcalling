@@ -245,11 +245,9 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["tts"] = tts
 
-    # 4. Compile the LLM schemas and pre-warm TTS connections synchronously inside an HTTP context
+    # 4. Compile the LLM schemas synchronously at startup
     try:
         from livekit.agents import llm as agents_llm
-        from livekit.agents.utils import http_context
-        
         agent = PriyaRealEstateAgent()
         agent_tools = agent.tools
         
@@ -257,31 +255,14 @@ def prewarm_fnc(proc: JobProcess):
         chat_ctx.add_message(role="user", content="hello")
         
         async def _run_prewarm():
-            async with http_context.open():
-                # 4.1. Pre-warm LLM chat generation & function schemas
-                try:
-                    chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
-                    async for chunk in chat_stream:
-                        break
-                    logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
-                except Exception as e:
-                    logger.warning(f"LLM pre-warm error: {e}")
+            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
+            async for chunk in chat_stream:
+                break
                 
-                # 4.2. Pre-warm TTS (Cartesia or ElevenLabs) Connection Pool & Client
-                try:
-                    if hasattr(tts, "prewarm"):
-                        tts.prewarm()
-                    
-                    stream = tts.synthesize(text="hi")
-                    async for chunk in stream:
-                        break
-                    logger.info("🔥 [PRE-WARMING] TTS client connection and stream pre-warmed successfully.")
-                except Exception as e:
-                    logger.warning(f"TTS pre-warm error: {e}")
-                        
         asyncio.run(_run_prewarm())
+        logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
     except Exception as e:
-        logger.warning(f"Pre-warm outer error: {e}")
+        logger.warning(f"LLM pre-warm error: {e}")
 
     # 5. Pre-warm Lightweight Silero VAD
     proc.userdata["vad"] = silero.VAD.load(
@@ -344,6 +325,20 @@ async def entrypoint(ctx: JobContext):
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
     logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
+
+    # Pre-warm TTS connection pool concurrently in the background while session starts
+    async def _prewarm_tts_conn():
+        try:
+            if hasattr(tts, "prewarm"):
+                tts.prewarm()
+            stream = tts.synthesize(text="hi")
+            async for chunk in stream:
+                break
+            logger.info("⏱️ [PERF] TTS connection pre-warmed concurrently in background!")
+        except Exception as e:
+            logger.warning(f"TTS background pre-warm error: {e}")
+
+    asyncio.create_task(_prewarm_tts_conn())
 
     # Start session with record=False
     t_session_start = time.perf_counter()
