@@ -200,7 +200,7 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 2. Pre-warm LLM (Groq/OpenAI or Google Gemini) and compile its schemas
+    # 2. Instantiate LLM (Groq/OpenAI or Google Gemini)
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key and groq_key.startswith("gsk_"):
         llm = openai.LLM(
@@ -218,30 +218,11 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    # Compile the LLM's chat schemas and function tools validation structures synchronously at startup
-    try:
-        from livekit.agents import llm as agents_llm
-        agent = PriyaRealEstateAgent()
-        agent_tools = agent.tools
-        
-        chat_ctx = agents_llm.ChatContext()
-        chat_ctx.add_message(role="user", content="hello")
-        
-        async def _run_dummy_chat():
-            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
-            async for chunk in chat_stream:
-                break
-                
-        asyncio.run(_run_dummy_chat())
-        logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
-    except Exception as e:
-        logger.warning(f"LLM pre-warm error: {e}")
-
-    # 3. Pre-warm Cartesia TTS with Native Hindi Esha Calm Voice
+    # 3. Instantiate Cartesia TTS (or ElevenLabs fallback)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     if cartesia_key and len(cartesia_key) > 10:
         logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
-        proc.userdata["tts"] = cartesia.TTS(
+        tts = cartesia.TTS(
             api_key=cartesia_key,
             voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha - Calm, soft, reassuring native Hindi female
             language="hi",
@@ -249,7 +230,8 @@ def prewarm_fnc(proc: JobProcess):
         )
     else:
         eleven_key = os.getenv("ELEVENLABS_API_KEY")
-        proc.userdata["tts"] = elevenlabs.TTS(
+        logger.info("Initializing ElevenLabs TTS with Rachel Fallback Multilingual Voice...")
+        tts = elevenlabs.TTS(
             api_key=eleven_key,
             voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Fallback multilingual
             model="eleven_turbo_v2_5",
@@ -261,8 +243,47 @@ def prewarm_fnc(proc: JobProcess):
             ),
             streaming_latency=3
         )
+    proc.userdata["tts"] = tts
 
-    # 4. Pre-warm Lightweight Silero VAD
+    # 4. Compile the LLM schemas and pre-warm TTS connections synchronously inside an HTTP context
+    try:
+        from livekit.agents import llm as agents_llm
+        from livekit.agents.utils import http_context
+        
+        agent = PriyaRealEstateAgent()
+        agent_tools = agent.tools
+        
+        chat_ctx = agents_llm.ChatContext()
+        chat_ctx.add_message(role="user", content="hello")
+        
+        async def _run_prewarm():
+            async with http_context.open():
+                # 4.1. Pre-warm LLM chat generation & function schemas
+                try:
+                    chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
+                    async for chunk in chat_stream:
+                        break
+                    logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
+                except Exception as e:
+                    logger.warning(f"LLM pre-warm error: {e}")
+                
+                # 4.2. Pre-warm TTS (Cartesia or ElevenLabs) Connection Pool & Client
+                try:
+                    if hasattr(tts, "prewarm"):
+                        tts.prewarm()
+                    
+                    stream = tts.synthesize(text="hi")
+                    async for chunk in stream:
+                        break
+                    logger.info("🔥 [PRE-WARMING] TTS client connection and stream pre-warmed successfully.")
+                except Exception as e:
+                    logger.warning(f"TTS pre-warm error: {e}")
+                        
+        asyncio.run(_run_prewarm())
+    except Exception as e:
+        logger.warning(f"Pre-warm outer error: {e}")
+
+    # 5. Pre-warm Lightweight Silero VAD
     proc.userdata["vad"] = silero.VAD.load(
         min_silence_duration=0.25,
         min_speech_duration=0.08
