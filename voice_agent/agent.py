@@ -100,6 +100,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 2. NATURAL HINDI/HINGLISH: Speak warm, polite conversational Hindi ("Ji bilkul", "Haanji Aman ji").
 3. NEVER GIVE LONG PARAGRAPHS: Give the direct fact immediately, then ask a quick question.
 4. SPEAK CALMLY & SLOWLY: Maintain a calm, warm, and unhurried pace. Use punctuation like commas `,` and ellipses `...` to force the voice synthesizer to insert natural human breathing pauses.
+5. DYNAMIC & INTERACTIVE CONVERSATION (BARGE-IN FRIENDLY): Adapt your responses dynamically based on what the user says. Do not rigidly follow a script. If the user interrupts, acknowledges, or changes the topic, address their comment naturally and match their flow immediately. Keep it conversational, relaxed, and real.
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
 ==================================================
@@ -311,6 +312,10 @@ async def entrypoint(ctx: JobContext):
         tts=tts,
         vad=vad,
         turn_detection="vad",
+        allow_interruptions=True,
+        min_interruption_words=1,
+        min_interruption_duration=0.15,
+        resume_false_interruption=False,
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
     logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
