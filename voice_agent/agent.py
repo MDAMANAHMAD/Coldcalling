@@ -217,19 +217,22 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    # Compile the LLM's chat schemas and initialize the API client synchronously at startup
+    # Compile the LLM's chat schemas and function tools validation structures synchronously at startup
     try:
         from livekit.agents import llm as agents_llm
+        agent = PriyaRealEstateAgent()
+        agent_tools = agent.tools
+        
         chat_ctx = agents_llm.ChatContext()
         chat_ctx.add_message(role="user", content="hello")
         
         async def _run_dummy_chat():
-            chat_stream = llm.chat(chat_ctx=chat_ctx)
+            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
             async for chunk in chat_stream:
                 break
                 
         asyncio.run(_run_dummy_chat())
-        logger.info("🔥 [PRE-WARMING] LLM chat completions/protobuf schemas compiled successfully.")
+        logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
     except Exception as e:
         logger.warning(f"LLM pre-warm error: {e}")
 
