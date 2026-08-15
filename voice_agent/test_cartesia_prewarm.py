@@ -20,32 +20,34 @@ async def main():
         sample_rate=24000
     )
 
-    # Test 1: Run prewarm and dummy synthesis
-    print("\nRunning prewarm() and first dummy synthesis (to warm up connection)...")
-    t0 = time.perf_counter()
-    tts.prewarm()
-    try:
-        stream = tts.synthesize(text="hi")
-        async for chunk in stream:
-            print("First chunk received from prewarm stream!")
-            break
-    except Exception as e:
-        print("Prewarm synthesis error:", e)
-    t1 = time.perf_counter()
-    print(f"Prewarm + first dummy synthesis took: {t1 - t0:.3f} seconds")
+    # Test 1: Run prewarm and dummy synthesis inside a temporary HTTP context
+    from livekit.agents.utils import http_context
+    async with http_context.open():
+        print("\nRunning prewarm() and first dummy synthesis (to warm up connection)...")
+        t0 = time.perf_counter()
+        tts.prewarm()
+        try:
+            stream = tts.synthesize(text="hi")
+            async for chunk in stream:
+                print("First chunk received from prewarm stream!")
+                break
+        except Exception as e:
+            print("Prewarm synthesis error:", e)
+        t1 = time.perf_counter()
+        print(f"Prewarm + first dummy synthesis took: {t1 - t0:.3f} seconds")
 
-    # Test 2: Run subsequent synthesis (this represents the live call start)
-    print("\nRunning second synthesis (should be instant)...")
-    t2 = time.perf_counter()
-    try:
-        stream = tts.synthesize(text="namaste")
-        async for chunk in stream:
-            print("First chunk received from live stream!")
-            break
-    except Exception as e:
-        print("Second synthesis error:", e)
-    t3 = time.perf_counter()
-    print(f"Second synthesis latency: {t3 - t2:.3f} seconds")
+        # Test 2: Run subsequent synthesis (this represents the live call start)
+        print("\nRunning second synthesis (should be instant)...")
+        t2 = time.perf_counter()
+        try:
+            stream = tts.synthesize(text="namaste")
+            async for chunk in stream:
+                print("First chunk received from live stream!")
+                break
+        except Exception as e:
+            print("Second synthesis error:", e)
+        t3 = time.perf_counter()
+        print(f"Second synthesis latency: {t3 - t2:.3f} seconds")
 
 if __name__ == "__main__":
     asyncio.run(main())
