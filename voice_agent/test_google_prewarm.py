@@ -31,16 +31,21 @@ async def main():
         print("Prewarm error:", e)
 
     # Let's run a test chat call to see if the first request is now instant
-    print("Testing a dummy chat completion to see latency...")
+    print("Testing a dummy chat completion with function tools to see latency...")
     from livekit.agents import llm as agents_llm
+    from voice_agent.agent import PriyaRealEstateAgent
+    
+    agent = PriyaRealEstateAgent()
+    agent_tools = agent.tools
+    print(f"Loaded {len(agent_tools)} tools from agent.")
     
     chat_ctx = agents_llm.ChatContext()
     chat_ctx.add_message(role="user", content="hello")
     
-    # We call llm.chat
+    # We call llm.chat with tools to compile function-calling schemas
     t2 = time.perf_counter()
     try:
-        chat_stream = llm.chat(chat_ctx=chat_ctx)
+        chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
         async for chunk in chat_stream:
             # Just consume first chunk
             print("First chunk received!")
