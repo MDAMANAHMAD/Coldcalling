@@ -34,11 +34,20 @@ async def main():
     print("Testing a dummy chat completion to see latency...")
     from livekit.agents import llm as agents_llm
     
-    t2 = time.perf_counter()
     chat_ctx = agents_llm.ChatContext()
-    chat_ctx.messages.append(agents_llm.ChatMessage(role="user", text="hello"))
+    print("ChatContext type:", type(chat_ctx))
+    print("ChatContext dir:", dir(chat_ctx))
+    
+    # Try different common ways to append a message depending on the livekit-agents version
+    if hasattr(chat_ctx, "messages") and callable(chat_ctx.messages):
+        chat_ctx.messages().append(agents_llm.ChatMessage(role="user", text="hello"))
+    elif hasattr(chat_ctx, "messages") and isinstance(chat_ctx.messages, list):
+        chat_ctx.messages.append(agents_llm.ChatMessage(role="user", text="hello"))
+    elif hasattr(chat_ctx, "_messages"):
+        chat_ctx._messages.append(agents_llm.ChatMessage(role="user", text="hello"))
     
     # We call llm.chat
+    t2 = time.perf_counter()
     try:
         chat_stream = llm.chat(chat_ctx=chat_ctx)
         async for chunk in chat_stream:
