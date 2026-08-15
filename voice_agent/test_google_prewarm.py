@@ -33,7 +33,7 @@ async def main():
     # Let's run a test chat call to see if the first request is now instant
     print("Testing a dummy chat completion with function tools to see latency...")
     from livekit.agents import llm as agents_llm
-    from voice_agent.agent import PriyaRealEstateAgent
+    from agent import PriyaRealEstateAgent
     
     agent = PriyaRealEstateAgent()
     agent_tools = agent.tools
