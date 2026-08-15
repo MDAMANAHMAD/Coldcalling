@@ -199,10 +199,10 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 2. Pre-warm Groq LPU LLM (<75ms First Token)
+    # 2. Pre-warm LLM (Groq/OpenAI or Google Gemini) and compile its schemas
     groq_key = os.getenv("GROQ_API_KEY")
     if groq_key and groq_key.startswith("gsk_"):
-        proc.userdata["llm"] = openai.LLM(
+        llm = openai.LLM(
             base_url="https://api.groq.com/openai/v1",
             model="llama-3.1-8b-instant",
             api_key=groq_key,
@@ -210,11 +210,28 @@ def prewarm_fnc(proc: JobProcess):
         )
     else:
         google_key = os.getenv("GOOGLE_API_KEY")
-        proc.userdata["llm"] = google.LLM(
+        llm = google.LLM(
             model="gemini-flash-latest",
             api_key=google_key,
             temperature=0.0
         )
+    proc.userdata["llm"] = llm
+
+    # Compile the LLM's chat schemas and initialize the API client synchronously at startup
+    try:
+        from livekit.agents import llm as agents_llm
+        chat_ctx = agents_llm.ChatContext()
+        chat_ctx.add_message(role="user", content="hello")
+        
+        async def _run_dummy_chat():
+            chat_stream = llm.chat(chat_ctx=chat_ctx)
+            async for chunk in chat_stream:
+                break
+                
+        asyncio.run(_run_dummy_chat())
+        logger.info("🔥 [PRE-WARMING] LLM chat completions/protobuf schemas compiled successfully.")
+    except Exception as e:
+        logger.warning(f"LLM pre-warm error: {e}")
 
     # 3. Pre-warm Cartesia TTS with Native Hindi Esha Calm Voice
     cartesia_key = os.getenv("CARTESIA_API_KEY")
