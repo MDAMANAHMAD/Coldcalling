@@ -311,11 +311,15 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
-        turn_detection="vad",
-        allow_interruptions=True,
-        min_interruption_words=1,
-        min_interruption_duration=0.15,
-        resume_false_interruption=False,
+        turn_handling={
+            "interruption": {
+                "enabled": True,
+                "mode": "vad",
+                "min_words": 1,
+                "min_duration": 0.15,
+                "resume_false_interruption": False,
+            }
+        }
     )
     agent = PriyaRealEstateAgent(customer_name=customer_name)
     logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
