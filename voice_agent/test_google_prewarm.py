@@ -35,18 +35,20 @@ async def main():
     from livekit.agents import llm as agents_llm
     
     t2 = time.perf_counter()
-    chat_ctx = agents_llm.ChatContext().append(
-        role="user", text="hello"
-    )
+    chat_ctx = agents_llm.ChatContext()
+    chat_ctx.messages.append(agents_llm.ChatMessage(role="user", text="hello"))
     
     # We call llm.chat
-    chat_stream = llm.chat(chat_ctx=chat_ctx)
-    async for chunk in chat_stream:
-        # Just consume first chunk
-        print("First chunk received!")
-        break
-    t3 = time.perf_counter() - t2
-    print(f"First chat reply latency: {t3:.3f} seconds")
+    try:
+        chat_stream = llm.chat(chat_ctx=chat_ctx)
+        async for chunk in chat_stream:
+            # Just consume first chunk
+            print("First chunk received!")
+            break
+        t3 = time.perf_counter() - t2
+        print(f"First chat reply latency: {t3:.3f} seconds")
+    except Exception as e:
+        print("Chat completion error:", e)
 
 if __name__ == "__main__":
     asyncio.run(main())
