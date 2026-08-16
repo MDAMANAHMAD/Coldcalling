@@ -338,11 +338,13 @@ async def entrypoint(ctx: JobContext):
     tts = ctx.proc.userdata.get("tts")
     vad = ctx.proc.userdata.get("vad")
     
-    logger.info(
-        f"⏱️ [PERF] userdata models retrieved: "
-        f"stt={stt is not None}, llm={llm is not None}, "
-        f"tts={tts is not None}, vad={vad is not None} in {(time.perf_counter() - t_retrieval)*1000:.1f}ms"
-    )
+    # Reset TTS options to default Hindi (Esha) at the start of every call
+    if tts and hasattr(tts, "update_options"):
+        tts.update_options(
+            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+            language="hi"
+        )
+        logger.info("🔄 [STATE RESET] TTS options reset to default Esha Hindi voice.")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
