@@ -255,8 +255,8 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    # 3. Instantiate Cartesia TTS (or ElevenLabs fallback)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
+    logger.info(f"🔍 [DIAGNOSTIC] Cartesia key retrieved: {cartesia_key[:10] + '...' if cartesia_key else None} (length={len(cartesia_key) if cartesia_key else 0})")
     if cartesia_key and len(cartesia_key) > 10:
         logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
         tts = cartesia.TTS(
