@@ -256,8 +256,9 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["llm"] = llm
 
     # 3. Instantiate Cartesia TTS (or ElevenLabs fallback)
-    cartesia_key = os.getenv("CARTESIA_API_KEY")
-    if cartesia_key and len(cartesia_key) > 10:
+    # Force fallback to ElevenLabs because Cartesia has hit 402 Payment Required billing limit
+    cartesia_key = None
+    if False and cartesia_key and len(cartesia_key) > 10:
         logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
         tts = cartesia.TTS(
             api_key=cartesia_key,
@@ -385,24 +386,25 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"🗣️ Resolved language: '{lang}' (detected_lang='{ev.language}') for text: '{ev.transcript}'")
             
             # Switch TTS voice and language configurations on the fly
-            if lang == "mr":
-                session.tts.update_options(
-                    voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
-                    language="mr"
-                )
-                logger.info("🔄 Switched TTS to Marathi (Anika)")
-            elif lang == "en":
-                session.tts.update_options(
-                    voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (English)
-                    language="en"
-                )
-                logger.info("🔄 Switched TTS to English (Esha)")
-            else:
-                session.tts.update_options(
-                    voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
-                    language="hi"
-                )
-                logger.info("🔄 Switched TTS to Hindi (Esha)")
+            if hasattr(session.tts, "update_options"):
+                if lang == "mr":
+                    session.tts.update_options(
+                        voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
+                        language="mr"
+                    )
+                    logger.info("🔄 Switched TTS to Marathi (Anika)")
+                elif lang == "en":
+                    session.tts.update_options(
+                        voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (English)
+                        language="en"
+                    )
+                    logger.info("🔄 Switched TTS to English (Esha)")
+                else:
+                    session.tts.update_options(
+                        voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+                        language="hi"
+                    )
+                    logger.info("🔄 Switched TTS to Hindi (Esha)")
 
     # Start session with record=False
     t_session_start = time.perf_counter()
