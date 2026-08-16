@@ -355,6 +355,22 @@ async def entrypoint(ctx: JobContext):
 
     asyncio.create_task(_prewarm_tts_conn())
 
+    # Pre-warm LLM schema compilation concurrently in the background while session starts
+    async def _prewarm_llm():
+        try:
+            from livekit.agents import llm as agents_llm
+            chat_ctx = agents_llm.ChatContext()
+            chat_ctx.add_message(role="user", content="hello")
+            
+            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent.tools)
+            async for chunk in chat_stream:
+                break
+            logger.info("⏱️ [PERF] LLM schema pre-compiled concurrently in background!")
+        except Exception as e:
+            logger.warning(f"LLM background pre-warm error: {e}")
+
+    asyncio.create_task(_prewarm_llm())
+
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         if ev.is_final and ev.transcript:
