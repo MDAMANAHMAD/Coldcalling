@@ -368,26 +368,12 @@ async def entrypoint(ctx: JobContext):
 
     from livekit.agents.voice import UserInputTranscribedEvent
 
-    # Pre-warm both Esha (Hindi/English) and Anika (Marathi) connection pools concurrently in the background
+    # Pre-warm Esha connection pool concurrently in the background while session starts
     async def _prewarm_tts_conn():
         try:
-            # 1. Pre-warm Esha (Hindi/English)
             if hasattr(tts, "prewarm"):
                 tts.prewarm()
-            stream = tts.synthesize(text="hi")
-            async for chunk in stream:
-                break
-                
-            # 2. Pre-warm Anika (Marathi)
-            # Switch options temporarily to force the Marathi connection, then restore to Esha
-            tts.update_options(voice="5c32dce6-936a-4892-b131-bafe474afe5f", language="mr")
-            stream_mr = tts.synthesize(text="नमस्कार")
-            async for chunk in stream_mr:
-                break
-                
-            # Restore to default Esha (Hindi) for the greeting
-            tts.update_options(voice="72656902-fb4b-4c31-af52-c3b68e2cae26", language="hi")
-            logger.info("⏱️ [PERF] Both Hindi, English and Marathi TTS connections pre-warmed concurrently in background!")
+            logger.info("⏱️ [PERF] Esha TTS connection pre-warmed concurrently in background!")
         except Exception as e:
             logger.warning(f"TTS background pre-warm error: {e}")
 
