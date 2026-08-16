@@ -89,6 +89,57 @@ logger = logging.getLogger("enterprise_voice_agent")
 
 
 # ==============================================================================
+# 0. TTS TEXT CLEANER PROXIES (Ensures abbreviations like sqft or Cr are spoken fully)
+# ==============================================================================
+def clean_text_for_tts(text: str) -> str:
+    import re
+    # Replace sqft variations with 'square feet'
+    text = re.sub(r'(?i)\bsq\s*ft\b', 'square feet', text)
+    text = re.sub(r'(?i)\bsq\.?\s*ft\.?\b', 'square feet', text)
+    text = re.sub(r'(?i)\bsquare\s*feet\b', 'square feet', text)
+    text = re.sub(r'(?i)\bsq\b', 'square feet', text)
+    
+    # Replace other real estate abbreviations to ensure smooth pronunciation
+    text = re.sub(r'(?i)\bcr\b', 'crore', text)
+    text = re.sub(r'(?i)\blacs\b', 'lakh', text)
+    text = re.sub(r'(?i)\blakhs\b', 'lakh', text)
+    text = re.sub(r'(?i)\brs\.?\b', 'rupees', text)
+    text = re.sub(r'₹', 'rupees', text)
+    
+    # Clean up multiple whitespaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+class TTSStreamCleanerWrapper:
+    def __init__(self, stream_instance):
+        self._stream = stream_instance
+
+    def __getattr__(self, name):
+        return getattr(self._stream, name)
+
+    def push_text(self, text: str, *args, **kwargs):
+        cleaned_text = clean_text_for_tts(text)
+        return self._stream.push_text(cleaned_text, *args, **kwargs)
+
+
+class TTSCleanerWrapper:
+    def __init__(self, tts_instance):
+        self._tts = tts_instance
+
+    def __getattr__(self, name):
+        return getattr(self._tts, name)
+
+    def synthesize(self, text: str, *args, **kwargs):
+        cleaned_text = clean_text_for_tts(text)
+        return self._tts.synthesize(cleaned_text, *args, **kwargs)
+
+    def stream(self, *args, **kwargs):
+        raw_stream = self._tts.stream(*args, **kwargs)
+        return TTSStreamCleanerWrapper(raw_stream)
+
+
+# ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
@@ -103,6 +154,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 5. DYNAMIC & INTERACTIVE CONVERSATION (BARGE-IN FRIENDLY): Adapt your responses dynamically based on what the user says. Do not rigidly follow a script. If the user interrupts, acknowledges, or changes the topic, address their comment naturally and match their flow immediately. Keep it conversational, relaxed, and real.
 6. DO NOT OVERUSE THE CLIENT'S NAME: Address the client by name (e.g., "Aman ji") only once or twice during the entire call (such as in the greeting or closing). Do NOT append their name to every response.
 7. MULTILINGUAL RESPONSE MATCHING: Always respond in the EXACT same language that the client speaks to you. If the client speaks in Marathi, reply in fluent, warm Marathi. If the client speaks in English, reply in English. If the client speaks in Hindi, reply in Hindi.
+8. NO ABBREVIATIONS: Never use abbreviations like "sqft", "sq. ft.", "cr", "lacs", or "rs" in your replies. Always write them out fully in plain text as "square feet", "crore", "lakh", or "rupaye". For example, write "375 square feet" instead of "375 sqft".
 ==================================================
 PROJECT KNOWLEDGE BASE (SAI COMPLEX, DOMBIVLI EAST):
 ==================================================
@@ -254,6 +306,13 @@ def prewarm_fnc(proc: JobProcess):
     # This prevents multiple idle processes from opening concurrent WebSocket connections, completely bypassing 429 concurrency blocks.
 
     # Heavy VAD loading and LLM chat compilation removed from startup to prevent process initialization timeouts.
+    # 3. Pre-warm Silero VAD
+    from livekit.plugins import silero
+    logger.info("⏱️ [VAD] Pre-loading Silero VAD model in background...")
+    proc.userdata["vad"] = silero.VAD.load(
+        min_silence_duration=0.25,
+        min_speech_duration=0.08
+    )
 
     t1 = (time.perf_counter() - t0) * 1000
     logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
@@ -314,10 +373,14 @@ async def entrypoint(ctx: JobContext):
                 streaming_latency=3
             )
         ctx.proc.userdata["tts"] = tts
+    
+    # Apply the pronunciation cleaner wrapper
+    tts = TTSCleanerWrapper(tts)
 
+    # VAD is pre-warmed, but load as fallback if not present
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model dynamically on call connection...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
             min_silence_duration=0.25,
             min_speech_duration=0.08
@@ -439,7 +502,7 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
-            num_idle_processes=0,
+            num_idle_processes=1,
             load_threshold=0.95,
             initialize_process_timeout=90.0,
         )
