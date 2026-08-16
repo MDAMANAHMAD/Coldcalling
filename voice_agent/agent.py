@@ -322,13 +322,14 @@ async def entrypoint(ctx: JobContext):
             min_speech_duration=0.08
         )
     
-    # Reset TTS options to default Hindi (Esha) at the start of every call
-    if tts and hasattr(tts, "update_options"):
+    # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
+    is_cartesia = tts and "cartesia" in tts.__class__.__module__
+    if is_cartesia and hasattr(tts, "update_options"):
         tts.update_options(
             voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
             language="hi"
         )
-        logger.info("🔄 [STATE RESET] TTS options reset to default Esha Hindi voice.")
+        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Esha Hindi voice.")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
@@ -368,8 +369,9 @@ async def entrypoint(ctx: JobContext):
             lang = resolve_language(ev.transcript, ev.language)
             logger.info(f"🗣️ Resolved language: '{lang}' (detected_lang='{ev.language}') for text: '{ev.transcript}'")
             
-            # Switch TTS voice and language configurations on the fly
-            if hasattr(session.tts, "update_options"):
+            # Switch TTS voice and language configurations on the fly (Cartesia only)
+            is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
+            if is_cartesia and hasattr(session.tts, "update_options"):
                 if lang == "mr":
                     session.tts.update_options(
                         voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
