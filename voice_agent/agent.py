@@ -145,27 +145,16 @@ As soon as the client agrees for a site visit or gives a preferred day/time, imm
 # 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS
 # ==============================================================================
 def resolve_language(transcript: str, detected_lang: str | None) -> str:
-    """Detects spoken language using Deepgram code with a local keyword classifier fallback."""
-    # Method 1: Check Deepgram's native neural network classification (if available)
-    if detected_lang:
-        lang_code = detected_lang.lower()
-        if lang_code.startswith("mr"):
-            return "mr"
-        if lang_code.startswith("en"):
-            return "en"
-        if lang_code.startswith("hi"):
-            return "hi"
-            
-    # Method 2: Local Heuristics / Keyword Fallback Classifier
+    """Detects spoken language using Devanagari keyword matching and character checks."""
     text = transcript.lower()
     
-    # 2.1. English Check (Latin script ratio)
+    # 1. English Check (Latin script ratio)
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(" ", ""))
     if total_chars > 0 and (latin_chars / total_chars) > 0.4:
         return "en"
         
-    # 2.2. English Check in Devanagari script (phonetic English words)
+    # 2. English Check in Devanagari script (phonetic English words)
     english_devanagari_keywords = [
         "व्हाट", "वाॅट", "कैन", "प्लीज", "प्लिज", "शेयर", "सेंड", "ऍम", "एम", "फॉर", "फॉअर", 
         "थैंक", "थॅंक", "द प्राइस", "द फ्लैट", "द ब्रोशर", "यू प्लीज", "प्लीज सेंड", "प्लीज शेयर"
@@ -173,7 +162,7 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
     if any(word in text for word in english_devanagari_keywords):
         return "en"
         
-    # 2.3. Marathi Check
+    # 3. Marathi Check
     marathi_keywords = [
         "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
         "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
