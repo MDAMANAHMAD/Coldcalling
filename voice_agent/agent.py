@@ -74,7 +74,7 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, openai, elevenlabs, cartesia, google
+from livekit.plugins import deepgram, openai, elevenlabs, cartesia
 from livekit import rtc
 
 # Load environment variables
@@ -241,6 +241,7 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
     else:
+        from livekit.plugins import google
         google_key = os.getenv("GOOGLE_API_KEY")
         llm = google.LLM(
             model="gemini-flash-latest",
