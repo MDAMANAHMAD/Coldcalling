@@ -256,9 +256,8 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["llm"] = llm
 
     # 3. Instantiate Cartesia TTS (or ElevenLabs fallback)
-    # Force fallback to ElevenLabs because Cartesia has hit 402 Payment Required billing limit
-    cartesia_key = None
-    if False and cartesia_key and len(cartesia_key) > 10:
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    if cartesia_key and len(cartesia_key) > 10:
         logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
         tts = cartesia.TTS(
             api_key=cartesia_key,
