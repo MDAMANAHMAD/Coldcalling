@@ -166,7 +166,11 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
         return "en"
         
     # Marathi Check
-    marathi_keywords = ["आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", "बघतो", "चालू", "करून", "पुढील", "नका"]
+    marathi_keywords = [
+        "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
+        "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
+        "कशी", "कसे", "का", "सांगा", "दाखवा", "पाहू", "तुम्ही", "आम्ही", "मध्ये"
+    ]
     if "ळ" in transcript or any(word in text for word in marathi_keywords):
         return "mr"
         
@@ -226,10 +230,10 @@ def prewarm_fnc(proc: JobProcess):
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
-    # 1. Pre-warm Deepgram Nova-2 STT with Multilingual Auto-Detection
+    # 1. Pre-warm Deepgram Nova-2 STT
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        detect_language=True,
+        language="hi",
         model="nova-2",
         endpointing_ms=120,
         smart_format=True,
