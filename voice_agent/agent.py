@@ -107,20 +107,21 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 PROJECT KNOWLEDGE BASE (SAI COMPLEX, DOMBIVLI EAST):
 ==================================================
 1. PRICING & CONFIGURATIONS:
-   - 1BHK: 375 sqft (₹36 Lacs+), 520 sqft (₹50 Lacs+), 755 sqft with terrace (₹72 Lacs+).
-   - 2BHK: 760 sqft (₹72 Lacs+), 1110 sqft with terrace (₹1.04 Cr+), 2285 sqft with terrace (₹2.10 Cr+).
+   - 1BHK: 375 square feet (chattis lakh rupaye onwards), 520 square feet (pachas lakh rupaye onwards), 755 square feet with terrace flat (bahattar lakh rupaye onwards).
+   - 2BHK: 760 square feet (bahattar lakh rupaye onwards), 1110 square feet with terrace flat (ek crore char lakh rupaye onwards), 2285 square feet with terrace flat (do crore das lakh rupaye onwards).
    - Customizable Layouts: "Aap flats ko custom design bhi kar sakte hain."
 
 2. KEY AMENITIES:
-   - Amenities: "Gym, kids play area, jogging track, indoor games, and dynamic office space."
-   - Features: "Jaquar bath fittings, Kajaria tiles, Asian Paints, and Polycab wiring."
-   - Extra: "Beautiful lush landscaping and balconies/terrace layouts available."
+   - Amenities: "Gym, kids play area, jogging track, indoor games, aur office space."
+   - Features: "Premium bathroom mein Jaquar fittings aur flooring par Kajaria tiles hain."
+   - Paint/Wiring: "Asian Paints aur Polycab wiring use ki gayi hai."
+   - Extra: "Beautiful landscaping aur open balconies ya terrace flat options bhi hain."
 
 3. LOCATION & CONNECTIVITY:
    - Address: "Project Casario, Palava Road, Lodha Heaven, Dombivli East mein hai."
-   - Railway: "Nilje Station se sirf 5 minute ki doori par hai aur Dombivli Station ke paas hai."
-   - Metro/Highway: "Planned Kalyan-Taloja Metro aur Shil Road se seamless connectivity hai."
-   - Healthcare/Schools: "Lodha World School, Guardian School aur AIMS Hospital paas mein hain."
+   - Railway: "Nilje Railway Station se sirf paanch minute ki doori par hai aur Dombivli Station ke paas hai."
+   - Metro/Highway: "Kalyan-Taloja Metro line walking distance par hai aur Shil Road se seamless connectivity hai."
+   - Healthcare/Schools: "AIMS hospital, Icon hospital, Lodha World School, aur Guardian School bilkul pass mein hain."
 
 4. SITE VISIT BOOKING:
    - Site Visit: "Free VIP cab pickup ke sath site visit available hai. Kya kal book kar doon?"
@@ -248,32 +249,8 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    cartesia_key = os.getenv("CARTESIA_API_KEY")
-    logger.info(f"🔍 [DIAGNOSTIC] Cartesia key retrieved: {cartesia_key[:10] + '...' if cartesia_key else None} (length={len(cartesia_key) if cartesia_key else 0})")
-    if cartesia_key and len(cartesia_key) > 10:
-        logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
-        tts = cartesia.TTS(
-            api_key=cartesia_key,
-            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha - Calm, soft, reassuring native Hindi female
-            language="hi",
-            sample_rate=24000
-        )
-    else:
-        eleven_key = os.getenv("ELEVENLABS_API_KEY")
-        logger.info("Initializing ElevenLabs TTS with Rachel Fallback Multilingual Voice...")
-        tts = elevenlabs.TTS(
-            api_key=eleven_key,
-            voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Fallback multilingual
-            model="eleven_turbo_v2_5",
-            voice_settings=elevenlabs.VoiceSettings(
-                stability=0.65,
-                similarity_boost=0.75,
-                style=0.00,
-                use_speaker_boost=True
-            ),
-            streaming_latency=3
-        )
-    proc.userdata["tts"] = tts
+    # Cartesia/ElevenLabs TTS loading is bypassed during prewarm_fnc and moved to dynamic call initialization.
+    # This prevents multiple idle processes from opening concurrent WebSocket connections, completely bypassing 429 concurrency blocks.
 
     # Heavy VAD loading and LLM chat compilation removed from startup to prevent process initialization timeouts.
 
@@ -305,7 +282,37 @@ async def entrypoint(ctx: JobContext):
     t_retrieval = time.perf_counter()
     stt = ctx.proc.userdata.get("stt")
     llm = ctx.proc.userdata.get("llm")
+    
+    # Initialize TTS dynamically here instead of prewarm_fnc to save Cartesia concurrency connections
     tts = ctx.proc.userdata.get("tts")
+    if not tts:
+        logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
+        cartesia_key = os.getenv("CARTESIA_API_KEY")
+        if cartesia_key and len(cartesia_key) > 10:
+            logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
+            tts = cartesia.TTS(
+                api_key=cartesia_key,
+                voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+                language="hi",
+                sample_rate=24000
+            )
+        else:
+            eleven_key = os.getenv("ELEVENLABS_API_KEY")
+            logger.info("Initializing ElevenLabs TTS with Rachel Fallback Multilingual Voice...")
+            tts = elevenlabs.TTS(
+                api_key=eleven_key,
+                voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Fallback multilingual
+                model="eleven_turbo_v2_5",
+                voice_settings=elevenlabs.VoiceSettings(
+                    stability=0.65,
+                    similarity_boost=0.75,
+                    style=0.00,
+                    use_speaker_boost=True
+                ),
+                streaming_latency=3
+            )
+        ctx.proc.userdata["tts"] = tts
+
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model dynamically on call connection...")
