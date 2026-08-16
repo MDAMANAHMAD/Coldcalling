@@ -74,7 +74,6 @@ from livekit.agents import (
     cli,
     function_tool,
 )
-from livekit.plugins import deepgram, openai, elevenlabs, cartesia, google, silero
 from livekit import rtc
 
 # Load environment variables
@@ -222,6 +221,7 @@ def prewarm_fnc(proc: JobProcess):
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
     # 1. Pre-warm Deepgram Nova-2 STT
+    from livekit.plugins import deepgram, openai, google
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
@@ -279,6 +279,7 @@ async def entrypoint(ctx: JobContext):
             logger.warning(f"Metadata error: {err}")
 
     # Retrieve pre-warmed models from userdata (0ms latency)
+    from livekit.plugins import cartesia, elevenlabs, silero
     t_retrieval = time.perf_counter()
     stt = ctx.proc.userdata.get("stt")
     llm = ctx.proc.userdata.get("llm")
