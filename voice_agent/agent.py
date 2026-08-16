@@ -297,8 +297,11 @@ def prewarm_fnc(proc: JobProcess):
             async for chunk in chat_stream:
                 break
                 
-        asyncio.run(_run_prewarm())
-        logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
+        try:
+            asyncio.run(asyncio.wait_for(_run_prewarm(), timeout=3.0))
+            logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
+        except asyncio.TimeoutError:
+            logger.warning("LLM pre-warm timed out after 3.0s, skipping to prevent process hang.")
     except Exception as e:
         logger.warning(f"LLM pre-warm error: {e}")
 
