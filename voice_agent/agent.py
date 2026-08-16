@@ -439,8 +439,8 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
-            num_idle_processes=1,
+            num_idle_processes=0,
             load_threshold=0.95,
-            initialize_process_timeout=45.0,
+            initialize_process_timeout=90.0,
         )
     )
