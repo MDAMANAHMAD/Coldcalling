@@ -102,6 +102,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 4. SPEAK CALMLY & SLOWLY: Maintain a calm, warm, and unhurried pace. Use punctuation like commas `,` and ellipses `...` to force the voice synthesizer to insert natural human breathing pauses.
 5. DYNAMIC & INTERACTIVE CONVERSATION (BARGE-IN FRIENDLY): Adapt your responses dynamically based on what the user says. Do not rigidly follow a script. If the user interrupts, acknowledges, or changes the topic, address their comment naturally and match their flow immediately. Keep it conversational, relaxed, and real.
 6. DO NOT OVERUSE THE CLIENT'S NAME: Address the client by name (e.g., "Aman ji") only once or twice during the entire call (such as in the greeting or closing). Do NOT append their name to every response.
+7. MULTILINGUAL RESPONSE MATCHING: Always respond in the EXACT same language that the client speaks to you. If the client speaks in Marathi, reply in fluent, warm Marathi. If the client speaks in English, reply in English. If the client speaks in Hindi, reply in Hindi.
 ==================================================
 PROJECT KNOWLEDGE BASE (INSTANT FAST-ANSWER DATA):
 ==================================================
@@ -141,8 +142,38 @@ As soon as the client agrees for a site visit or gives a preferred day/time, imm
 
 
 # ==============================================================================
-# 2. AGENT CLASS & FUNCTION TOOLS
+# 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS
 # ==============================================================================
+def resolve_language(transcript: str, detected_lang: str | None) -> str:
+    """Detects spoken language using Deepgram code with a local keyword classifier fallback."""
+    # Method 1: Check Deepgram's native neural network classification (highly accurate)
+    if detected_lang:
+        lang_code = detected_lang.lower()
+        if lang_code.startswith("mr"):
+            return "mr"
+        if lang_code.startswith("en"):
+            return "en"
+        if lang_code.startswith("hi"):
+            return "hi"
+            
+    # Method 2: Local Heuristics / Keyword Fallback Classifier
+    text = transcript.lower()
+    
+    # English Check (Latin script ratio)
+    latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
+    total_chars = len(transcript.replace(" ", ""))
+    if total_chars > 0 and (latin_chars / total_chars) > 0.4:
+        return "en"
+        
+    # Marathi Check
+    marathi_keywords = ["आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", "बघतो", "चालू", "करून", "पुढील", "नका"]
+    if "ळ" in transcript or any(word in text for word in marathi_keywords):
+        return "mr"
+        
+    # Default to Hindi
+    return "hi"
+
+
 class PriyaRealEstateAgent(Agent):
     def __init__(self, customer_name: str = "Aman ji"):
         instructions = (
@@ -195,10 +226,10 @@ def prewarm_fnc(proc: JobProcess):
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
-    # 1. Pre-warm Deepgram Nova-2 STT
+    # 1. Pre-warm Deepgram Nova-2 STT with Multilingual Auto-Detection
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        language="hi",
+        detect_language=True,
         model="nova-2",
         endpointing_ms=120,
         smart_format=True,
@@ -331,19 +362,58 @@ async def entrypoint(ctx: JobContext):
     agent = PriyaRealEstateAgent(customer_name=customer_name)
     logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
 
-    # Pre-warm TTS connection pool concurrently in the background while session starts
+    from livekit.agents.voice import UserInputTranscribedEvent
+
+    # Pre-warm both Esha (Hindi/English) and Anika (Marathi) connection pools concurrently in the background
     async def _prewarm_tts_conn():
         try:
+            # 1. Pre-warm Esha (Hindi/English)
             if hasattr(tts, "prewarm"):
                 tts.prewarm()
             stream = tts.synthesize(text="hi")
             async for chunk in stream:
                 break
-            logger.info("⏱️ [PERF] TTS connection pre-warmed concurrently in background!")
+                
+            # 2. Pre-warm Anika (Marathi)
+            # Switch options temporarily to force the Marathi connection, then restore to Esha
+            tts.update_options(voice="5c32dce6-936a-4892-b131-bafe474afe5f", language="mr")
+            stream_mr = tts.synthesize(text="नमस्कार")
+            async for chunk in stream_mr:
+                break
+                
+            # Restore to default Esha (Hindi) for the greeting
+            tts.update_options(voice="72656902-fb4b-4c31-af52-c3b68e2cae26", language="hi")
+            logger.info("⏱️ [PERF] Both Hindi, English and Marathi TTS connections pre-warmed concurrently in background!")
         except Exception as e:
             logger.warning(f"TTS background pre-warm error: {e}")
 
     asyncio.create_task(_prewarm_tts_conn())
+
+    @session.on("user_input_transcribed")
+    def on_user_input(ev: UserInputTranscribedEvent):
+        if ev.is_final and ev.transcript:
+            lang = resolve_language(ev.transcript, ev.language)
+            logger.info(f"🗣️ Resolved language: '{lang}' (detected_lang='{ev.language}') for text: '{ev.transcript}'")
+            
+            # Switch TTS voice and language configurations on the fly
+            if lang == "mr":
+                session.tts.update_options(
+                    voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
+                    language="mr"
+                )
+                logger.info("🔄 Switched TTS to Marathi (Anika)")
+            elif lang == "en":
+                session.tts.update_options(
+                    voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (English)
+                    language="en"
+                )
+                logger.info("🔄 Switched TTS to English (Esha)")
+            else:
+                session.tts.update_options(
+                    voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+                    language="hi"
+                )
+                logger.info("🔄 Switched TTS to Hindi (Esha)")
 
     # Start session with record=False
     t_session_start = time.perf_counter()
