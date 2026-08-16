@@ -29,7 +29,10 @@ def test_language_detection():
     en_tests = [
         "hello i am looking for a 2bhk",
         "yes please share the brochure",
-        "can we schedule a site visit next saturday"
+        "can we schedule a site visit next saturday",
+        "येस प्लीज शेयर द डिटेल्स",
+        "व्हाट इस द प्राइस",
+        "प्लीज सेंड मी ब्रोशर"
     ]
     
     print("=== TESTING RESOLVE_LANGUAGE ===")

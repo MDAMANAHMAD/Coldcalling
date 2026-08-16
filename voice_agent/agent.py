@@ -146,7 +146,7 @@ As soon as the client agrees for a site visit or gives a preferred day/time, imm
 # ==============================================================================
 def resolve_language(transcript: str, detected_lang: str | None) -> str:
     """Detects spoken language using Deepgram code with a local keyword classifier fallback."""
-    # Method 1: Check Deepgram's native neural network classification (highly accurate)
+    # Method 1: Check Deepgram's native neural network classification (if available)
     if detected_lang:
         lang_code = detected_lang.lower()
         if lang_code.startswith("mr"):
@@ -159,13 +159,21 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
     # Method 2: Local Heuristics / Keyword Fallback Classifier
     text = transcript.lower()
     
-    # English Check (Latin script ratio)
+    # 2.1. English Check (Latin script ratio)
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(" ", ""))
     if total_chars > 0 and (latin_chars / total_chars) > 0.4:
         return "en"
         
-    # Marathi Check
+    # 2.2. English Check in Devanagari script (phonetic English words)
+    english_devanagari_keywords = [
+        "व्हाट", "वाॅट", "कैन", "प्लीज", "प्लिज", "शेयर", "सेंड", "ऍम", "एम", "फॉर", "फॉअर", 
+        "थैंक", "थॅंक", "द प्राइस", "द फ्लैट", "द ब्रोशर", "यू प्लीज", "प्लीज सेंड", "प्लीज शेयर"
+    ]
+    if any(word in text for word in english_devanagari_keywords):
+        return "en"
+        
+    # 2.3. Marathi Check
     marathi_keywords = [
         "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
         "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
@@ -230,10 +238,10 @@ def prewarm_fnc(proc: JobProcess):
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
-    # 1. Pre-warm Deepgram Nova-2 STT with Multilingual Code-Switching
+    # 1. Pre-warm Deepgram Nova-2 STT
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        language="multi",
+        language="hi",
         model="nova-2",
         endpointing_ms=120,
         smart_format=True,
