@@ -283,33 +283,7 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["tts"] = tts
 
-    # 4. Compile the LLM schemas synchronously at startup
-    try:
-        from livekit.agents import llm as agents_llm
-        agent = PriyaRealEstateAgent()
-        agent_tools = agent.tools
-        
-        chat_ctx = agents_llm.ChatContext()
-        chat_ctx.add_message(role="user", content="hello")
-        
-        async def _run_prewarm():
-            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
-            async for chunk in chat_stream:
-                break
-                
-        try:
-            asyncio.run(asyncio.wait_for(_run_prewarm(), timeout=3.0))
-            logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
-        except asyncio.TimeoutError:
-            logger.warning("LLM pre-warm timed out after 3.0s, skipping to prevent process hang.")
-    except Exception as e:
-        logger.warning(f"LLM pre-warm error: {e}")
-
-    # 5. Pre-warm Lightweight Silero VAD
-    proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.08
-    )
+    # Heavy VAD loading and LLM chat compilation removed from startup to prevent process initialization timeouts.
 
     t1 = (time.perf_counter() - t0) * 1000
     logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
@@ -341,6 +315,12 @@ async def entrypoint(ctx: JobContext):
     llm = ctx.proc.userdata.get("llm")
     tts = ctx.proc.userdata.get("tts")
     vad = ctx.proc.userdata.get("vad")
+    if not vad:
+        logger.info("⏱️ [VAD] Loading Silero VAD model dynamically on call connection...")
+        vad = silero.VAD.load(
+            min_silence_duration=0.25,
+            min_speech_duration=0.08
+        )
     
     # Reset TTS options to default Hindi (Esha) at the start of every call
     if tts and hasattr(tts, "update_options"):
