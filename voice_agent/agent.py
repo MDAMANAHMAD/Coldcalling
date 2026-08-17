@@ -68,27 +68,6 @@ logger = logging.getLogger("enterprise_voice_agent")
 
 
 # ==============================================================================
-# 0. TTS TEXT CLEANER PROXIES (Ensures abbreviations like sqft or Cr are spoken fully)
-# ==============================================================================
-def clean_text_for_tts(text: str) -> str:
-    import re
-    # Replace sqft variations with 'square feet'
-    text = re.sub(r'(?i)\bsq\s*ft\b', 'square feet', text)
-    text = re.sub(r'(?i)\bsq\.?\s*ft\.?\b', 'square feet', text)
-    text = re.sub(r'(?i)\bsquare\s*feet\b', 'square feet', text)
-    text = re.sub(r'(?i)\bsq\b', 'square feet', text)
-    
-    # Replace other real estate abbreviations to ensure smooth pronunciation
-    text = re.sub(r'(?i)\bcr\b', 'crore', text)
-    text = re.sub(r'(?i)\blacs\b', 'lakh', text)
-    text = re.sub(r'(?i)\blakhs\b', 'lakh', text)
-    text = re.sub(r'(?i)\brs\.?\b', 'rupees', text)
-    text = re.sub(r'₹', 'rupees', text)
-    
-    # Clean up multiple whitespaces
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
-# ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
@@ -348,7 +327,6 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
-        tts_text_transforms=[clean_text_for_tts],
         turn_handling={
             "interruption": {
                 "enabled": True,
