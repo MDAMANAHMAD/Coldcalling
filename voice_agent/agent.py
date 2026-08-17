@@ -271,40 +271,6 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
     proc.userdata["llm"] = llm
-
-    # Check Cartesia key validity synchronously during prewarm_fnc
-    cartesia_key = os.getenv("CARTESIA_API_KEY")
-    use_cartesia = False
-    if cartesia_key and len(cartesia_key) > 10:
-        logger.info("⏱️ [PRE-WARMING] Testing Cartesia API key health...")
-        try:
-            import requests
-            url = "https://api.cartesia.ai/tts/bytes"
-            headers = {
-                "X-API-Key": cartesia_key,
-                "Cartesia-Version": "2024-06-10",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "model_id": "sonic-multilingual",
-                "transcript": "Namaste",
-                "voice": {"mode": "id", "id": "72656902-fb4b-4c31-af52-c3b68e2cae26"},
-                "output_format": {"container": "raw", "encoding": "pcm_f32le", "sample_rate": 24000},
-                "language": "hi"
-            }
-            resp = requests.post(url, headers=headers, json=payload, timeout=1.5)
-            if resp.status_code == 200:
-                logger.info("✅ Cartesia API key verified healthy and active!")
-                use_cartesia = True
-            else:
-                logger.warning(f"⚠️ Cartesia key check failed with status {resp.status_code} ({resp.text.strip()}). Falling back to ElevenLabs.")
-        except Exception as e:
-            logger.warning(f"⚠️ Cartesia key check exception: {e}. Falling back to ElevenLabs.")
-    else:
-        logger.info("ℹ️ No active Cartesia key found. Defaulting to ElevenLabs TTS.")
-    
-    proc.userdata["use_cartesia"] = use_cartesia
-
     # Cartesia/ElevenLabs TTS loading is bypassed during prewarm_fnc and moved to dynamic call initialization.
     # This prevents multiple idle processes from opening concurrent WebSocket connections, completely bypassing 429 concurrency blocks.
 
@@ -351,9 +317,8 @@ async def entrypoint(ctx: JobContext):
     tts = ctx.proc.userdata.get("tts")
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
-        use_cartesia = ctx.proc.userdata.get("use_cartesia", False)
         cartesia_key = os.getenv("CARTESIA_API_KEY")
-        if use_cartesia and cartesia_key and len(cartesia_key) > 10:
+        if cartesia_key and len(cartesia_key) > 10:
             logger.info("Initializing Cartesia TTS with Esha Calm Hindi Voice...")
             tts = cartesia.TTS(
                 api_key=cartesia_key,
