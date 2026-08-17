@@ -329,7 +329,7 @@ async def entrypoint(ctx: JobContext):
         vad=vad,
         turn_handling={
             "interruption": {
-                "enabled": True,
+                "enabled": False,
                 "mode": "vad",
                 "min_words": 1,
                 "min_duration": 0.15,
@@ -435,7 +435,7 @@ if __name__ == "__main__":
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
             num_idle_processes=0,
-            load_threshold=2.0,
+            load_threshold=100.0,
             initialize_process_timeout=90.0,
         )
     )
