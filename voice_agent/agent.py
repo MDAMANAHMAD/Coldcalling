@@ -389,22 +389,7 @@ async def entrypoint(ctx: JobContext):
 
     from livekit.agents.voice import UserInputTranscribedEvent
 
-    # Pre-warm Esha connection pool concurrently in the background while session starts
-    async def _prewarm_tts_conn():
-        try:
-            if hasattr(tts, "prewarm"):
-                tts.prewarm()
-                logger.info("⏱️ [PERF] Esha TTS connection pre-warmed concurrently in background!")
-            else:
-                logger.info("⏱️ [TTS] Pre-warming ElevenLabs connection via dummy synthesis...")
-                stream = tts.synthesize("Namaste")
-                async for chunk in stream:
-                    break
-                logger.info("⏱️ [PERF] ElevenLabs TTS connection pre-warmed concurrently in background!")
-        except Exception as e:
-            logger.warning(f"TTS background pre-warm error: {e}")
 
-    asyncio.create_task(_prewarm_tts_conn())
 
 
 
