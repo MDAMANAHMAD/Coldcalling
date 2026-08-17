@@ -35,28 +35,7 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
-try:
-    import torch
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
-except Exception:
-    pass
 
-# -----------------------------------------------------------------------------
-# Pre-import and compile OpenAI SDK lazy resources at worker startup.
-# We increased initialize_process_timeout to 45.0s to allow these imports
-# to run synchronously during process spawning without causing worker timeouts.
-# -----------------------------------------------------------------------------
-try:
-    import openai
-    import openai.resources.models
-    import openai.resources.admin
-    import openai.types.admin.organization
-    _dummy_client = openai.AsyncOpenAI(api_key="dummy")
-    _ = _dummy_client.models
-except Exception:
-    pass
-# -----------------------------------------------------------------------------
 
 # Monkey patch livekit's OpenAI LLM prewarm implementation to bypass the
 # slow models.list() API request, enabling instant session startup.
@@ -494,7 +473,7 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
-            num_idle_processes=1,
+            num_idle_processes=0,
             load_threshold=0.95,
             initialize_process_timeout=90.0,
         )
