@@ -439,7 +439,7 @@ async def entrypoint(ctx: JobContext):
     # Speak greeting immediately using ElevenLabs streaming audio
     logger.info(f"🎙️ [PERF +{t_total_ready:.1f}ms] Speaking Greeting immediately to caller!")
     try:
-        session.say(greeting_text, allow_interruptions=True)
+        session.say(greeting_text, allow_interruptions=False)
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 
