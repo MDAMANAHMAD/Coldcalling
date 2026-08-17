@@ -322,25 +322,7 @@ async def entrypoint(ctx: JobContext):
             )
         ctx.proc.userdata["tts"] = tts
     
-    # Monkey patch TTS synthesize and stream methods to clean abbreviations (sqft -> square feet)
-    orig_synthesize = tts.synthesize
-    orig_stream = tts.stream
 
-    def patched_synthesize(text: str, *args, **kwargs):
-        cleaned_text = clean_text_for_tts(text)
-        return orig_synthesize(cleaned_text, *args, **kwargs)
-
-    def patched_stream(*args, **kwargs):
-        raw_stream = orig_stream(*args, **kwargs)
-        orig_push_text = raw_stream.push_text
-        def patched_push_text(text: str, *args, **kwargs):
-            cleaned_text = clean_text_for_tts(text)
-            return orig_push_text(cleaned_text, *args, **kwargs)
-        raw_stream.push_text = patched_push_text
-        return raw_stream
-
-    tts.synthesize = patched_synthesize
-    tts.stream = patched_stream
 
     # VAD is pre-warmed, but load as fallback if not present
     vad = ctx.proc.userdata.get("vad")
@@ -366,6 +348,7 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
+        tts_text_transforms=[clean_text_for_tts],
         turn_handling={
             "interruption": {
                 "enabled": True,
@@ -474,7 +457,7 @@ if __name__ == "__main__":
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
             num_idle_processes=0,
-            load_threshold=0.95,
+            load_threshold=2.0,
             initialize_process_timeout=90.0,
         )
     )
