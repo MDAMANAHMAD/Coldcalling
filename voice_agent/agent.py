@@ -198,6 +198,7 @@ class PriyaRealEstateAgent(Agent):
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
     """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
+    set_low_priority()
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
 
@@ -229,11 +230,30 @@ def prewarm_fnc(proc: JobProcess):
             temperature=0.0
         )
     proc.userdata["llm"] = llm
-    # Cartesia/ElevenLabs TTS loading is bypassed during prewarm_fnc and moved to dynamic call initialization.
-    # This prevents multiple idle processes from opening concurrent WebSocket connections, completely bypassing 429 concurrency blocks.
 
-    # Heavy VAD loading and LLM chat compilation removed from startup to prevent process initialization timeouts.
-    # 3. Pre-warm Silero VAD
+    # 3. Compile the LLM schemas synchronously at startup (fully pre-warms Groq/Pydantic tool schemas)
+    try:
+        from livekit.agents import llm as agents_llm
+        agent = PriyaRealEstateAgent()
+        agent_tools = agent.tools
+        
+        chat_ctx = agents_llm.ChatContext()
+        chat_ctx.add_message(role="user", content="hello")
+        
+        async def _run_prewarm():
+            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
+            async for chunk in chat_stream:
+                break
+                
+        try:
+            asyncio.run(asyncio.wait_for(_run_prewarm(), timeout=8.0))
+            logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
+        except asyncio.TimeoutError:
+            logger.warning("LLM pre-warm timed out, skipping to prevent process hang.")
+    except Exception as e:
+        logger.warning(f"LLM pre-warm error: {e}")
+
+    # 4. Pre-warm Silero VAD
     from livekit.plugins import silero
     logger.info("⏱️ [VAD] Pre-loading Silero VAD model in background...")
     proc.userdata["vad"] = silero.VAD.load(
@@ -249,6 +269,7 @@ def prewarm_fnc(proc: JobProcess):
 # 4. AGENT ENTRYPOINT (Instant Telephony Streaming Audio)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
+    set_normal_priority()
     t_start = time.perf_counter()
     logger.info(f"⏱️ [PERF +0ms] Job received for Room: {ctx.room.name}")
     
@@ -359,21 +380,7 @@ async def entrypoint(ctx: JobContext):
 
     asyncio.create_task(_prewarm_tts_conn())
 
-    # Pre-warm LLM schema compilation concurrently in the background while session starts
-    async def _prewarm_llm():
-        try:
-            from livekit.agents import llm as agents_llm
-            chat_ctx = agents_llm.ChatContext()
-            chat_ctx.add_message(role="user", content="hello")
-            
-            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent.tools)
-            async for chunk in chat_stream:
-                break
-            logger.info("⏱️ [PERF] LLM schema pre-compiled concurrently in background!")
-        except Exception as e:
-            logger.warning(f"LLM background pre-warm error: {e}")
 
-    asyncio.create_task(_prewarm_llm())
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
@@ -434,7 +441,7 @@ if __name__ == "__main__":
         WorkerOptions(
             entrypoint_fnc=entrypoint,
             prewarm_fnc=prewarm_fnc,
-            num_idle_processes=0,
+            num_idle_processes=1,
             load_threshold=100.0,
             initialize_process_timeout=90.0,
         )
