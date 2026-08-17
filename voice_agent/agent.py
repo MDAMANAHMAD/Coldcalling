@@ -68,6 +68,32 @@ logger = logging.getLogger("enterprise_voice_agent")
 
 
 # ==============================================================================
+# 0. PROCESS CPU PRIORITY OPTIMIZERS (Prevents idle background pre-warming from starving active calls)
+# ==============================================================================
+def set_low_priority():
+    import os
+    import sys
+    if sys.platform == "win32":
+        return
+    try:
+        os.nice(15)
+        logger.info("📉 Set process CPU nice priority to 15 (low priority)")
+    except Exception as e:
+        logger.warning(f"Could not set low priority: {e}")
+
+def set_normal_priority():
+    import os
+    import sys
+    if sys.platform == "win32":
+        return
+    try:
+        os.nice(-15)
+        logger.info("📈 Restored process CPU nice priority to normal (0)")
+    except Exception as e:
+        logger.warning(f"Could not restore normal priority: {e}")
+
+
+# ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """
