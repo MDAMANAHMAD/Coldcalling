@@ -287,7 +287,7 @@ def prewarm_fnc(proc: JobProcess):
     if groq_key and groq_key.startswith("gsk_"):
         llm = openai.LLM(
             base_url="https://api.groq.com/openai/v1",
-            model="groq/compound-mini",
+            model="qwen/qwen3.6-27b",
             api_key=groq_key,
             temperature=0.0
         )
