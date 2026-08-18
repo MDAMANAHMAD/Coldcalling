@@ -264,7 +264,6 @@ def prewarm_fnc(proc: JobProcess):
     # Co-operatively wait until any active call finishes to protect VPS CPU resources
     if is_active_call_running():
         logger.info("⏳ Active call in progress, delaying background pre-warming...")
-        import time
         while is_active_call_running():
             time.sleep(0.5)
         logger.info("🟢 Active call ended, starting background pre-warming...")
