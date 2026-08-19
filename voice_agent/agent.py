@@ -115,6 +115,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 6. DO NOT OVERUSE THE CLIENT'S NAME: Address the client by name (e.g., "Aman ji") only once or twice during the entire call (such as in the greeting or closing). Do NOT append their name to every response.
 7. MULTILINGUAL RESPONSE MATCHING: Always respond in the EXACT same language that the client speaks to you. If the client speaks in Marathi, reply in fluent, warm Marathi. If the client speaks in English, reply in English. If the client speaks in Hindi, reply in Hindi.
 8. NO ABBREVIATIONS: Never use abbreviations like "sqft", "sq. ft.", "cr", "lacs", or "rs" in your replies. Always write them out fully in plain text as "square feet", "crore", "lakh", or "rupaye". For example, write "375 square feet" instead of "375 sqft".
+9. SHORT PROJECT INTRO & PRICING: When describing the project or pricing, keep it very short and simple. Do NOT list out all square footages or terrace flat options in one go. Just mention that we have 1BHK flats starting at thirty six lakh rupees, and 2BHK flats starting at seventy two lakh rupees, and then ask them if they would like to know more. Keep this intro to exactly 1 or 2 sentences maximum.
 
 ==================================================
 PROJECT KNOWLEDGE BASE (SAI COMPLEX, DOMBIVLI EAST):
@@ -474,20 +475,51 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Wait for the caller to join the room if not already present
-    if not ctx.room.remote_participants:
-        logger.info("⏳ Room is empty. Waiting for caller to join...")
+    # Wait for the caller to join the room and be answered (active status)
+    caller = None
+    for p in ctx.room.remote_participants.values():
+        if p.identity.startswith("sip-"):
+            caller = p
+            break
+
+    if not caller:
+        logger.info("⏳ Waiting for caller participant to join...")
         caller_joined = asyncio.Event()
-        
+
         @ctx.room.on("participant_connected")
         def _on_participant_connected(p):
-            logger.info(f"📞 Caller joined: {p.identity}")
-            caller_joined.set()
-            
+            nonlocal caller
+            if p.identity.startswith("sip-"):
+                logger.info(f"📞 Caller joined: {p.identity}")
+                caller = p
+                caller_joined.set()
+
         try:
-            await asyncio.wait_for(caller_joined.wait(), timeout=10.0)
+            await asyncio.wait_for(caller_joined.wait(), timeout=15.0)
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
+
+    if caller:
+        current_status = caller.attributes.get("sip.callStatus")
+        logger.info(f"📞 Caller current SIP status: {current_status}")
+        if current_status != "active":
+            logger.info("⏳ Waiting for caller to answer the phone (SIP active status)...")
+            call_active = asyncio.Event()
+
+            @ctx.room.on("participant_attributes_changed")
+            def _on_attributes_changed(changed_attrs, p):
+                if p.identity == caller.identity and changed_attrs.get("sip.callStatus") == "active":
+                    logger.info("📞 Caller answered! SIP call status is active.")
+                    call_active.set()
+
+            # Prevent race condition
+            if caller.attributes.get("sip.callStatus") == "active":
+                call_active.set()
+
+            try:
+                await asyncio.wait_for(call_active.wait(), timeout=30.0)
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for caller to answer phone.")
 
     # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle
     logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle...")
