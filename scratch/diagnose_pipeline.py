@@ -94,17 +94,19 @@ async def test_vad():
         if hasattr(vad, "_onnx_session") and vad._onnx_session:
             session = vad._onnx_session
             
-            # Inspect session inputs dynamically
             inputs = session.get_inputs()
             input_feed = {}
             for inp in inputs:
-                # Replace dynamic dimension names or None with standard values (1 or 256 depending on name)
                 shape = []
-                for s in inp.shape:
+                for idx, s in enumerate(inp.shape):
                     if isinstance(s, int) and s > 0:
                         shape.append(s)
-                    elif inp.name == "input":
-                        shape.append(256) # 32ms at 8kHz
+                    elif idx == 0:
+                        # Batch size is always 1
+                        shape.append(1)
+                    elif inp.name == "input" and idx == 1:
+                        # Samples is 256 for 32ms at 8kHz
+                        shape.append(256)
                     else:
                         shape.append(1)
                 
