@@ -222,10 +222,12 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
-        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."# ==============================================================================
+        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."
+
+# ==============================================================================
 # 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
 # ==============================================================================
-logger.info("🔥 [IMPORT TIME] Instantiating LLM and compiling schemas...")
+logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
 global_groq_key = os.getenv("GROQ_API_KEY")
 if global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
@@ -244,28 +246,34 @@ else:
         temperature=0.0
     )
 
-try:
-    from livekit.agents import llm as agents_llm
-    agent_dummy = PriyaRealEstateAgent()
-    agent_tools_dummy = agent_dummy.tools
-    chat_ctx_dummy = agents_llm.ChatContext()
-    chat_ctx_dummy.add_message(role="user", content="hello")
-
-    async def _compile_schemas_static():
-        chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-        async for chunk in chat_stream:
-            break
-
+global_llm_compiled = False
+# If a call is currently active, skip import-time compilation to protect the active call's CPU
+if os.path.exists("bookings/active_call.lock"):
+    logger.info("🔒 Active call detected during import. Skipping static LLM compilation to protect call CPU.")
+else:
     try:
-        loop_static = asyncio.get_event_loop()
-    except RuntimeError:
-        loop_static = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop_static)
-        
-    loop_static.run_until_complete(asyncio.wait_for(_compile_schemas_static(), timeout=8.0))
-    logger.info("✅ [IMPORT TIME COMPLETE] LLM schemas compiled successfully!")
-except Exception as e:
-    logger.warning(f"Static LLM schema compilation failed during import: {e}")
+        from livekit.agents import llm as agents_llm
+        agent_dummy = PriyaRealEstateAgent()
+        agent_tools_dummy = agent_dummy.tools
+        chat_ctx_dummy = agents_llm.ChatContext()
+        chat_ctx_dummy.add_message(role="user", content="hello")
+
+        async def _compile_schemas_static():
+            chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+            async for chunk in chat_stream:
+                break
+
+        try:
+            loop_static = asyncio.get_event_loop()
+        except RuntimeError:
+            loop_static = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop_static)
+            
+        loop_static.run_until_complete(asyncio.wait_for(_compile_schemas_static(), timeout=8.0))
+        global_llm_compiled = True
+        logger.info("✅ [IMPORT TIME COMPLETE] LLM schemas compiled successfully!")
+    except Exception as e:
+        logger.warning(f"Static LLM schema compilation failed during import: {e}")
 
 
 # ==============================================================================
@@ -277,8 +285,55 @@ def prewarm_fnc(proc: JobProcess):
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines...")
 
-    # 1. Store the already compiled global LLM
+    # 1. Store the global LLM
     proc.userdata["llm"] = global_llm
+
+    # If static compilation was skipped due to an active call, compile lazily in a background thread once idle
+    global global_llm_compiled
+    if not global_llm_compiled:
+        import threading
+        def compile_schemas_lazy():
+            global global_llm_compiled
+            # Sleep to let process initialization settle
+            time.sleep(1.0)
+            
+            # Loop and sleep while another call is active
+            while os.path.exists("bookings/active_call.lock"):
+                try:
+                    with open("bookings/active_call.lock", "r") as f:
+                        lock_pid = int(f.read().strip())
+                    if lock_pid == os.getpid():
+                        # We are the active call! Abort background thread to protect CPU!
+                        return
+                except Exception:
+                    pass
+                time.sleep(1.5)
+                
+            logger.info("🔥 [PRE-WARMING] System is idle. Compiling LLM schemas lazily in background...")
+            try:
+                from livekit.agents import llm as agents_llm
+                agent_dummy = PriyaRealEstateAgent()
+                agent_tools_dummy = agent_dummy.tools
+                chat_ctx_dummy = agents_llm.ChatContext()
+                chat_ctx_dummy.add_message(role="user", content="hello")
+
+                async def _compile_schemas_lazy():
+                    chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                    async for chunk in chat_stream:
+                        break
+
+                loop_lazy = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_lazy)
+                try:
+                    loop_lazy.run_until_complete(asyncio.wait_for(_compile_schemas_lazy(), timeout=8.0))
+                    global_llm_compiled = True
+                    logger.info("✅ [PRE-WARMING COMPLETE] LLM schemas compiled lazily in background successfully!")
+                finally:
+                    loop_lazy.close()
+            except Exception as e:
+                logger.warning(f"Lazy LLM schema compilation failed: {e}")
+                
+        threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
     # 2. Pre-warm Deepgram Nova-2 STT
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
