@@ -261,27 +261,7 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    # 3. Compile the LLM schemas synchronously at startup (fully pre-warms Groq/Pydantic tool schemas)
-    try:
-        from livekit.agents import llm as agents_llm
-        agent = PriyaRealEstateAgent()
-        agent_tools = agent.tools
-        
-        chat_ctx = agents_llm.ChatContext()
-        chat_ctx.add_message(role="user", content="hello")
-        
-        async def _run_prewarm():
-            chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
-            async for chunk in chat_stream:
-                break
-                
-        try:
-            asyncio.run(asyncio.wait_for(_run_prewarm(), timeout=8.0))
-            logger.info("🔥 [PRE-WARMING] LLM chat completions and function tools schemas compiled successfully.")
-        except asyncio.TimeoutError:
-            logger.warning("LLM pre-warm timed out, skipping to prevent process hang.")
-    except Exception as e:
-        logger.warning(f"LLM pre-warm error: {e}")
+    # LLM pre-warming step removed to prevent background CPU spikes during active calls
 
     # 4. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
     from livekit.plugins import silero
