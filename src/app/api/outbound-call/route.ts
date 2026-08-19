@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
     const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).trim();
     const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).trim();
 
+    console.log(`[API OUTBOUND CALL] Waiting 10 seconds before dialing ${safePhone} to allow background systems to pre-warm...`);
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+
     console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host}`);
 
     const sipClient = new SipClient(host, apiKey, apiSecret);
