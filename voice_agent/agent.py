@@ -522,16 +522,9 @@ async def entrypoint(ctx: JobContext):
                     logger.info("🔄 Switched TTS to Hindi (Esha)")
 
     # Start session with record=False
-    t_session_start = time.perf_counter()
-    logger.info("⏱️ [PERF] Calling session.start()...")
-    await session.start(agent=agent, room=ctx.room, record=False)
-    
-    t_session_ready = (time.perf_counter() - t_session_start) * 1000
-    t_total_ready = (time.perf_counter() - t_start) * 1000
-    logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
-    logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
-
-    # Wait for the caller to join the room if not already present
+    # Wait for the caller to join the room if not already present.
+    # We wait BEFORE calling session.start() to prevent Deepgram from starting its WebSocket 
+    # connection during the ringing phase, which would trigger 1006 connection timeouts.
     if not ctx.room.remote_participants:
         logger.info("⏳ Room is empty. Waiting for caller to join...")
         caller_joined = asyncio.Event()
@@ -542,9 +535,19 @@ async def entrypoint(ctx: JobContext):
             caller_joined.set()
             
         try:
-            await asyncio.wait_for(caller_joined.wait(), timeout=10.0)
+            await asyncio.wait_for(caller_joined.wait(), timeout=60.0)
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
+
+    # Start session with record=False
+    t_session_start = time.perf_counter()
+    logger.info("⏱️ [PERF] Calling session.start()...")
+    await session.start(agent=agent, room=ctx.room, record=False)
+    
+    t_session_ready = (time.perf_counter() - t_session_start) * 1000
+    t_total_ready = (time.perf_counter() - t_start) * 1000
+    logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
+    logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
     # Allow 0.1s for WebRTC audio negotiation and SIP RTP streams to fully settle
     logger.info("⏳ Allowing 0.1s for audio bridge and SIP RTP connection to settle...")
