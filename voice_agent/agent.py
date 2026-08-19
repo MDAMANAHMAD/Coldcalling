@@ -475,51 +475,20 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Wait for the caller to join the room and be answered (active status)
-    caller = None
-    for p in ctx.room.remote_participants.values():
-        if p.identity.startswith("sip-"):
-            caller = p
-            break
-
-    if not caller:
-        logger.info("⏳ Waiting for caller participant to join...")
+    # Wait for the caller to join the room if not already present
+    if not ctx.room.remote_participants:
+        logger.info("⏳ Room is empty. Waiting for caller to join...")
         caller_joined = asyncio.Event()
-
+        
         @ctx.room.on("participant_connected")
         def _on_participant_connected(p):
-            nonlocal caller
-            if p.identity.startswith("sip-"):
-                logger.info(f"📞 Caller joined: {p.identity}")
-                caller = p
-                caller_joined.set()
-
+            logger.info(f"📞 Caller joined: {p.identity}")
+            caller_joined.set()
+            
         try:
-            await asyncio.wait_for(caller_joined.wait(), timeout=15.0)
+            await asyncio.wait_for(caller_joined.wait(), timeout=10.0)
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
-
-    if caller:
-        current_status = caller.attributes.get("sip.callStatus")
-        logger.info(f"📞 Caller current SIP status: {current_status}")
-        if current_status != "active":
-            logger.info("⏳ Waiting for caller to answer the phone (SIP active status)...")
-            call_active = asyncio.Event()
-
-            @ctx.room.on("participant_attributes_changed")
-            def _on_attributes_changed(changed_attrs, p):
-                if p.identity == caller.identity and changed_attrs.get("sip.callStatus") == "active":
-                    logger.info("📞 Caller answered! SIP call status is active.")
-                    call_active.set()
-
-            # Prevent race condition
-            if caller.attributes.get("sip.callStatus") == "active":
-                call_active.set()
-
-            try:
-                await asyncio.wait_for(call_active.wait(), timeout=30.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout waiting for caller to answer phone.")
 
     # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle
     logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle...")
