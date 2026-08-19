@@ -91,27 +91,39 @@ async def test_vad():
         load_time = (time.perf_counter() - t0) * 1000
         print(f"Silero VAD Load Time: {load_time:.1f} ms")
         
-        # Benchmark ONNX Session directly to see raw execution speed of CPU
         if hasattr(vad, "_onnx_session") and vad._onnx_session:
             session = vad._onnx_session
             
-            # Prepare standard Silero inputs for 8kHz (256 samples per 32ms frame)
-            input_data = np.zeros((1, 256), dtype=np.float32)
-            sr_data = np.array(8000, dtype=np.int64)
-            h_data = np.zeros((2, 1, 64), dtype=np.float32)
-            c_data = np.zeros((2, 1, 64), dtype=np.float32)
-            
-            input_feed = {
-                "input": input_data,
-                "sr": sr_data,
-                "h": h_data,
-                "c": c_data
-            }
+            # Inspect session inputs dynamically
+            inputs = session.get_inputs()
+            input_feed = {}
+            for inp in inputs:
+                # Replace dynamic dimension names or None with standard values (1 or 256 depending on name)
+                shape = []
+                for s in inp.shape:
+                    if isinstance(s, int) and s > 0:
+                        shape.append(s)
+                    elif inp.name == "input":
+                        shape.append(256) # 32ms at 8kHz
+                    else:
+                        shape.append(1)
+                
+                # Determine data type
+                if "int64" in inp.type:
+                    val = np.zeros(shape, dtype=np.int64)
+                    if inp.name in ("sr", "sample_rate"):
+                        val.fill(8000)
+                else:
+                    val = np.zeros(shape, dtype=np.float32)
+                
+                input_feed[inp.name] = val
+                print(f"ONNX Input - Name: '{inp.name}', Shape: {shape}, Type: {inp.type}")
             
             # Warm up
             for _ in range(5):
                 session.run(None, input_feed)
                 
+            # Benchmark 100 runs
             t_start = time.perf_counter()
             for _ in range(100):
                 session.run(None, input_feed)
