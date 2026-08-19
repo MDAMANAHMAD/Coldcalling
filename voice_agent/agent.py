@@ -261,7 +261,42 @@ def prewarm_fnc(proc: JobProcess):
         )
     proc.userdata["llm"] = llm
 
-    # LLM pre-warming step removed to prevent background CPU spikes during active calls
+    # 3. Compile LLM schemas in a background thread once the system is idle (protects active calls from CPU spikes)
+    import threading
+    def compile_schemas_worker():
+        # Sleep to let process initialization settle
+        time.sleep(1.0)
+        
+        # Loop until there is no active call lock file
+        while os.path.exists("bookings/active_call.lock"):
+            time.sleep(1.5)
+            
+        logger.info("🔥 [PRE-WARMING] System is idle. Compiling LLM schemas now...")
+        try:
+            from livekit.agents import llm as agents_llm
+            # Instantiate a dummy agent to extract tools
+            agent = PriyaRealEstateAgent()
+            agent_tools = agent.tools
+            
+            chat_ctx = agents_llm.ChatContext()
+            chat_ctx.add_message(role="user", content="hello")
+            
+            async def _run_prewarm():
+                chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
+                async for chunk in chat_stream:
+                    break
+                    
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(asyncio.wait_for(_run_prewarm(), timeout=8.0))
+                logger.info("✅ [PRE-WARMING COMPLETE] LLM chat completions and function tools schemas compiled successfully.")
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning(f"LLM pre-warm error in background thread: {e}")
+            
+    threading.Thread(target=compile_schemas_worker, daemon=True).start()
 
     # 4. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
     from livekit.plugins import silero
@@ -306,6 +341,26 @@ async def entrypoint(ctx: JobContext):
     t_start = time.perf_counter()
     logger.info(f"⏱️ [PERF +0ms] Job received for Room: {ctx.room.name}")
     
+    # Create active call lock file to signal background processes to hold off heavy compilation
+    try:
+        os.makedirs("bookings", exist_ok=True)
+        with open("bookings/active_call.lock", "w") as f:
+            f.write(str(os.getpid()))
+        logger.info("🔒 Active call lock created.")
+    except Exception as e:
+        logger.warning(f"Failed to create lock file: {e}")
+
+    # Register cleanup callback on job shutdown to release the lock file
+    async def cleanup_lock():
+        try:
+            if os.path.exists("bookings/active_call.lock"):
+                os.remove("bookings/active_call.lock")
+                logger.info("🔓 Active call lock released.")
+        except Exception as e:
+            logger.warning(f"Failed to remove lock file: {e}")
+
+    ctx.add_shutdown_callback(cleanup_lock)
+
     await ctx.connect()
     t_connected = (time.perf_counter() - t_start) * 1000
     logger.info(f"⏱️ [PERF +{t_connected:.1f}ms] Connected to LiveKit Room!")
