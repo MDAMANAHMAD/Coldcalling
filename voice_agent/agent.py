@@ -404,7 +404,7 @@ async def entrypoint(ctx: JobContext):
         tts=tts,
         vad=vad,
         turn_handling={
-            "turn_detection": "vad",
+            "turn_detection": None,
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
