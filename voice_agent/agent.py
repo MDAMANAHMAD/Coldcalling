@@ -93,42 +93,6 @@ def set_normal_priority():
         logger.warning(f"Could not restore normal priority: {e}")
 
 
-# ==============================================================================
-# 0.1 ACTIVE CALL COOPERATIVE LOCK (Prevents background pre-warming during active calls)
-# ==============================================================================
-def pid_exists(pid: int) -> bool:
-    import sys
-    import os
-    if sys.platform == "win32":
-        return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-def is_active_call_running() -> bool:
-    import os
-    lock_file = "active_call.lock"
-    if not os.path.exists(lock_file):
-        return False
-    try:
-        with open(lock_file, "r") as f:
-            pid = int(f.read().strip())
-        if pid_exists(pid):
-            return True
-        else:
-            try:
-                os.remove(lock_file)
-                logger.info("🧹 Removed stale active call lock file.")
-            except Exception:
-                pass
-            return False
-    except Exception as e:
-        logger.warning(f"Error checking active call lock: {e}")
-        return False
-
-
 
 # ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
@@ -261,13 +225,6 @@ class PriyaRealEstateAgent(Agent):
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
     """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
-    # Co-operatively wait until any active call finishes to protect VPS CPU resources
-    if is_active_call_running():
-        logger.info("⏳ Active call in progress, delaying background pre-warming...")
-        while is_active_call_running():
-            time.sleep(0.5)
-        logger.info("🟢 Active call ended, starting background pre-warming...")
-
     set_low_priority()
     t0 = time.perf_counter()
     logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines into memory...")
@@ -323,12 +280,13 @@ def prewarm_fnc(proc: JobProcess):
     except Exception as e:
         logger.warning(f"LLM pre-warm error: {e}")
 
-    # 4. Pre-warm Silero VAD
+    # 4. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
     from livekit.plugins import silero
     logger.info("⏱️ [VAD] Pre-loading Silero VAD model in background...")
     proc.userdata["vad"] = silero.VAD.load(
         min_silence_duration=0.25,
-        min_speech_duration=0.08
+        min_speech_duration=0.08,
+        sample_rate=8000
     )
 
     t1 = (time.perf_counter() - t0) * 1000
@@ -339,29 +297,6 @@ def prewarm_fnc(proc: JobProcess):
 # 4. AGENT ENTRYPOINT (Instant Telephony Streaming Audio)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
-    # Lock CPU resources for the active call
-    lock_file = "active_call.lock"
-    try:
-        import os
-        import atexit
-        with open(lock_file, "w") as f:
-            f.write(str(os.getpid()))
-        logger.info(f"🔒 Active call lock file created for PID {os.getpid()}.")
-        
-        def cleanup_lock():
-            try:
-                if os.path.exists(lock_file):
-                    with open(lock_file, "r") as f:
-                        file_pid = int(f.read().strip())
-                    if file_pid == os.getpid():
-                        os.remove(lock_file)
-                        logger.info("🔓 Active call lock file removed on process exit.")
-            except Exception:
-                pass
-        atexit.register(cleanup_lock)
-    except Exception as e:
-        logger.warning(f"Failed to create lock file: {e}")
-
     set_normal_priority()
     t_start = time.perf_counter()
     logger.info(f"⏱️ [PERF +0ms] Job received for Room: {ctx.room.name}")
@@ -417,13 +352,14 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present
+    # VAD is pre-warmed, but load as fallback if not present (optimized with 8kHz sample rate to cut CPU usage by 50%)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
             min_silence_duration=0.25,
-            min_speech_duration=0.08
+            min_speech_duration=0.08,
+            sample_rate=8000
         )
     
     # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
