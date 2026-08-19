@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from livekit.plugins import silero, cartesia, openai
 import urllib.request
 import json
+import numpy as np
 
 load_dotenv()
 
@@ -82,7 +83,7 @@ async def test_tts():
     except Exception as e:
         print(f"TTS Error: {e}")
 
-def test_vad():
+async def test_vad():
     print("\n--- 3. VAD ONNX Latency Benchmark (Silero) ---")
     try:
         t0 = time.perf_counter()
@@ -90,39 +91,51 @@ def test_vad():
         load_time = (time.perf_counter() - t0) * 1000
         print(f"Silero VAD Load Time: {load_time:.1f} ms")
         
-        # Simulate 100 VAD frames (each frame is 32ms of audio, which is 256 samples at 8kHz)
-        import numpy as np
-        from livekit import rtc
-        
-        # 32ms audio frame at 8000Hz PCM 16-bit is 256 samples
-        raw_data = np.zeros(256, dtype=np.int16)
-        audio_frame = rtc.AudioFrame(
-            data=raw_data.tobytes(),
-            sample_rate=8000,
-            num_channels=1,
-            samples_per_channel=256
-        )
-        
-        # Benchmark 100 VAD inferences
-        t_start = time.perf_counter()
-        for _ in range(100):
-            vad.process_frame(audio_frame)
-        t_end = time.perf_counter()
-        
-        avg_infer = ((t_end - t_start) / 100) * 1000
-        print(f"Average VAD Inference Time per 32ms frame: {avg_infer:.3f} ms")
-        
-        if avg_infer > 10.0:
-            print(f"⚠️ WARNING: VAD inference is extremely slow ({avg_infer:.1f}ms). Normal speed is <2ms. This indicates severe CPU throttling or starvation!")
+        # Benchmark ONNX Session directly to see raw execution speed of CPU
+        if hasattr(vad, "_onnx_session") and vad._onnx_session:
+            session = vad._onnx_session
+            
+            # Prepare standard Silero inputs for 8kHz (256 samples per 32ms frame)
+            input_data = np.zeros((1, 256), dtype=np.float32)
+            sr_data = np.array(8000, dtype=np.int64)
+            h_data = np.zeros((2, 1, 64), dtype=np.float32)
+            c_data = np.zeros((2, 1, 64), dtype=np.float32)
+            
+            input_feed = {
+                "input": input_data,
+                "sr": sr_data,
+                "h": h_data,
+                "c": c_data
+            }
+            
+            # Warm up
+            for _ in range(5):
+                session.run(None, input_feed)
+                
+            t_start = time.perf_counter()
+            for _ in range(100):
+                session.run(None, input_feed)
+            t_end = time.perf_counter()
+            
+            avg_infer = ((t_end - t_start) / 100) * 1000
+            print(f"ONNX average VAD inference latency per 32ms frame: {avg_infer:.3f} ms")
+            
+            if avg_infer > 5.0:
+                print(f"\n⚠️ WARNING: ONNX inference is extremely slow ({avg_infer:.1f}ms).")
+                print("Normal speed on a healthy CPU is <1.0 ms.")
+                print("This indicates your VPS CPU is severely throttled or lacks CPU credits/burst capacity!")
+            else:
+                print(f"\n✅ ONNX inference is healthy ({avg_infer:.3f}ms per frame).")
         else:
-            print(f"✅ VAD inference is healthy ({avg_infer:.3f}ms per frame).")
+            print("Could not access _onnx_session object.")
+            
     except Exception as e:
         print(f"VAD Error: {e}")
 
 async def main():
     await test_llm()
     await test_tts()
-    test_vad()
+    await test_vad()
 
 if __name__ == "__main__":
     asyncio.run(main())
