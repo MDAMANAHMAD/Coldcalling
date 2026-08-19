@@ -101,7 +101,7 @@ HINDI_REAL_ESTATE_PROMPT = """You are Gayatri (गायत्री), a warm, h
 You are on a live phone call with a prospective client.
 
 CRITICAL VOICE & SPEED RULES (MANDATORY):
-1. COMPLETE & NATURAL SENTENCES: Speak in complete, polite, and friendly sentences. Do not use extremely short, cut-off, or robotic replies. You can use 2 to 3 sentences to explain pricing, amenities, or location details naturally, but do not speak in long paragraphs.
+1. NATURAL & CONVERSATIONAL REPLIES (MAXIMUM 1-2 SENTENCES): Always reply in exactly 1 or 2 short sentences. Keep your replies concise, friendly, and complete. Avoid extremely short one-word replies, and never speak in long paragraphs.
 2. ENGLISH-NUMBER PRICING PRONUNCIATION: You must write out all money and pricing parts phonetically using English words for the numbers and the units "lakh" or "crore". For example:
    - Write "thirty six lakh" instead of "36 Lacs" or "chattis lakh".
    - Write "fifty lakh" instead of "50 Lacs" or "pachas lakh".
@@ -305,6 +305,28 @@ def prewarm_fnc(proc: JobProcess):
         sample_rate=8000
     )
 
+    # 5. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    if cartesia_key and len(cartesia_key) > 10:
+        logger.info("🔥 [PRE-WARMING] Pre-loading Cartesia TTS...")
+        proc.userdata["tts"] = cartesia.TTS(
+            api_key=cartesia_key,
+            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+            language="hi",
+            sample_rate=24000,
+            model="sonic-3.5"
+        )
+    else:
+        eleven_key = os.getenv("ELEVENLABS_API_KEY")
+        if eleven_key and len(eleven_key) > 10:
+            logger.info("🔥 [PRE-WARMING] Pre-loading ElevenLabs TTS...")
+            proc.userdata["tts"] = elevenlabs.TTS(
+                api_key=eleven_key,
+                voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel
+                model="eleven_flash_v2_5",
+                streaming_latency=1
+            )
+
     t1 = (time.perf_counter() - t0) * 1000
     logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
 
@@ -397,11 +419,11 @@ async def entrypoint(ctx: JobContext):
         turn_handling={
             "turn_detection": None,
             "interruption": {
-                "enabled": False,
+                "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
                 "min_duration": 0.15,
-                "resume_false_interruption": False,
+                "resume_false_interruption": True,
             }
         }
     )
@@ -467,19 +489,19 @@ async def entrypoint(ctx: JobContext):
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
 
-    # Allow 1.5s for WebRTC audio negotiation and SIP RTP streams to fully settle
-    logger.info("⏳ Allowing 1.5s for audio bridge and SIP RTP connection to settle...")
-    await asyncio.sleep(1.5)
+    # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle
+    logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle...")
+    await asyncio.sleep(0.8)
 
     greeting_text = (
         f"Namaste {customer_name}... Main Gayatri baat kar rahi hoon Sai Complex Dombivli se... "
         "Hamara naya residential project launch hua hai... Kya aap details jaan-na chahenge?"
     )
 
-    # Speak greeting immediately after bridge has settled
+    # Speak greeting immediately after bridge has settled, allow caller to interrupt
     logger.info("🎙️ Speaking Greeting to caller...")
     try:
-        session.say(greeting_text, allow_interruptions=False)
+        session.say(greeting_text, allow_interruptions=True)
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 
