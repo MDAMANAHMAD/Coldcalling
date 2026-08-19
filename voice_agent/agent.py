@@ -389,9 +389,18 @@ async def entrypoint(ctx: JobContext):
     tts = ctx.proc.userdata.get("tts")
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
-        eleven_key = os.getenv("ELEVENLABS_API_KEY")
-        if eleven_key and len(eleven_key) > 10:
-            logger.info("Initializing ElevenLabs TTS as Primary with Rachel Fallback Multilingual Voice (eleven_flash_v2_5)...")
+        cartesia_key = os.getenv("CARTESIA_API_KEY")
+        if cartesia_key and len(cartesia_key) > 10:
+            logger.info("Initializing Cartesia TTS as Primary with Esha Calm Hindi Voice...")
+            tts = cartesia.TTS(
+                api_key=cartesia_key,
+                voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+                language="hi",
+                sample_rate=24000
+            )
+        else:
+            eleven_key = os.getenv("ELEVENLABS_API_KEY")
+            logger.info("Initializing ElevenLabs TTS as Fallback with Rachel Fallback Multilingual Voice (eleven_flash_v2_5)...")
             tts = elevenlabs.TTS(
                 api_key=eleven_key,
                 voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel - Fallback multilingual
@@ -403,15 +412,6 @@ async def entrypoint(ctx: JobContext):
                     use_speaker_boost=True
                 ),
                 streaming_latency=1
-            )
-        else:
-            cartesia_key = os.getenv("CARTESIA_API_KEY")
-            logger.info("Initializing Cartesia TTS as Fallback with Esha Calm Hindi Voice...")
-            tts = cartesia.TTS(
-                api_key=cartesia_key,
-                voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
-                language="hi",
-                sample_rate=24000
             )
         ctx.proc.userdata["tts"] = tts
     
