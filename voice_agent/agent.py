@@ -71,26 +71,12 @@ logger = logging.getLogger("enterprise_voice_agent")
 # 0. PROCESS CPU PRIORITY OPTIMIZERS (Prevents idle background pre-warming from starving active calls)
 # ==============================================================================
 def set_low_priority():
-    import os
-    import sys
-    if sys.platform == "win32":
-        return
-    try:
-        os.nice(15)
-        logger.info("📉 Set process CPU nice priority to 15 (low priority)")
-    except Exception as e:
-        logger.warning(f"Could not set low priority: {e}")
+    # Disabled to prevent permission lock issues and CPU starvation
+    pass
 
 def set_normal_priority():
-    import os
-    import sys
-    if sys.platform == "win32":
-        return
-    try:
-        os.nice(-15)
-        logger.info("📈 Restored process CPU nice priority to normal (0)")
-    except Exception as e:
-        logger.warning(f"Could not restore normal priority: {e}")
+    # Disabled to prevent permission lock issues and CPU starvation
+    pass
 
 
 
