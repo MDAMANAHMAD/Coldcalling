@@ -435,13 +435,32 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
+    # Wait for the caller to join the room if not already present
+    if not ctx.room.remote_participants:
+        logger.info("⏳ Room is empty. Waiting for caller to join...")
+        caller_joined = asyncio.Event()
+        
+        @ctx.room.on("participant_connected")
+        def _on_participant_connected(p):
+            logger.info(f"📞 Caller joined: {p.identity}")
+            caller_joined.set()
+            
+        try:
+            await asyncio.wait_for(caller_joined.wait(), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.warning("Timeout waiting for caller to join room.")
+
+    # Allow 1.5s for WebRTC audio negotiation and SIP RTP streams to fully settle
+    logger.info("⏳ Allowing 1.5s for audio bridge and SIP RTP connection to settle...")
+    await asyncio.sleep(1.5)
+
     greeting_text = (
         f"Namaste {customer_name}... Main Gayatri baat kar rahi hoon Sai Complex Dombivli se... "
         "Hamara naya residential project launch hua hai... Kya aap details jaan-na chahenge?"
     )
 
-    # Speak greeting immediately using ElevenLabs streaming audio
-    logger.info(f"🎙️ [PERF +{t_total_ready:.1f}ms] Speaking Greeting immediately to caller!")
+    # Speak greeting immediately after bridge has settled
+    logger.info("🎙️ Speaking Greeting to caller...")
     try:
         session.say(greeting_text, allow_interruptions=False)
     except Exception as e:
