@@ -71,11 +71,13 @@ logger = logging.getLogger("enterprise_voice_agent")
 # 0. PROCESS CPU PRIORITY OPTIMIZERS (Prevents idle background pre-warming from starving active calls)
 # ==============================================================================
 def set_low_priority():
-    # Disabled to prevent permission lock issues and CPU starvation
-    pass
+    try:
+        os.nice(19)
+        logger.info("🟢 Process priority successfully set to nice 19 (low priority).")
+    except Exception as e:
+        logger.warning(f"Could not set nice priority: {e}")
 
 def set_normal_priority():
-    # Disabled to prevent permission lock issues and CPU starvation
     pass
 
 
@@ -220,120 +222,104 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
-        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."
+        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."# ==============================================================================
+# 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
+# ==============================================================================
+logger.info("🔥 [IMPORT TIME] Instantiating LLM and compiling schemas...")
+global_groq_key = os.getenv("GROQ_API_KEY")
+if global_groq_key and global_groq_key.startswith("gsk_"):
+    from livekit.plugins import openai as lk_openai
+    global_llm = lk_openai.LLM(
+        base_url="https://api.groq.com/openai/v1",
+        model="openai/gpt-oss-20b",
+        api_key=global_groq_key,
+        temperature=0.0
+    )
+else:
+    from livekit.plugins import google
+    global_google_key = os.getenv("GOOGLE_API_KEY")
+    global_llm = google.LLM(
+        model="gemini-flash-latest",
+        api_key=global_google_key,
+        temperature=0.0
+    )
+
+try:
+    from livekit.agents import llm as agents_llm
+    agent_dummy = PriyaRealEstateAgent()
+    agent_tools_dummy = agent_dummy.tools
+    chat_ctx_dummy = agents_llm.ChatContext()
+    chat_ctx_dummy.add_message(role="user", content="hello")
+
+    async def _compile_schemas_static():
+        chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+        async for chunk in chat_stream:
+            break
+
+    try:
+        loop_static = asyncio.get_event_loop()
+    except RuntimeError:
+        loop_static = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop_static)
+        
+    loop_static.run_until_complete(asyncio.wait_for(_compile_schemas_static(), timeout=8.0))
+    logger.info("✅ [IMPORT TIME COMPLETE] LLM schemas compiled successfully!")
+except Exception as e:
+    logger.warning(f"Static LLM schema compilation failed during import: {e}")
 
 
 # ==============================================================================
 # 3. PREWARMING FUNCTION (Pre-Loads All AI Engines in Idle Memory)
 # ==============================================================================
 def prewarm_fnc(proc: JobProcess):
-    """Pre-allocates and caches STT, LLM, TTS, and VAD in a background thread when the system is idle."""
+    """Pre-allocates and caches STT, LLM, TTS, and VAD before any call arrives."""
     set_low_priority()
-    
-    import threading
-    def prewarm_worker():
-        # Sleep to let process initialization settle
-        time.sleep(1.0)
-        
-        # Loop and sleep if another call is currently active to protect active call CPU resources
-        while os.path.exists("bookings/active_call.lock"):
-            try:
-                with open("bookings/active_call.lock", "r") as f:
-                    lock_pid = int(f.read().strip())
-                if lock_pid == os.getpid():
-                    # We are the active call! Abort background thread to protect CPU!
-                    logger.info("🔒 We are the active call process. Aborting background pre-warm thread.")
-                    return
-            except Exception:
-                pass
-            time.sleep(1.5)
-            
-        logger.info("🔥 [PRE-WARMING] System is idle. Pre-loading Sarah voice model and AI engines...")
-        t0 = time.perf_counter()
-        
-        try:
-            # 1. Pre-warm Deepgram Nova-2 STT
-            deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
-            proc.userdata["stt"] = deepgram.STT(
-                language="hi",
-                model="nova-2",
-                endpointing_ms=120,
-                smart_format=True,
-                api_key=deepgram_key
+    t0 = time.perf_counter()
+    logger.info("🔥 [PRE-WARMING] Pre-loading Sarah voice model and AI engines...")
+
+    # 1. Store the already compiled global LLM
+    proc.userdata["llm"] = global_llm
+
+    # 2. Pre-warm Deepgram Nova-2 STT
+    deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
+    proc.userdata["stt"] = deepgram.STT(
+        language="hi",
+        model="nova-2",
+        endpointing_ms=120,
+        smart_format=True,
+        api_key=deepgram_key
+    )
+
+    # 3. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
+    from livekit.plugins import silero
+    proc.userdata["vad"] = silero.VAD.load(
+        min_silence_duration=0.25,
+        min_speech_duration=0.08,
+        sample_rate=8000
+    )
+
+    # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
+    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    if cartesia_key and len(cartesia_key) > 10:
+        proc.userdata["tts"] = cartesia.TTS(
+            api_key=cartesia_key,
+            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+            language="hi",
+            sample_rate=24000,
+            model="sonic-3.5"
+        )
+    else:
+        eleven_key = os.getenv("ELEVENLABS_API_KEY")
+        if eleven_key and len(eleven_key) > 10:
+            proc.userdata["tts"] = elevenlabs.TTS(
+                api_key=eleven_key,
+                voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel
+                model="eleven_flash_v2_5",
+                streaming_latency=1
             )
-            
-            # 2. Instantiate LLM (Groq/OpenAI or Google Gemini)
-            groq_key = os.getenv("GROQ_API_KEY")
-            if groq_key and groq_key.startswith("gsk_"):
-                llm = openai.LLM(
-                    base_url="https://api.groq.com/openai/v1",
-                    model="openai/gpt-oss-20b",
-                    api_key=groq_key,
-                    temperature=0.0
-                )
-            else:
-                from livekit.plugins import google
-                google_key = os.getenv("GOOGLE_API_KEY")
-                llm = google.LLM(
-                    model="gemini-flash-latest",
-                    api_key=google_key,
-                    temperature=0.0
-                )
-            proc.userdata["llm"] = llm
-            
-            # 3. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
-            from livekit.plugins import silero
-            proc.userdata["vad"] = silero.VAD.load(
-                min_silence_duration=0.25,
-                min_speech_duration=0.08,
-                sample_rate=8000
-            )
-            
-            # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
-            cartesia_key = os.getenv("CARTESIA_API_KEY")
-            if cartesia_key and len(cartesia_key) > 10:
-                proc.userdata["tts"] = cartesia.TTS(
-                    api_key=cartesia_key,
-                    voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
-                    language="hi",
-                    sample_rate=24000,
-                    model="sonic-3.5"
-                )
-            else:
-                eleven_key = os.getenv("ELEVENLABS_API_KEY")
-                if eleven_key and len(eleven_key) > 10:
-                    proc.userdata["tts"] = elevenlabs.TTS(
-                        api_key=eleven_key,
-                        voice_id="21m00Tcm4TlvDq8ikWAM",  # Rachel
-                        model="eleven_flash_v2_5",
-                        streaming_latency=1
-                    )
-            
-            # 5. Compile LLM schemas
-            from livekit.agents import llm as agents_llm
-            agent = PriyaRealEstateAgent()
-            agent_tools = agent.tools
-            
-            chat_ctx = agents_llm.ChatContext()
-            chat_ctx.add_message(role="user", content="hello")
-            
-            async def _run_prewarm():
-                chat_stream = llm.chat(chat_ctx=chat_ctx, tools=agent_tools)
-                async for chunk in chat_stream:
-                    break
-                    
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(asyncio.wait_for(_run_prewarm(), timeout=8.0))
-                t1 = (time.perf_counter() - t0) * 1000
-                logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready & LLM schemas compiled in {t1:.1f}ms!")
-            finally:
-                loop.close()
-        except Exception as e:
-            logger.warning(f"Error in background pre-warm thread: {e}")
-            
-    threading.Thread(target=prewarm_worker, daemon=True).start()
+
+    t1 = (time.perf_counter() - t0) * 1000
+    logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
 
 
 # ==============================================================================
