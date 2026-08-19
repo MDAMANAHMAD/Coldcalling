@@ -331,7 +331,8 @@ async def entrypoint(ctx: JobContext):
                 api_key=cartesia_key,
                 voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
                 language="hi",
-                sample_rate=24000
+                sample_rate=24000,
+                model="sonic-3.5"
             )
         else:
             eleven_key = os.getenv("ELEVENLABS_API_KEY")
