@@ -532,6 +532,76 @@ async def entrypoint(ctx: JobContext):
     agent = PriyaRealEstateAgent(customer_name=customer_name)
     logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
 
+    t_call_start = time.time()
+    input_tokens = 0
+    output_tokens = 0
+    characters_spoken = 0
+
+    @ctx.on("metrics_collected")
+    def _on_metrics_collected(ev):
+        nonlocal input_tokens, output_tokens, characters_spoken
+        try:
+            m_type = getattr(ev.metrics, "type", None)
+            if m_type == "llm_metrics":
+                input_tokens += getattr(ev.metrics, "prompt_tokens", 0)
+                output_tokens += getattr(ev.metrics, "completion_tokens", 0)
+            elif m_type == "tts_metrics":
+                characters_spoken += getattr(ev.metrics, "characters_count", 0)
+        except Exception as e:
+            logger.warning(f"Error extracting metrics: {e}")
+
+    @ctx.room.on("disconnected")
+    def _on_disconnected():
+        try:
+            duration_seconds = time.time() - t_call_start
+            duration_minutes = duration_seconds / 60.0
+            
+            # Determine which LLM was used
+            llm_name = llm.__class__.__name__.lower()
+            if "openai" in llm_name:
+                # Groq Rates
+                input_rate = (0.59 * 83.5) / 1000000.0  # cost per token
+                output_rate = (0.79 * 83.5) / 1000000.0
+                brain_name = "Groq Llama 3.3"
+            else:
+                # Gemini Rates
+                input_rate = (0.075 * 83.5) / 1000000.0
+                output_rate = (0.30 * 83.5) / 1000000.0
+                brain_name = "Google Gemini 1.5"
+                
+            cost_vobiz = duration_minutes * 0.40
+            cost_cartesia = characters_spoken * 0.00163
+            cost_llm = (input_tokens * input_rate) + (output_tokens * output_rate)
+            total_cost = cost_vobiz + cost_cartesia + cost_llm
+            
+            billing_record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "room_name": ctx.room.name,
+                "customer_name": customer_name,
+                "duration_seconds": round(duration_seconds, 1),
+                "duration_minutes": round(duration_minutes, 2),
+                "brain_model": brain_name,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "characters_spoken": characters_spoken,
+                "cost_vobiz_inr": round(cost_vobiz, 3),
+                "cost_cartesia_inr": round(cost_cartesia, 3),
+                "cost_llm_inr": round(cost_llm, 3),
+                "total_cost_inr": round(total_cost, 3)
+            }
+            
+            os.makedirs("bookings", exist_ok=True)
+            with open("bookings/call_billing_log.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(billing_record) + "\n")
+                
+            logger.info("📊 [BILLING RECORDED]")
+            logger.info(f"   📞 Duration: {duration_minutes:.2f} mins")
+            logger.info(f"   🗣️ Speech: {characters_spoken} characters (Cartesia)")
+            logger.info(f"   🧠 Brain ({brain_name}): Input={input_tokens}, Output={output_tokens} tokens")
+            logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f}")
+        except Exception as e:
+            logger.error(f"Failed to record call billing: {e}")
+
     from livekit.agents.voice import UserInputTranscribedEvent
 
 
