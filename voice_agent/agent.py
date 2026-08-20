@@ -537,18 +537,24 @@ async def entrypoint(ctx: JobContext):
     output_tokens = 0
     characters_spoken = 0
 
-    @ctx.on("metrics_collected")
-    def _on_metrics_collected(ev):
-        nonlocal input_tokens, output_tokens, characters_spoken
+    @llm.on("metrics_collected")
+    def _on_llm_metrics(metrics):
+        nonlocal input_tokens, output_tokens
         try:
-            m_type = getattr(ev.metrics, "type", None)
-            if m_type == "llm_metrics":
-                input_tokens += getattr(ev.metrics, "prompt_tokens", 0)
-                output_tokens += getattr(ev.metrics, "completion_tokens", 0)
-            elif m_type == "tts_metrics":
-                characters_spoken += getattr(ev.metrics, "characters_count", 0)
+            m = getattr(metrics, "metrics", metrics)
+            input_tokens += getattr(m, "prompt_tokens", 0)
+            output_tokens += getattr(m, "completion_tokens", 0)
         except Exception as e:
-            logger.warning(f"Error extracting metrics: {e}")
+            logger.warning(f"Error extracting LLM metrics: {e}")
+
+    @tts.on("metrics_collected")
+    def _on_tts_metrics(metrics):
+        nonlocal characters_spoken
+        try:
+            m = getattr(metrics, "metrics", metrics)
+            characters_spoken += getattr(m, "characters_count", 0)
+        except Exception as e:
+            logger.warning(f"Error extracting TTS metrics: {e}")
 
     @ctx.room.on("disconnected")
     def _on_disconnected():
