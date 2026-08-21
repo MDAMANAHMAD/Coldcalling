@@ -104,7 +104,7 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
    - Example (DO NOT WRITE): "Hamara project main road ke pass hai."
    - Example (WRITE INSTEAD): "Hamara project... main road ke pass hai..."
 5. DYNAMIC & INTERACTIVE CONVERSATION (BARGE-IN FRIENDLY): Adapt your responses dynamically based on what the user says. Do not rigidly follow a script. If the user interrupts, acknowledges, or changes the topic, address their comment naturally and match their flow immediately. Keep it conversational, relaxed, and real.
-6. DO NOT OVERUSE THE CLIENT'S NAME: Address the client by name (e.g., "Aman ji") only once or twice during the entire call (such as in the greeting or closing). Do NOT append their name to every response.
+6. STRICT RULE - NO CLIENT NAME REPETITION: Do NOT say the client's name (like "Raj ji" or "Aman ji") in your responses. The greeting already addresses them at the start. For the rest of the call, talk to them directly without repeating or saying their name at all. NEVER prefix your responses with the client's name.
 7. MULTILINGUAL RESPONSE MATCHING: Always respond in the EXACT same language that the client speaks to you. If the client speaks in Marathi, reply in fluent, warm Marathi. If the client speaks in English, reply in English. If the client speaks in Hindi, reply in Hindi.
 8. NO ABBREVIATIONS: Never use abbreviations like "sqft", "sq. ft.", "cr", "lacs", or "rs" in your replies. Always write them out fully in plain text as "square feet", "crore", "lakh", or "rupaye". For example, write "375 square feet" instead of "375 sqft".
 9. SHORT PROJECT INTRO & PRICING: When describing the project or pricing, keep it very short and simple. Do NOT list out all square footages or terrace flat options in one go. Just mention that we have 1BHK flats starting at thirty six lakh rupees, and 2BHK flats starting at seventy two lakh rupees, and then ask them if they would like to know more. Keep this intro to exactly 1 or 2 sentences maximum.
@@ -185,7 +185,7 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
     marathi_keywords = [
         "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
         "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
-        "कशी", "कसे", "का", "सांगा", "दाखवा", "पाहू", "तुम्ही", "आम्ही", "मध्ये"
+        "कशी", "कसे", "सांगा", "दाखवा", "पाहू", "तुम्ही", "आम्ही", "मध्ये"
     ]
     if "ळ" in transcript or (len(words) >= 3 and any(word in text for word in marathi_keywords)):
         return "mr"
@@ -199,7 +199,7 @@ class PriyaRealEstateAgent(Agent):
         instructions = (
             f"{HINDI_REAL_ESTATE_PROMPT}\n\n"
             f"Aap abhi {customer_name} se call par baat kar rahi hain. "
-            "Do NOT repeat the client's name in every sentence. Address them by name only once or twice during the whole call."
+            "STRICT RULE: Do NOT say the client's name in your responses. You must talk to them directly without repeating or saying their name at all. NEVER prefix your sentences with their name."
         )
         super().__init__(instructions=instructions)
 
