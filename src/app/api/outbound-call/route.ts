@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         playRingtone: true,
-        waitUntilAnswered: true,
+        waitUntilAnswered: false,
       }
     );
 

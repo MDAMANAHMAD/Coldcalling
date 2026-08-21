@@ -155,30 +155,37 @@ As soon as the client agrees for a site visit or gives a preferred day/time, imm
 # 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS
 # ==============================================================================
 def resolve_language(transcript: str, detected_lang: str | None) -> str:
-    """Detects spoken language using Devanagari keyword matching and character checks."""
-    text = transcript.lower()
+    """Detects spoken language, preferring Hindi unless a strong shift to English or Marathi occurs."""
+    text = transcript.strip().lower()
+    words = text.split()
     
-    # 1. English Check (Latin script ratio)
+    # Count Latin letters vs total
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(" ", ""))
-    if total_chars > 0 and (latin_chars / total_chars) > 0.4:
-        return "en"
-        
-    # 2. English Check in Devanagari script (phonetic English words)
-    english_devanagari_keywords = [
-        "व्हाट", "वाॅट", "कैन", "प्लीज", "प्लिज", "शेयर", "सेंड", "ऍम", "एम", "फॉर", "फॉअर", 
-        "थैंक", "थॅंक", "द प्राइस", "द फ्लैट", "द ब्रोशर", "यू प्लीज", "प्लीज सेंड", "प्लीज शेयर"
-    ]
-    if any(word in text for word in english_devanagari_keywords):
-        return "en"
-        
-    # 3. Marathi Check
+    
+    # Common Hinglish grammatical words/filler words. If the user uses these, they are speaking Hindi/Hinglish.
+    hinglish_markers = {
+        "hai", "kya", "ka", "ki", "ko", "se", "par", "ji", "haan", "han", "achha", "acha", 
+        "bataiye", "batao", "btao", "he", "ho", "me", "mein", "ke", "ne", "aur", "ya", "toh", 
+        "to", "bhai", "na", "ab", "kab", "sab", "kar", "karna", "krna", "do", "dena", "dedo"
+    }
+    
+    # 1. English Check: Only switch to English if:
+    # - Sentence is at least 4 words
+    # - More than 80% of the characters are Latin
+    # - None of the words are common Hinglish markers
+    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.8
+    if len(words) >= 4 and is_mostly_latin:
+        if not any(w in hinglish_markers for w in words):
+            return "en"
+            
+    # 2. Marathi Check
     marathi_keywords = [
         "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
         "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
         "कशी", "कसे", "का", "सांगा", "दाखवा", "पाहू", "तुम्ही", "आम्ही", "मध्ये"
     ]
-    if "ळ" in transcript or any(word in text for word in marathi_keywords):
+    if "ळ" in transcript or (len(words) >= 3 and any(word in text for word in marathi_keywords)):
         return "mr"
         
     # Default to Hindi
@@ -579,6 +586,7 @@ async def entrypoint(ctx: JobContext):
             cost_cartesia = characters_spoken * 0.00163
             cost_llm = (input_tokens * input_rate) + (output_tokens * output_rate)
             total_cost = cost_vobiz + cost_cartesia + cost_llm
+            per_minute_cost = total_cost / duration_minutes if duration_minutes > 0 else 0
             
             billing_record = {
                 "timestamp": datetime.utcnow().isoformat(),
@@ -593,7 +601,8 @@ async def entrypoint(ctx: JobContext):
                 "cost_vobiz_inr": round(cost_vobiz, 3),
                 "cost_cartesia_inr": round(cost_cartesia, 3),
                 "cost_llm_inr": round(cost_llm, 3),
-                "total_cost_inr": round(total_cost, 3)
+                "total_cost_inr": round(total_cost, 3),
+                "cost_per_minute_inr": round(per_minute_cost, 3)
             }
             
             os.makedirs("bookings", exist_ok=True)
@@ -604,7 +613,7 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"   📞 Duration: {duration_minutes:.2f} mins")
             logger.info(f"   🗣️ Speech: {characters_spoken} characters (Cartesia)")
             logger.info(f"   🧠 Brain ({brain_name}): Input={input_tokens}, Output={output_tokens} tokens")
-            logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f}")
+            logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f} (₹{per_minute_cost:.2f}/min)")
         except Exception as e:
             logger.error(f"Failed to record call billing: {e}")
 
