@@ -108,6 +108,8 @@ CRITICAL VOICE & SPEED RULES (MANDATORY):
 7. MULTILINGUAL RESPONSE MATCHING: Always respond in the EXACT same language that the client speaks to you. If the client speaks in Marathi, reply in fluent, warm Marathi. If the client speaks in English, reply in English. If the client speaks in Hindi, reply in Hindi.
 8. NO ABBREVIATIONS: Never use abbreviations like "sqft", "sq. ft.", "cr", "lacs", or "rs" in your replies. Always write them out fully in plain text as "square feet", "crore", "lakh", or "rupaye". For example, write "375 square feet" instead of "375 sqft".
 9. SHORT PROJECT INTRO & PRICING: When describing the project or pricing, keep it very short and simple. Do NOT list out all square footages or terrace flat options in one go. Just mention that we have 1BHK flats starting at thirty six lakh rupees, and 2BHK flats starting at seventy two lakh rupees, and then ask them if they would like to know more. Keep this intro to exactly 1 or 2 sentences maximum.
+10. STRICT CONFIGURATION SEGREGATION: If the user asks about 2BHK, you MUST only tell them 2BHK details (starting at seventy two lakh onwards). Do NOT mention any 1BHK configurations, sizes, or prices. If the user asks about 1BHK, you MUST only tell them 1BHK details. Never mix them up or list both configurations in the same turn.
+11. AVOID REPETITION & DYNAMIC PROGRESSION: Do NOT repeat the exact same details or sentences you have already said during the call. If the customer is quiet, hesitating, or repeats their question, rephrase your reply, or move the conversation forward by asking if they would like a free site visit with VIP cab pickup, or if they would prefer to receive the brochure on WhatsApp. Keep the conversation moving.
 
 ==================================================
 PROJECT KNOWLEDGE BASE (SAI COMPLEX, DOMBIVLI EAST):
@@ -536,8 +538,7 @@ async def entrypoint(ctx: JobContext):
             }
         }
     )
-    agent = PriyaRealEstateAgent(customer_name=customer_name)
-    logger.info(f"⏱️ [PERF] AgentSession & Agent instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
+    logger.info(f"⏱️ [PERF] AgentSession instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
 
     t_call_start = time.time()
     input_tokens = 0
@@ -668,6 +669,19 @@ async def entrypoint(ctx: JobContext):
             await asyncio.wait_for(caller_joined.wait(), timeout=60.0)
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
+
+    # Dynamically resolve customer name from participants in the room
+    for p in ctx.room.remote_participants.values():
+        raw_name = p.name or p.identity
+        if raw_name:
+            if raw_name.startswith("sip-"):
+                raw_name = raw_name.replace("sip-", "")
+            raw_name = raw_name.strip().capitalize()
+            customer_name = f"{raw_name} ji" if not raw_name.endswith("ji") else raw_name
+            logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
+            break
+
+    agent = PriyaRealEstateAgent(customer_name=customer_name)
 
     # Start session with record=False
     t_session_start = time.perf_counter()
