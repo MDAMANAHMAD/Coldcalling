@@ -638,33 +638,47 @@ async def entrypoint(ctx: JobContext):
 
 
 
+    current_lang = "hi"
+
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
+        nonlocal current_lang
         if ev.is_final and ev.transcript:
-            lang = resolve_language(ev.transcript, ev.language)
-            logger.info(f"🗣️ Resolved language: '{lang}' (detected_lang='{ev.language}') for text: '{ev.transcript}'")
+            text = ev.transcript.strip().lower()
+            new_lang = current_lang
             
-            # Switch TTS voice and language configurations on the fly (Cartesia only)
-            is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
-            if is_cartesia and hasattr(session.tts, "update_options"):
-                if lang == "mr":
-                    session.tts.update_options(
-                        voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
-                        language="mr"
-                    )
-                    logger.info("🔄 Switched TTS to Marathi (Anika)")
-                elif lang == "en":
-                    session.tts.update_options(
-                        voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (English)
-                        language="en"
-                    )
-                    logger.info("🔄 Switched TTS to English (Esha)")
-                else:
-                    session.tts.update_options(
-                        voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
-                        language="hi"
-                    )
-                    logger.info("🔄 Switched TTS to Hindi (Esha)")
+            # Switch ONLY when explicitly requested by name
+            if "marathi" in text or "मराठी" in text:
+                new_lang = "mr"
+            elif "english" in text or "इंग्लिश" in text:
+                new_lang = "en"
+            elif "hindi" in text or "हिंदी" in text or "हिन्दी" in text:
+                new_lang = "hi"
+                
+            if new_lang != current_lang:
+                current_lang = new_lang
+                logger.info(f"🗣️ Explicit Language Switch: '{current_lang}' requested for text: '{ev.transcript}'")
+                
+                is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
+                if is_cartesia and hasattr(session.tts, "update_options"):
+                    if current_lang == "mr":
+                        session.tts.update_options(
+                            voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
+                            language="mr"
+                        )
+                        logger.info("🔄 Switched TTS to Marathi (Anika)")
+                    elif current_lang == "en":
+                        session.tts.update_options(
+                            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (English)
+                            language="en"
+                        )
+                        logger.info("🔄 Switched TTS to English (Esha)")
+                    else:
+                        session.tts.update_options(
+                            voice="72656902-fb4b-4c31-af52-c3b68e2cae26",  # Esha (Hindi)
+                            language="hi"
+                        )
+                        logger.info("🔄 Switched TTS to Hindi (Esha)")
 
     # Start session with record=False
     # Wait for the caller to join the room if not already present.
