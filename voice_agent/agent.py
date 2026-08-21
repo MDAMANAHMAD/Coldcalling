@@ -161,6 +161,14 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
     text = transcript.strip().lower()
     words = text.split()
     
+    # 0. Explicit language request overrides (user asks to switch language)
+    if "marathi" in text or "मराठी" in text:
+        return "mr"
+    if "english" in text or "इंग्लिश" in text:
+        return "en"
+    if "hindi" in text or "हिंदी" in text or "हिन्दी" in text:
+        return "hi"
+    
     # Count Latin letters vs total
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(" ", ""))
