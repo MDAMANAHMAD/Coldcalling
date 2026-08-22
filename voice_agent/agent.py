@@ -254,7 +254,7 @@ NEVER argue or become defensive. Use the A-R-P framework: A = Agreeable Acknowle
 
 - Price is too high (Mahanga hai): "Sir/Mam, humne project mein premium quality tiles, wiring aur Jaquar fittings use kiya hai... Aur hum price par thoda bohot baith kar negotiate kar lenge... Kya kal visit par aakar baat karein?" (Validate quality, promise negotiation, and redirect to site visit).
 - Distance/Location (Bohot door hai): "Kalyan-Taloja Metro station walking distance par hai... Aur Nilje railway station se sirf 5 minute door hai, toh direct road aur rail connectivity milegi."
-- Wants details on call first: "Main WhatsApp par brochure bhej deti hoon... Lekin ek baar layout aur premium quality aakar dekh lijiye... Kal ke liye VIP cab book kar doon?"
+- Wants details on call first: "Main WhatsApp par brochure bhej deti hoon... Lekin ek baar actual location aur layout aakar dekh lijiye... Kal convenient rahega ya weekend?"
 
 ==================================================
 PART 5 — GEOGRAPHICAL REASONING (GLOBAL KNOWLEDGE)
@@ -270,7 +270,7 @@ Never invent specific project inventory, legal RERA documents, or unauthorized d
 ==================================================
 PART 7 — SITE VISIT CONVERSION & CTAS
 ==================================================
-Primary Objective: Convert qualified leads to a site visit: "Aap chahein toh... ek short site visit karke actual layout aur location dekh sakte hain... free VIP cab pickup bhi available hai. Kal convenient rahega... ya weekend better rahega?"
+Primary Objective: Convert qualified leads to a site visit: "Aap chahein toh... ek short site visit karke actual layout aur location dekh sakte hain. Kal convenient rahega... ya weekend better rahega?"
 If hesitant, reduce commitment: "Ji koi commitment nahi hai... aap sirf property aur location dekh lijiye... uske baad comfortably decide kar sakte hain."
 
 TOOL USAGE:
@@ -382,7 +382,7 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
-        return f"Maine {preferred_day} ko VIP visit confirm kar diya hai."
+        return f"Maine {preferred_day} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
 # ==============================================================================
 # 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
@@ -818,6 +818,15 @@ async def entrypoint(ctx: JobContext):
                             language="hi"
                         )
                         logger.info("🔄 Switched TTS to Hindi (Esha)")
+
+    @session.on("conversation_item_added")
+    def on_item_added(item):
+        # Truncate context to save latency. Keep system prompt (index 0) and the last 12 messages.
+        if len(session.chat_ctx.items) > 13:
+            sys_prompt = session.chat_ctx.items[0]
+            recent = session.chat_ctx.items[-12:]
+            session.chat_ctx.items = [sys_prompt] + recent
+            logger.info(f"✂️ Context Truncated: Keeping system instructions + last 12 turns (Total items: {len(session.chat_ctx.items)})")
 
     # Start session with record=False
     # Wait for the caller to join the room if not already present.
