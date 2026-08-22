@@ -396,7 +396,7 @@ global_google_key = os.getenv("GOOGLE_API_KEY")
 if global_google_key:
     from livekit.plugins import google
     global_llm = google.LLM(
-        model="gemini-flash-latest",
+        model="gemini-1.5-flash",
         api_key=global_google_key,
         temperature=0.3
     )
@@ -607,7 +607,7 @@ async def entrypoint(ctx: JobContext):
         if google_key:
             from livekit.plugins import google
             llm = google.LLM(
-                model="gemini-flash-latest",
+                model="gemini-1.5-flash",
                 api_key=google_key,
                 temperature=0.3
             )
