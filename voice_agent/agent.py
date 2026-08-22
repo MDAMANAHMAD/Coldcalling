@@ -684,7 +684,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": None,
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.25,
+                "min_delay": 0.1,
             },
             "interruption": {
                 "enabled": True,
