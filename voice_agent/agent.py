@@ -259,7 +259,7 @@ if is_main_process:
             logger.warning(f"Could not remove stale active call lock: {e}")
 
 SELECTED_MODEL = "gemini-3.6-flash" # default fallback
-SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile" # default fallback
+SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
 global_llm = None
 global_llm_compiled = False
 
@@ -279,11 +279,11 @@ global_google_key = os.getenv("GOOGLE_API_KEY")
 if global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "mixtral-8x7b-32768"
+        "openai/gpt-oss-20b",
+        "groq/compound-mini",
+        "groq/compound",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.6-27b"
     ]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
