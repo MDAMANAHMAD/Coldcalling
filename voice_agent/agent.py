@@ -678,11 +678,15 @@ async def entrypoint(ctx: JobContext):
         vad=vad,
         turn_handling={
             "turn_detection": None,
+            "endpointing": {
+                "mode": "fixed",
+                "min_delay": 0.25,
+            },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.3,
+                "min_duration": 0.25,
                 "resume_false_interruption": True,
             }
         }
