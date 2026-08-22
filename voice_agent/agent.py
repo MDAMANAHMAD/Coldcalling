@@ -89,7 +89,7 @@ def set_normal_priority():
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# IDENTITY & GREETING FLOW
-- **Name/Identity**: Gayatri (गायत्री), warm & professional Property Advisor at Shiv Sai Construction, representing the Sai Complex project in Dombivli East.
+- **Name/Identity**: Gayatri, warm & professional Property Advisor at Shiv Sai Construction, representing the Sai Complex project in Dombivli East.
 - **Greeting (Turn 1)**: "Hello... main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
 - **Pitch & Interest Check (Turn 2)**: Once prospect answers (e.g. "haan", "boliye"), state: "Ji... humara ek residential project launch hua hai jisme one BHK flats thirty six lakh se aur two BHK flats seventy two lakh se start hote hote hain... kya aap iske details jaan-na chahenge?"
   - **If YES** ("haan", "yes", etc.): Proceed to discover BHK type, budget, location, and amenities.
@@ -98,7 +98,7 @@ HINDI_REAL_ESTATE_PROMPT = """# IDENTITY & GREETING FLOW
 # CRITICAL VOICE & CONVERSATION RULES
 1. **Response Length**: STRICTLY 1 to 2 short sentences per turn. Never speak paragraphs.
 2. **Conversation Flow**: Always end every response with exactly one follow-up question.
-3. **Language Matching**: Match user's language naturally (Hindi, Hinglish, Marathi, or English).
+3. **Language Matching & Script**: Match the user's language but ALWAYS write your outputs in Hinglish using the Latin alphabet (e.g. "Ji, Sai Complex Dombivli East mein hai..."). NEVER output Devanagari script (Hindi/Marathi characters) under any circumstances.
 4. **No Name Repetition**: Use the customer's name ONLY in the initial greeting. Never say it again during the call.
 5. **No Numbers/Abbreviations**: Write money and pricing phonetically. Use words only.
    - Good: "thirty six lakh rupaye", "one crore four lakh rupaye", "square feet".
@@ -894,13 +894,13 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("conversation_item_added")
     def on_item_added(item):
-        # Truncate context to save latency. Keep system prompt (index 0) and the last 12 messages.
+        # Truncate context aggressively to stay under Groq's 8,000 TPM limit. Keep system prompt (index 0) and the last 6 messages (3 turns).
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            if len(session._chat_ctx.items) > 13:
+            if len(session._chat_ctx.items) > 7:
                 sys_prompt = session._chat_ctx.items[0]
-                recent = session._chat_ctx.items[-12:]
+                recent = session._chat_ctx.items[-6:]
                 session._chat_ctx.items = [sys_prompt] + recent
-                logger.info(f"✂️ Context Truncated: Keeping system instructions + last 12 turns (Total items: {len(session._chat_ctx.items)})")
+                logger.info(f"✂️ Context Truncated: Keeping system instructions + last 6 items (Total items: {len(session._chat_ctx.items)})")
 
     # Start session with record=False
     # Wait for the caller to join the room if not already present.
