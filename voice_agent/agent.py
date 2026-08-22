@@ -374,23 +374,24 @@ class PriyaRealEstateAgent(Agent):
 # 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
 # ==============================================================================
 logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
-global_groq_key = os.getenv("GROQ_API_KEY")
-if global_groq_key and global_groq_key.startswith("gsk_"):
-    from livekit.plugins import openai as lk_openai
-    global_llm = lk_openai.LLM(
-        base_url="https://api.groq.com/openai/v1",
-        model="openai/gpt-oss-20b",
-        api_key=global_groq_key,
-        temperature=0.3
-    )
-else:
+global_google_key = os.getenv("GOOGLE_API_KEY")
+if global_google_key:
     from livekit.plugins import google
-    global_google_key = os.getenv("GOOGLE_API_KEY")
     global_llm = google.LLM(
         model="gemini-flash-latest",
         api_key=global_google_key,
         temperature=0.3
     )
+else:
+    global_groq_key = os.getenv("GROQ_API_KEY")
+    if global_groq_key and global_groq_key.startswith("gsk_"):
+        from livekit.plugins import openai as lk_openai
+        global_llm = lk_openai.LLM(
+            base_url="https://api.groq.com/openai/v1",
+            model="openai/gpt-oss-20b",
+            api_key=global_groq_key,
+            temperature=0.3
+        )
 
 global_llm_compiled = False
 # If a call is currently active, skip import-time compilation to protect the active call's CPU
@@ -584,22 +585,23 @@ async def entrypoint(ctx: JobContext):
     llm = ctx.proc.userdata.get("llm")
     if not llm:
         logger.info("⏱️ [LLM] Initializing LLM dynamically on demand...")
-        groq_key = os.getenv("GROQ_API_KEY")
-        if groq_key and groq_key.startswith("gsk_"):
-            llm = openai.LLM(
-                base_url="https://api.groq.com/openai/v1",
-                model="openai/gpt-oss-20b",
-                api_key=groq_key,
-                temperature=0.3
-            )
-        else:
+        google_key = os.getenv("GOOGLE_API_KEY")
+        if google_key:
             from livekit.plugins import google
-            google_key = os.getenv("GOOGLE_API_KEY")
             llm = google.LLM(
                 model="gemini-flash-latest",
                 api_key=google_key,
                 temperature=0.3
             )
+        else:
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key and groq_key.startswith("gsk_"):
+                llm = openai.LLM(
+                    base_url="https://api.groq.com/openai/v1",
+                    model="openai/gpt-oss-20b",
+                    api_key=groq_key,
+                    temperature=0.3
+                )
         ctx.proc.userdata["llm"] = llm
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
