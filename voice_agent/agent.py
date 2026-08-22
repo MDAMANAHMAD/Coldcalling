@@ -350,11 +350,12 @@ class PriyaRealEstateAgent(Agent):
         )
         super().__init__(instructions=instructions)
 
-    @function_tool(description="Schedule a free VIP property site visit for the client.")
+    @function_tool(description="Schedule a free property site visit for the client. Call this only when the client agrees to a visit and specifies a preferred day/date.")
     async def schedule_site_visit(
         self,
         customer_name: str,
         preferred_day: str,
+        preferred_time: str = "Not specified",
         flat_type: str = "2BHK / 3BHK",
         notes: str = ""
     ) -> str:
@@ -362,6 +363,7 @@ class PriyaRealEstateAgent(Agent):
         logger.info("🏠 [HINDI REAL ESTATE SITE VISIT BOOKED]")
         logger.info(f"👤 Client Name     : {customer_name}")
         logger.info(f"📅 Preferred Day   : {preferred_day}")
+        logger.info(f"⏰ Preferred Time  : {preferred_time}")
         logger.info(f"🏢 Flat Type       : {flat_type}")
         logger.info(f"📝 Notes           : {notes}")
         logger.info("=" * 60)
@@ -369,6 +371,7 @@ class PriyaRealEstateAgent(Agent):
         visit_record = {
             "customer_name": customer_name,
             "preferred_day": preferred_day,
+            "preferred_time": preferred_time,
             "flat_type": flat_type,
             "notes": notes,
             "timestamp": datetime.utcnow().isoformat(),
@@ -382,7 +385,8 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
-        return f"Maine {preferred_day} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
+        time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
+        return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
 # ==============================================================================
 # 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
@@ -822,11 +826,12 @@ async def entrypoint(ctx: JobContext):
     @session.on("conversation_item_added")
     def on_item_added(item):
         # Truncate context to save latency. Keep system prompt (index 0) and the last 12 messages.
-        if len(session.chat_ctx.items) > 13:
-            sys_prompt = session.chat_ctx.items[0]
-            recent = session.chat_ctx.items[-12:]
-            session.chat_ctx.items = [sys_prompt] + recent
-            logger.info(f"✂️ Context Truncated: Keeping system instructions + last 12 turns (Total items: {len(session.chat_ctx.items)})")
+        if hasattr(session, "_chat_ctx") and session._chat_ctx:
+            if len(session._chat_ctx.items) > 13:
+                sys_prompt = session._chat_ctx.items[0]
+                recent = session._chat_ctx.items[-12:]
+                session._chat_ctx.items = [sys_prompt] + recent
+                logger.info(f"✂️ Context Truncated: Keeping system instructions + last 12 turns (Total items: {len(session._chat_ctx.items)})")
 
     # Start session with record=False
     # Wait for the caller to join the room if not already present.
