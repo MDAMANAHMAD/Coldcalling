@@ -542,11 +542,34 @@ def prewarm_fnc(proc: JobProcess):
     logger.info(f"✅ [PRE-WARMING COMPLETE] Models ready in {t1:.1f}ms!")
 
 
+def log_system_diagnostics():
+    try:
+        # Check RAM via /proc/meminfo (Linux)
+        if os.path.exists("/proc/meminfo"):
+            with open("/proc/meminfo", "r") as f:
+                lines = f.readlines()
+            mem_info = {}
+            for line in lines:
+                parts = line.split(":")
+                if len(parts) == 2:
+                    mem_info[parts[0].strip()] = parts[1].strip()
+            logger.info(f"💾 [DIAGNOSTICS] RAM Status: Total={mem_info.get('MemTotal')}, Free={mem_info.get('MemFree')}, Available={mem_info.get('MemAvailable')}")
+        
+        # Check CPU Load
+        if os.path.exists("/proc/loadavg"):
+            with open("/proc/loadavg", "r") as f:
+                load = f.read().strip()
+            logger.info(f"⚙️ [DIAGNOSTICS] CPU Load Average: {load}")
+    except Exception as e:
+        logger.warning(f"Failed to gather diagnostics: {e}")
+
+
 # ==============================================================================
 # 4. AGENT ENTRYPOINT (Instant Telephony Streaming Audio)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
     set_normal_priority()
+    log_system_diagnostics()
     t_start = time.perf_counter()
     logger.info(f"⏱️ [PERF +0ms] Job received for Room: {ctx.room.name}")
     
@@ -874,9 +897,9 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 0.1s for WebRTC audio negotiation and SIP RTP streams to fully settle
-    logger.info("⏳ Allowing 0.1s for audio bridge and SIP RTP connection to settle...")
-    await asyncio.sleep(0.1)
+    # Allow 1.2s for WebRTC audio negotiation and SIP RTP streams to fully settle
+    logger.info("⏳ Allowing 1.2s for audio bridge and SIP RTP connection to settle...")
+    await asyncio.sleep(1.2)
 
     greeting_text = (
         f" Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... "
