@@ -28,29 +28,51 @@ r_models = requests.get(
 )
 print(f"Status Code: {r_models.status_code}")
 
-# Test 2: Real Chat Completion with openai/gpt-oss-20b
-print("\n--- Test 2: Actual Chat Completion (openai/gpt-oss-20b) ---")
-t0 = time.perf_counter()
-try:
-    r_comp = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-        json={
-            "model": "openai/gpt-oss-20b",
-            "messages": [
-                {"role": "system", "content": HINDI_REAL_ESTATE_PROMPT},
-                {"role": "user", "content": "haan boliye kya project hai?"}
-            ],
-            "temperature": 0.3
-        }
-    )
-    duration = time.perf_counter() - t0
-    print(f"HTTP Status: {r_comp.status_code} | Time Taken: {duration:.2f}s")
+# Test 2: Benchmarking all active models
+models_to_test = [
+    "openai/gpt-oss-20b",
+    "groq/compound-mini",
+    "groq/compound",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b"
+]
+
+print("\n=== Benchmarking Latency for all Groq Models ===")
+for model in models_to_test:
+    print(f"\nModel: {model}")
+    t0 = time.perf_counter()
     try:
-        res = r_comp.json()
-        print(f"Response Text: {res['choices'][0]['message']['content']}")
-    except Exception:
-        print(r_comp.text)
-except Exception as e:
-    print(f"Error calling completions API: {e}")
+        r_comp = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": HINDI_REAL_ESTATE_PROMPT},
+                    {"role": "user", "content": "haan boliye kya project hai?"}
+                ],
+                "temperature": 0.3
+            },
+            timeout=10
+        )
+        duration = time.perf_counter() - t0
+        print(f"  HTTP Status: {r_comp.status_code}")
+        print(f"  Time Taken: {duration:.3f} seconds")
+        if r_comp.status_code == 200:
+            res = r_comp.json()
+            text = res['choices'][0]['message']['content'].strip()
+            print(f"  Response: {text[:150]}...")
+            
+            # Print token stats if available
+            usage = res.get("usage", {})
+            if usage:
+                prompt_tok = usage.get("prompt_tokens", 0)
+                comp_tok = usage.get("completion_tokens", 0)
+                total_tok = usage.get("total_tokens", 0)
+                print(f"  Tokens: Prompt={prompt_tok}, Completion={comp_tok}, Total={total_tok}")
+        else:
+            print(f"  Error Body: {r_comp.text}")
+    except Exception as e:
+        print(f"  ❌ Error calling completions for {model}: {e}")
+
 
