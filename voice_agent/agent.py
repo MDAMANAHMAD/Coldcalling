@@ -221,12 +221,58 @@ class PriyaRealEstateAgent(Agent):
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
+# ==============================================================================
+# Model Cache and Process Lifecycle Helpers
+# ==============================================================================
+MODEL_CACHE_PATH = "bookings/model_cache.json"
+
+def load_cached_models():
+    if os.path.exists(MODEL_CACHE_PATH):
+        try:
+            with open(MODEL_CACHE_PATH, "r") as f:
+                data = json.load(f)
+                return data.get("selected_model"), data.get("selected_groq_model")
+        except Exception:
+            pass
+    return None, None
+
+def save_cached_models(selected_model, selected_groq_model):
+    try:
+        os.makedirs(os.path.dirname(MODEL_CACHE_PATH), exist_ok=True)
+        with open(MODEL_CACHE_PATH, "w") as f:
+            json.dump({
+                "selected_model": selected_model,
+                "selected_groq_model": selected_groq_model
+            }, f)
+    except Exception:
+        pass
+
+import multiprocessing
+is_main_process = (multiprocessing.current_process().name == "MainProcess")
+
+if is_main_process:
+    if os.path.exists("bookings/active_call.lock"):
+        try:
+            os.remove("bookings/active_call.lock")
+            logger.info("🧹 Cleaned up stale active call lock at startup.")
+        except Exception as e:
+            logger.warning(f"Could not remove stale active call lock: {e}")
+
 SELECTED_MODEL = "gemini-3.6-flash" # default fallback
+SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile" # default fallback
 global_llm = None
 global_llm_compiled = False
 
+# Load cached models if available to prevent child process re-validation delays
+cached_model, cached_groq_model = load_cached_models()
+if cached_model or cached_groq_model:
+    if cached_model:
+        SELECTED_MODEL = cached_model
+    if cached_groq_model is not None:
+        SELECTED_GROQ_MODEL = cached_groq_model
+    logger.info(f"💾 [IMPORT TIME] Loaded cached models: Gemini={SELECTED_MODEL}, Groq={SELECTED_GROQ_MODEL}")
+
 logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
-SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile" # default fallback
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 
@@ -240,10 +286,9 @@ if global_groq_key and global_groq_key.startswith("gsk_"):
         "mixtral-8x7b-32768"
     ]
     
-    # If a call is active, skip verification compilation and use llama-3.3-70b-versatile immediately
+    # If a call is active, skip verification compilation and use cached/default model immediately
     if os.path.exists("bookings/active_call.lock"):
-        logger.info("🔒 Active call detected during import. Selecting default llama-3.3-70b-versatile without validation.")
-        SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+        logger.info(f"🔒 Active call detected during import. Selecting Groq model '{SELECTED_GROQ_MODEL}' without validation.")
         global_llm = lk_openai.LLM(
             base_url="https://api.groq.com/openai/v1",
             model=SELECTED_GROQ_MODEL,
@@ -285,6 +330,7 @@ if global_groq_key and global_groq_key.startswith("gsk_"):
                     global_llm = candidate_llm
                     SELECTED_GROQ_MODEL = model_name
                     global_llm_compiled = True
+                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
                     logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
                     break
                 except Exception as e:
@@ -335,10 +381,9 @@ elif global_google_key:
     
     preferred_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash"]
     
-    # If a call is active, skip verification compilation and use gemini-2.0-flash immediately
+    # If a call is active, skip verification compilation and use cached/default model immediately
     if os.path.exists("bookings/active_call.lock"):
-        logger.info("🔒 Active call detected during import. Selecting default gemini-2.0-flash without validation.")
-        SELECTED_MODEL = "gemini-2.0-flash"
+        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
         global_llm = google.LLM(
             model=SELECTED_MODEL,
             api_key=global_google_key,
@@ -374,6 +419,7 @@ elif global_google_key:
                     global_llm = candidate_llm
                     SELECTED_MODEL = model_name
                     global_llm_compiled = True
+                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
                     logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
                     break
                 except Exception as e:
