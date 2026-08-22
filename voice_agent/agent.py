@@ -110,6 +110,7 @@ Never give long paragraphs.
 Never deliver multiple points at once unless absolutely necessary.
 Keep the conversation light and easy to follow.
 The prospect should feel like they are having a phone conversation, not listening to a presentation.
+- **AMENITIES LIMIT (STRICT)**: When asked about amenities, NEVER list all of them. Pick only 3 key amenities (such as gym, kids play area, and choubees ghante water supply) and immediately end your response with a follow-up question (e.g., "Aap specifically kis type ke amenities dhoond rahe hain?"). Listing too many items at once is unnatural and causes stutters or silence.
 
 ---
 
@@ -178,6 +179,16 @@ If they change the topic → Follow their topic naturally.
 Never mechanically follow: Opening → Pitch → Questions → Closing.
 Always respond dynamically to the prospect's actual words.
 
+---
+
+### 10. ALWAYS END WITH A QUESTION OR NEXT STEP (STRICT)
+Every single response you speak must end with a clear question or a prompt for the user to reply. Never stop speaking after stating a fact or finishing a list without prompting the user. This ensures your sentences are complete, flows naturally, and prevents awkward silences.
+
+---
+
+### 11. PIVOT BACK TO SALES (STRICT)
+If the caller asks an off-topic question (e.g., about local restaurants, personal topics, weather, etc.), answer their question in exactly 1 short sentence, and then immediately pivot the conversation back to the real estate project (e.g., "Vaise... kya aap Sai Complex project ke flats ke baare mein kuch aur jaan-na chahenge?"). Do not wander off-track.
+
 ==================================================
 PART 2 — CORE SALES PHILOSOPHY
 ==================================================
@@ -216,7 +227,8 @@ IMPORTANT:
 - Never mix configurations.
 
 KEY AMENITIES:
-- Gym/Fitness club, Kids play area, Jogging track, Indoor games, Dedicated office/work-from-home space, twenty four seven water supply, Landscaping, Jaquar fittings, Kajaria tiles, Asian Paints, Polycab wiring, Balconies/Terrace flats.
+- Gym/Fitness club, Kids play area, Jogging track, Indoor games, Dedicated office/work-from-home space, choubees ghante water supply, Landscaping, Jaquar fittings, Kajaria tiles, Asian Paints, Polycab wiring, Balconies/Terrace flats.
+- STRICT RULE: Pick only 3 key amenities at a time. Never list the entire selection at once.
 
 LOCAL CONNECTIVITY:
 - Nilje Railway Station (five minutes away).
@@ -359,7 +371,7 @@ if global_groq_key and global_groq_key.startswith("gsk_"):
         base_url="https://api.groq.com/openai/v1",
         model="openai/gpt-oss-20b",
         api_key=global_groq_key,
-        temperature=0.0
+        temperature=0.3
     )
 else:
     from livekit.plugins import google
@@ -367,7 +379,7 @@ else:
     global_llm = google.LLM(
         model="gemini-flash-latest",
         api_key=global_google_key,
-        temperature=0.0
+        temperature=0.3
     )
 
 global_llm_compiled = False
@@ -568,7 +580,7 @@ async def entrypoint(ctx: JobContext):
                 base_url="https://api.groq.com/openai/v1",
                 model="openai/gpt-oss-20b",
                 api_key=groq_key,
-                temperature=0.0
+                temperature=0.3
             )
         else:
             from livekit.plugins import google
@@ -576,7 +588,7 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model="gemini-flash-latest",
                 api_key=google_key,
-                temperature=0.0
+                temperature=0.3
             )
         ctx.proc.userdata["llm"] = llm
     
