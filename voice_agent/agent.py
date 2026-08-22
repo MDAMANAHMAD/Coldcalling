@@ -189,6 +189,16 @@ Every single response you speak must end with a clear question or a prompt for t
 ### 11. PIVOT BACK TO SALES (STRICT)
 If the caller asks an off-topic question (e.g., about local restaurants, personal topics, weather, etc.), answer their question in exactly 1 short sentence, and then immediately pivot the conversation back to the real estate project (e.g., "Vaise... kya aap Sai Complex project ke flats ke baare mein kuch aur jaan-na chahenge?"). Do not wander off-track.
 
+---
+
+### 12. STRICT REPETITION PROHIBITION (MANDATORY)
+You must NEVER repeat the exact same question or sentence you just asked in the previous turn. If the customer is quiet, hesitates, or says a filler word, rephrase your sentence completely, or ask a completely different, helpful question (such as their budget or preferred location) to keep the conversation moving naturally.
+
+---
+
+### 13. HANDLING SHORT WORDS ("HELLO", "YES", "OK")
+If the caller replies with just one word like "hello", "haanji", "yes", "ok", or configuration names like "2 BHK", do not get confused or repeat yourself. Acknowledge it briefly and immediately ask the next logical sales question. E.g., if they say "2 BHK", respond: "Ji bilkul... humare paas 2 BHK options seventy two lakh rupaye se start hote hain... kya aap iska carpet area aur layout jaan-na chahenge?"
+
 ==================================================
 PART 2 — CORE SALES PHILOSOPHY
 ==================================================
@@ -655,8 +665,8 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 2,
-                "min_duration": 0.5,
+                "min_words": 1,
+                "min_duration": 0.3,
                 "resume_false_interruption": True,
             }
         }
