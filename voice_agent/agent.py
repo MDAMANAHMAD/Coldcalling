@@ -388,18 +388,70 @@ class PriyaRealEstateAgent(Agent):
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
-# ==============================================================================
-# 2.5 GLOBAL LLM INSTANTIATION & STATIC COMPILATION (Pre-compiled at module import)
-# ==============================================================================
+SELECTED_MODEL = "gemini-3.6-flash" # default fallback
+global_llm = None
+global_llm_compiled = False
+
 logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
 global_google_key = os.getenv("GOOGLE_API_KEY")
+
 if global_google_key:
     from livekit.plugins import google
-    global_llm = google.LLM(
-        model="gemini-3.6-flash",
-        api_key=global_google_key,
-        temperature=0.3
-    )
+    
+    preferred_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash"]
+    
+    # If a call is active, skip verification compilation and use gemini-2.0-flash immediately
+    if os.path.exists("bookings/active_call.lock"):
+        logger.info("🔒 Active call detected during import. Selecting default gemini-2.0-flash without validation.")
+        SELECTED_MODEL = "gemini-2.0-flash"
+        global_llm = google.LLM(
+            model=SELECTED_MODEL,
+            api_key=global_google_key,
+            temperature=0.3
+        )
+    else:
+        try:
+            from livekit.agents import llm as agents_llm
+            agent_dummy = PriyaRealEstateAgent()
+            agent_tools_dummy = agent_dummy.tools
+            chat_ctx_dummy = agents_llm.ChatContext()
+            chat_ctx_dummy.add_message(role="user", content="hello")
+            
+            async def _test_compile(llm_instance):
+                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                async for chunk in chat_stream:
+                    break
+
+            try:
+                loop_static = asyncio.get_event_loop()
+            except RuntimeError:
+                loop_static = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_static)
+
+            for model_name in preferred_models:
+                try:
+                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
+                    candidate_llm = google.LLM(model=model_name, api_key=global_google_key, temperature=0.3)
+                    
+                    # Verify schema compilation works
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
+                    
+                    global_llm = candidate_llm
+                    SELECTED_MODEL = model_name
+                    global_llm_compiled = True
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
+            
+            if not global_llm:
+                logger.warning("All preferred models failed validation. Falling back to gemini-3.6-flash.")
+                global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
+                SELECTED_MODEL = "gemini-3.6-flash"
+        except Exception as outer_err:
+            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.6-flash.")
+            global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
+            SELECTED_MODEL = "gemini-3.6-flash"
 else:
     global_groq_key = os.getenv("GROQ_API_KEY")
     if global_groq_key and global_groq_key.startswith("gsk_"):
@@ -410,35 +462,6 @@ else:
             api_key=global_groq_key,
             temperature=0.3
         )
-
-global_llm_compiled = False
-# If a call is currently active, skip import-time compilation to protect the active call's CPU
-if os.path.exists("bookings/active_call.lock"):
-    logger.info("🔒 Active call detected during import. Skipping static LLM compilation to protect call CPU.")
-else:
-    try:
-        from livekit.agents import llm as agents_llm
-        agent_dummy = PriyaRealEstateAgent()
-        agent_tools_dummy = agent_dummy.tools
-        chat_ctx_dummy = agents_llm.ChatContext()
-        chat_ctx_dummy.add_message(role="user", content="hello")
-
-        async def _compile_schemas_static():
-            chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-            async for chunk in chat_stream:
-                break
-
-        try:
-            loop_static = asyncio.get_event_loop()
-        except RuntimeError:
-            loop_static = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop_static)
-            
-        loop_static.run_until_complete(asyncio.wait_for(_compile_schemas_static(), timeout=8.0))
-        global_llm_compiled = True
-        logger.info("✅ [IMPORT TIME COMPLETE] LLM schemas compiled successfully!")
-    except Exception as e:
-        logger.warning(f"Static LLM schema compilation failed during import: {e}")
 
 
 # ==============================================================================
@@ -560,6 +583,19 @@ def log_system_diagnostics():
             with open("/proc/loadavg", "r") as f:
                 load = f.read().strip()
             logger.info(f"⚙️ [DIAGNOSTICS] CPU Load Average: {load}")
+
+        # List Google models to diagnose 404/Not Found and identify valid names
+        try:
+            import google.generativeai as genai
+            google_key = os.getenv("GOOGLE_API_KEY")
+            if google_key:
+                genai.configure(api_key=google_key)
+                models = [m.name for m in genai.list_models()]
+                logger.info(f"📋 [DIAGNOSTICS] Google GenAI Models: {models}")
+            else:
+                logger.warning("GOOGLE_API_KEY env variable not set in log_system_diagnostics")
+        except Exception as model_err:
+            logger.warning(f"Failed to list Google models: {model_err}")
     except Exception as e:
         logger.warning(f"Failed to gather diagnostics: {e}")
 
@@ -630,7 +666,7 @@ async def entrypoint(ctx: JobContext):
         if google_key:
             from livekit.plugins import google
             llm = google.LLM(
-                model="gemini-3.6-flash",
+                model=SELECTED_MODEL,
                 api_key=google_key,
                 temperature=0.3
             )
@@ -732,6 +768,8 @@ async def entrypoint(ctx: JobContext):
             m = getattr(metrics, "metrics", metrics)
             input_tokens += getattr(m, "prompt_tokens", 0)
             output_tokens += getattr(m, "completion_tokens", 0)
+            ttft = getattr(m, "ttft", None)
+            logger.info(f"⚡ [LATENCY TRACE] LLM Metrics: TTFT={ttft}s | Prompt={getattr(m, 'prompt_tokens', 0)} | Completion={getattr(m, 'completion_tokens', 0)}")
         except Exception as e:
             logger.warning(f"Error extracting LLM metrics: {e}")
 
@@ -741,6 +779,8 @@ async def entrypoint(ctx: JobContext):
         try:
             m = getattr(metrics, "metrics", metrics)
             characters_spoken += getattr(m, "characters_count", 0)
+            ttfb = getattr(m, "ttfb", None)
+            logger.info(f"⚡ [LATENCY TRACE] TTS Metrics: TTFB={ttfb}s | Chars={getattr(m, 'characters_count', 0)}")
         except Exception as e:
             logger.warning(f"Error extracting TTS metrics: {e}")
 
