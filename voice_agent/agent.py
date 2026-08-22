@@ -458,7 +458,7 @@ else:
         from livekit.plugins import openai as lk_openai
         global_llm = lk_openai.LLM(
             base_url="https://api.groq.com/openai/v1",
-            model="openai/gpt-oss-20b",
+            model="llama-3.3-70b-versatile",
             api_key=global_groq_key,
             temperature=0.3
         )
@@ -586,12 +586,23 @@ def log_system_diagnostics():
 
         # List Google models to diagnose 404/Not Found and identify valid names
         try:
-            import google.generativeai as genai
             google_key = os.getenv("GOOGLE_API_KEY")
             if google_key:
-                genai.configure(api_key=google_key)
-                models = [m.name for m in genai.list_models()]
-                logger.info(f"📋 [DIAGNOSTICS] Google GenAI Models: {models}")
+                # Try new SDK first
+                try:
+                    from google import genai
+                    client = genai.Client(api_key=google_key)
+                    models = [m.name for m in client.models.list()]
+                    logger.info(f"📋 [DIAGNOSTICS] Google GenAI Models: {models}")
+                except Exception as sdk_err:
+                    # Fallback to legacy SDK
+                    try:
+                        import google.generativeai as legacy_genai
+                        legacy_genai.configure(api_key=google_key)
+                        models = [m.name for m in legacy_genai.list_models()]
+                        logger.info(f"📋 [DIAGNOSTICS] Legacy Google Models: {models}")
+                    except Exception as legacy_err:
+                        logger.warning(f"Could not list models via GenAI SDK ({sdk_err}) or Legacy SDK ({legacy_err})")
             else:
                 logger.warning("GOOGLE_API_KEY env variable not set in log_system_diagnostics")
         except Exception as model_err:
@@ -675,7 +686,7 @@ async def entrypoint(ctx: JobContext):
             if groq_key and groq_key.startswith("gsk_"):
                 llm = openai.LLM(
                     base_url="https://api.groq.com/openai/v1",
-                    model="openai/gpt-oss-20b",
+                    model="llama-3.3-70b-versatile",
                     api_key=groq_key,
                     temperature=0.3
                 )
