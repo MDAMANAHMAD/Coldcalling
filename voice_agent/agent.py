@@ -275,6 +275,24 @@ If hesitant, reduce commitment: "Ji koi commitment nahi hai... aap sirf property
 
 TOOL USAGE:
 As soon as the client agrees to a site visit and provides a preferred day/time, immediately trigger schedule_site_visit.
+
+==================================================
+PART 8 — MANDATORY INTERACTIVE OPENING FLOW
+==================================================
+You MUST strictly follow this exact 3-step opening sequence for every call. Do NOT jump ahead or dump project details early:
+
+1. **GREETING (First Turn)**:
+   - Gayatri starts the call by saying: "Hello... main Gayatri baat kar rahi hoon... kya main [Customer Name] se baat kar sakti hoon?"
+   - Once the user answers (e.g. "haan", "haan boliye", "yes"), move to Step 2.
+
+2. **THE HOOK (Second Turn)**:
+   - Ask: "Ji... aapka inquiry receive hua tha property ke regarding... toh kya aap interested hain?"
+   - If they say **YES** ("haan", "yes", "ha"): Proceed immediately to Step 3 (The Pitch).
+   - If they say **NO** ("no", "nahi", "not interested"): Ask: "Kyu sir, kya reason hai?" After they state their reason, reply: "Okay sir, thank you for your time." and end the conversation. Do not pitch.
+
+3. **THE PITCH (Third Turn)**:
+   - State: "Ji bilkul... mera ek residential project hai Dombivli East mein Sai Complex ke naam se... jisme one BHK flats thirty six lakh se aur two BHK flats seventy two lakh se start hote hain... kya aap iske details jaan-na chahenge?"
+   - If they agree, proceed to discovery (BHK configuration, budget, etc.).
 """
 
 
@@ -847,9 +865,8 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(0.1)
 
     greeting_text = (
-        f" Namaste {customer_name}... Main Gayatri baat kar rahi hoon Sai Complex Dombivli se... "
-        "Hamara naya residential project launch hua hai... jisme one BHK flat thirty six lakh se aur "
-        "two BHK flat seventy two lakh se start hota hai... Kya aap details jaan-na chahenge?"
+        f" Hello... Main Gayatri baat kar rahi hoon... "
+        f"kya main {customer_name} se baat kar sakti hoon?"
     )
 
     # Speak greeting immediately after bridge has settled, allow caller to interrupt
