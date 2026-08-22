@@ -226,18 +226,88 @@ global_llm = None
 global_llm_compiled = False
 
 logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
+SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile" # default fallback
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 
 if global_groq_key and global_groq_key.startswith("gsk_"):
-    logger.info("🚀 [LLM] Prioritizing Groq Llama-3.3-70b-versatile for ultra-low latency.")
     from livekit.plugins import openai as lk_openai
-    global_llm = lk_openai.LLM(
-        base_url="https://api.groq.com/openai/v1",
-        model="llama-3.3-70b-versatile",
-        api_key=global_groq_key,
-        temperature=0.3
-    )
+    preferred_groq_models = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "mixtral-8x7b-32768"
+    ]
+    
+    # If a call is active, skip verification compilation and use llama-3.3-70b-versatile immediately
+    if os.path.exists("bookings/active_call.lock"):
+        logger.info("🔒 Active call detected during import. Selecting default llama-3.3-70b-versatile without validation.")
+        SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+        global_llm = lk_openai.LLM(
+            base_url="https://api.groq.com/openai/v1",
+            model=SELECTED_GROQ_MODEL,
+            api_key=global_groq_key,
+            temperature=0.3
+        )
+    else:
+        try:
+            from livekit.agents import llm as agents_llm
+            agent_dummy = PriyaRealEstateAgent()
+            agent_tools_dummy = agent_dummy.tools
+            chat_ctx_dummy = agents_llm.ChatContext()
+            chat_ctx_dummy.add_message(role="user", content="hello")
+            
+            async def _test_compile_groq(llm_instance):
+                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                async for chunk in chat_stream:
+                    break
+
+            try:
+                loop_static = asyncio.get_event_loop()
+            except RuntimeError:
+                loop_static = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_static)
+
+            for model_name in preferred_groq_models:
+                try:
+                    logger.info(f"Trying to initialize and compile Groq model '{model_name}'...")
+                    candidate_llm = lk_openai.LLM(
+                        base_url="https://api.groq.com/openai/v1",
+                        model=model_name,
+                        api_key=global_groq_key,
+                        temperature=0.3
+                    )
+                    
+                    # Verify schema compilation works
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_groq(candidate_llm), timeout=5.0))
+                    
+                    global_llm = candidate_llm
+                    SELECTED_GROQ_MODEL = model_name
+                    global_llm_compiled = True
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
+            
+            if not global_llm:
+                logger.warning("All preferred Groq models failed validation. Falling back to llama-3.3-70b-versatile.")
+                global_llm = lk_openai.LLM(
+                    base_url="https://api.groq.com/openai/v1",
+                    model="llama-3.3-70b-versatile",
+                    api_key=global_groq_key,
+                    temperature=0.3
+                )
+                SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+        except Exception as outer_err:
+            logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Defaulting to llama-3.3-70b-versatile.")
+            global_llm = lk_openai.LLM(
+                base_url="https://api.groq.com/openai/v1",
+                model="llama-3.3-70b-versatile",
+                api_key=global_groq_key,
+                temperature=0.3
+            )
+            SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 elif global_google_key:
     from livekit.plugins import google
     
@@ -442,6 +512,27 @@ def log_system_diagnostics():
                 logger.warning("GOOGLE_API_KEY env variable not set in log_system_diagnostics")
         except Exception as model_err:
             logger.warning(f"Failed to list Google models: {model_err}")
+
+        # List Groq models to check availability
+        try:
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key:
+                import urllib.request
+                import urllib.error
+                import json
+                req = urllib.request.Request(
+                    "https://api.groq.com/openai/v1/models",
+                    headers={"Authorization": f"Bearer {groq_key}"}
+                )
+                with urllib.request.urlopen(req) as response:
+                    res_body = response.read().decode("utf-8")
+                    data = json.loads(res_body)
+                    groq_models = [m["id"] for m in data.get("data", [])]
+                    logger.info(f"📋 [DIAGNOSTICS] Groq Models: {groq_models}")
+            else:
+                logger.warning("GROQ_API_KEY env variable not set in log_system_diagnostics")
+        except Exception as groq_err:
+            logger.warning(f"Failed to list Groq models: {groq_err}")
     except Exception as e:
         logger.warning(f"Failed to gather diagnostics: {e}")
 
@@ -513,7 +604,7 @@ async def entrypoint(ctx: JobContext):
         if groq_key and groq_key.startswith("gsk_"):
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.3-70b-versatile",
+                model=SELECTED_GROQ_MODEL,
                 api_key=groq_key,
                 temperature=0.3
             )
