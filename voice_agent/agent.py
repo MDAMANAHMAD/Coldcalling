@@ -853,6 +853,8 @@ async def entrypoint(ctx: JobContext):
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         nonlocal current_lang
+        if ev.transcript:
+            logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
             new_lang = current_lang
