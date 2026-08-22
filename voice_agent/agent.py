@@ -291,7 +291,38 @@ if global_groq_key and global_groq_key.startswith("gsk_"):
                     logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
             
             if not global_llm:
-                logger.warning("All preferred Groq models failed validation. Falling back to llama-3.3-70b-versatile.")
+                if global_google_key:
+                    logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
+                    from livekit.plugins import google
+                    global_llm = google.LLM(
+                        model="gemini-3.6-flash",
+                        api_key=global_google_key,
+                        temperature=0.3
+                    )
+                    SELECTED_MODEL = "gemini-3.6-flash"
+                    SELECTED_GROQ_MODEL = None
+                else:
+                    logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
+                    global_llm = lk_openai.LLM(
+                        base_url="https://api.groq.com/openai/v1",
+                        model="llama-3.3-70b-versatile",
+                        api_key=global_groq_key,
+                        temperature=0.3
+                    )
+                    SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+        except Exception as outer_err:
+            if global_google_key:
+                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
+                from livekit.plugins import google
+                global_llm = google.LLM(
+                    model="gemini-3.6-flash",
+                    api_key=global_google_key,
+                    temperature=0.3
+                )
+                SELECTED_MODEL = "gemini-3.6-flash"
+                SELECTED_GROQ_MODEL = None
+            else:
+                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
                 global_llm = lk_openai.LLM(
                     base_url="https://api.groq.com/openai/v1",
                     model="llama-3.3-70b-versatile",
@@ -299,15 +330,6 @@ if global_groq_key and global_groq_key.startswith("gsk_"):
                     temperature=0.3
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
-        except Exception as outer_err:
-            logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Defaulting to llama-3.3-70b-versatile.")
-            global_llm = lk_openai.LLM(
-                base_url="https://api.groq.com/openai/v1",
-                model="llama-3.3-70b-versatile",
-                api_key=global_groq_key,
-                temperature=0.3
-            )
-            SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 elif global_google_key:
     from livekit.plugins import google
     
@@ -601,7 +623,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [LLM] Initializing LLM dynamically on demand...")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
-        if groq_key and groq_key.startswith("gsk_"):
+        if groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
