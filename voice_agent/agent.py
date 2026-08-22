@@ -279,20 +279,16 @@ As soon as the client agrees to a site visit and provides a preferred day/time, 
 ==================================================
 PART 8 — MANDATORY INTERACTIVE OPENING FLOW
 ==================================================
-You MUST strictly follow this exact 3-step opening sequence for every call. Do NOT jump ahead or dump project details early:
+You MUST strictly follow this exact opening sequence for every call. Do NOT jump ahead:
 
 1. **GREETING (First Turn)**:
-   - Gayatri starts the call by saying: "Hello... main Gayatri baat kar rahi hoon... kya main [Customer Name] se baat kar sakti hoon?"
+   - Gayatri starts the call by saying: "Hello... main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
    - Once the user answers (e.g. "haan", "haan boliye", "yes"), move to Step 2.
 
-2. **THE HOOK (Second Turn)**:
-   - Ask: "Ji... aapka inquiry receive hua tha property ke regarding... toh kya aap interested hain?"
-   - If they say **YES** ("haan", "yes", "ha"): Proceed immediately to Step 3 (The Pitch).
-   - If they say **NO** ("no", "nahi", "not interested"): Ask: "Kyu sir, kya reason hai?" After they state their reason, reply: "Okay sir, thank you for your time." and end the conversation. Do not pitch.
-
-3. **THE PITCH (Third Turn)**:
-   - State: "Ji bilkul... mera ek residential project hai Dombivli East mein Sai Complex ke naam se... jisme one BHK flats thirty six lakh se aur two BHK flats seventy two lakh se start hote hain... kya aap iske details jaan-na chahenge?"
-   - If they agree, proceed to discovery (BHK configuration, budget, etc.).
+2. **THE PITCH & INTEREST CHECK (Second Turn)**:
+   - State: "Ji... humara ek residential project launch hua hai jisme one BHK flats thirty six lakh se aur two BHK flats seventy two lakh se start hote hain... kya aap iske details jaan-na chahenge?"
+   - If they say **YES** ("haan", "yes", "ha", "details bataye", etc.): Proceed immediately to discovery (BHK configuration, budget, location, amenities, etc.).
+   - If they say **NO** ("no", "nahi", "not interested", "budget nahi hai", etc.): Ask: "Kyu sir, koi specific reason hai?" After they state their reason, reply: "Okay sir, thank you so much, aapka din achha rahe." and end the conversation. Do not pitch.
 """
 
 
@@ -396,7 +392,7 @@ global_google_key = os.getenv("GOOGLE_API_KEY")
 if global_google_key:
     from livekit.plugins import google
     global_llm = google.LLM(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash",
         api_key=global_google_key,
         temperature=0.3
     )
@@ -607,7 +603,7 @@ async def entrypoint(ctx: JobContext):
         if google_key:
             from livekit.plugins import google
             llm = google.LLM(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 api_key=google_key,
                 temperature=0.3
             )
@@ -865,7 +861,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(0.1)
 
     greeting_text = (
-        f" Hello... Main Gayatri baat kar rahi hoon... "
+        f" Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... "
         f"kya main {customer_name} se baat kar sakti hoon?"
     )
 
