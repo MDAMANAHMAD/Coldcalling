@@ -85,8 +85,12 @@ if google_key:
             chat_stream = llm_instance.chat(chat_ctx=chat_ctx)
             full_text = ""
             async for chunk in chat_stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    full_text += chunk.choices[0].delta.content
+                if hasattr(chunk, 'delta') and chunk.delta and hasattr(chunk.delta, 'content') and chunk.delta.content:
+                    full_text += chunk.delta.content
+                elif hasattr(chunk, 'choices') and chunk.choices:
+                    choice = chunk.choices[0]
+                    if hasattr(choice, 'delta') and choice.delta and hasattr(choice.delta, 'content') and choice.delta.content:
+                        full_text += choice.delta.content
             return full_text
 
         response_text = loop.run_until_complete(_run_gemini())
