@@ -293,7 +293,8 @@ if global_sambanova_key:
             base_url="https://api.sambanova.ai/v1",
             model=SELECTED_GROQ_MODEL,
             api_key=global_sambanova_key,
-            temperature=0.3
+            temperature=0.3,
+            max_tokens=150
         )
     else:
         try:
@@ -321,7 +322,8 @@ if global_sambanova_key:
                         base_url="https://api.sambanova.ai/v1",
                         model=model_name,
                         api_key=global_sambanova_key,
-                        temperature=0.3
+                        temperature=0.3,
+                        max_tokens=150
                     )
                     
                     # Verify schema compilation works
@@ -355,7 +357,8 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
             base_url="https://api.groq.com/openai/v1",
             model=SELECTED_GROQ_MODEL,
             api_key=global_groq_key,
-            temperature=0.3
+            temperature=0.3,
+            max_tokens=150
         )
     else:
         try:
@@ -383,7 +386,8 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                         base_url="https://api.groq.com/openai/v1",
                         model=model_name,
                         api_key=global_groq_key,
-                        temperature=0.3
+                        temperature=0.3,
+                        max_tokens=150
                     )
                     
                     # Verify schema compilation works
@@ -415,7 +419,8 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                         base_url="https://api.groq.com/openai/v1",
                         model="llama-3.3-70b-versatile",
                         api_key=global_groq_key,
-                        temperature=0.3
+                        temperature=0.3,
+                        max_tokens=150
                     )
                     SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
         except Exception as outer_err:
@@ -435,7 +440,8 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     base_url="https://api.groq.com/openai/v1",
                     model="llama-3.3-70b-versatile",
                     api_key=global_groq_key,
-                    temperature=0.3
+                    temperature=0.3,
+                    max_tokens=150
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 elif global_google_key:
@@ -729,14 +735,25 @@ async def entrypoint(ctx: JobContext):
     llm = ctx.proc.userdata.get("llm")
     if not llm:
         logger.info("⏱️ [LLM] Initializing LLM dynamically on demand...")
+        sambanova_key = os.getenv("SAMBANOVA_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
-        if groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
+        
+        if sambanova_key and SELECTED_GROQ_MODEL:
+            llm = openai.LLM(
+                base_url="https://api.sambanova.ai/v1",
+                model=SELECTED_GROQ_MODEL,
+                api_key=sambanova_key,
+                temperature=0.3,
+                max_tokens=150
+            )
+        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
                 api_key=groq_key,
-                temperature=0.3
+                temperature=0.3,
+                max_tokens=150
             )
         elif google_key:
             from livekit.plugins import google
