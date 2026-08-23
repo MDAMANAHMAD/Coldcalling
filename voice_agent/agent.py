@@ -261,7 +261,7 @@ if is_main_process:
 SELECTED_MODEL = "gemini-3.6-flash" # default fallback
 SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
 if os.getenv("SAMBANOVA_API_KEY"):
-    SELECTED_GROQ_MODEL = "Meta-Llama-3.1-8B-Instruct"
+    SELECTED_GROQ_MODEL = "gpt-oss-120b"
 global_llm = None
 global_llm_compiled = False
 
@@ -282,9 +282,8 @@ global_google_key = os.getenv("GOOGLE_API_KEY")
 if global_sambanova_key:
     from livekit.plugins import openai as lk_openai
     preferred_samba_models = [
-        "Meta-Llama-3.1-8B-Instruct",
-        "Meta-Llama-3.3-70B-Instruct",
-        "Meta-Llama-3.1-70B-Instruct"
+        "gpt-oss-120b",
+        "Meta-Llama-3.3-70B-Instruct"
     ]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
