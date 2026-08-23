@@ -57,42 +57,27 @@ else:
 
 # 2. Benchmark Google Gemini
 if google_key:
-    # We test gemini-1.5-flash as it's the standard production model
     model_name = "gemini-1.5-flash"
-    print(f"\n⚡ [Google Gemini] Testing '{model_name}'...")
+    print(f"\n⚡ [Google Gemini] Testing '{model_name}' via SDK...")
     t0 = time.perf_counter()
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={google_key}"
-        r = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [{"text": f"System Instructions:\n{HINDI_REAL_ESTATE_PROMPT}\n\nUser Question: Haan boliye, kya project hai?"}]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.3,
-                    "maxOutputTokens": 150
-                }
-            },
-            timeout=8
+        import google.generativeai as legacy_genai
+        legacy_genai.configure(api_key=google_key)
+        model = legacy_genai.GenerativeModel(
+            model_name=model_name,
+            system_instruction=HINDI_REAL_ESTATE_PROMPT
+        )
+        response = model.generate_content(
+            "Haan boliye, kya project hai?",
+            generation_config={"temperature": 0.3, "max_output_tokens": 150}
         )
         dt = time.perf_counter() - t0
-        if r.status_code == 200:
-            res_data = r.json()
-            completion_text = res_data['candidates'][0]['content']['parts'][0]['text'].strip()
-            print(f"  Status: {r.status_code} | Time: {dt:.3f} seconds")
-            print(f"  Response: '{completion_text[:80]}...'")
-            results["Gemini"] = dt
-        else:
-            print(f"  ❌ Error {r.status_code}: {r.text}")
-            results["Gemini"] = f"Error {r.status_code}"
+        print(f"  Status: Success | Time: {dt:.3f} seconds")
+        print(f"  Response: '{response.text.strip()[:80]}...'")
+        results["Gemini"] = dt
     except Exception as e:
-        print(f"  ❌ Connection Error: {e}")
-        results["Gemini"] = "Connection Error"
+        print(f"  ❌ SDK Error: {e}")
+        results["Gemini"] = "SDK Error"
 else:
     print("\n[Google Gemini] Key not set in .env")
     results["Gemini"] = "Key not set"
