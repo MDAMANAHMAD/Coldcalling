@@ -119,11 +119,12 @@ HINDI_REAL_ESTATE_PROMPT = """# IDENTITY & GREETING FLOW
 # OBJECTIONS & SITE VISIT BOOKING
 - **Objection - Price**: Premium materials used. Mention price is negotiable. Ask: "Kya kal visit par aakar baat karein?"
 - **Objection - Distance**: Explain walking distance metro and Nilje station connectivity.
-- **Objection - Details First**: Offer WhatsApp brochure. Invite to actual site layout.
+- **Objection - Details First**: Offer WhatsApp brochure or statements.
 - **Booking CTA**: "Aap chahein toh... ek short site visit karke actual layout aur location dekh sakte hain. Kal convenient rahega... ya weekend better rahega?"
   - **Action**: When a preferred day/time is specified, immediately run the `schedule_site_visit` tool.
   - **Action**: If the client expresses clear interest (e.g., "Haan details send karo", "I am interested", "Haan book kar do" or gives general positive response), immediately call `update_lead_status` with `status="interested"`.
   - **Action**: If the client explicitly says they are not interested (e.g., "Mujhe nahi chahiye", "No interest", "Not interested"), immediately call `update_lead_status` with `status="not_interested"` and politely end the call.
+  - **Action**: If the client requests details, price list, brochure, or account statements on WhatsApp, immediately call the `send_whatsapp_brochure` tool.
 """
 
 
@@ -254,6 +255,76 @@ class PriyaRealEstateAgent(Agent):
             return "Lead marked as interested. You should continue talking and guide them towards a site visit."
         else:
             return "Lead marked as not interested. Acknowledge and politely end the call."
+
+    @function_tool(description="Send the Sai Complex project brochure, pricing details, or account statements to the customer via WhatsApp. Call this immediately when the customer requests details, brochure, pricing, or statement on WhatsApp.")
+    async def send_whatsapp_brochure(
+        self,
+        customer_name: str,
+        phone_number: str,
+        media_url: str = None
+    ) -> str:
+        logger.info("=" * 60)
+        logger.info("📱 [SENDING WHATSAPP BROCHURE / DOCUMENT]")
+        logger.info(f"👤 Client Name     : {customer_name}")
+        logger.info(f"📞 Phone Number    : {phone_number}")
+        logger.info(f"📄 Media URL       : {media_url}")
+        logger.info("=" * 60)
+
+        # Standardize phone number format
+        clean_phone = phone_number.strip().replace(" ", "").replace("-", "")
+        if not clean_phone.startswith("+"):
+            if len(clean_phone) == 10:
+                clean_phone = "+91" + clean_phone
+            else:
+                clean_phone = "+" + clean_phone
+
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        api_key_sid = os.getenv("TWILIO_API_KEY_SID")
+        api_key_secret = os.getenv("TWILIO_API_KEY_SECRET")
+        
+        from_number = os.getenv("TWILIO_WHATSAPP_SENDER", "whatsapp:+14155238886")
+        
+        # If a media URL is provided (like the statement PDF), send a tailored statement message
+        if media_url and ("statement" in media_url.lower() or "paradise" in media_url.lower() or "yashraj" in media_url.lower()):
+            message_body = (
+                f"Namaste {customer_name},\n\n"
+                "As requested, here is your requested Payment & Account Statement for *Yashraj Paradise*.\n\n"
+                "You can view and download the PDF document attached below. Have a nice day!"
+            )
+        else:
+            message_body = (
+                f"Namaste {customer_name},\n\n"
+                "Thank you for speaking with Gayatri at Shiv Sai Construction.\n"
+                "As requested, here are the brochure and pricing details for *Sai Complex*, Dombivli East:\n\n"
+                "📍 *Location*: Palava Road, near Pratik Green, Dombivli East\n"
+                "💰 *Pricing*:\n"
+                "• 1 BHK: Starts at 36 Lakh\n"
+                "• 2 BHK: Starts at 72 Lakh\n\n"
+                "📄 *Brochure PDF*: https://sai-complex.com/brochure.pdf\n\n"
+                "If you have any questions, reply to this message. Have a nice day!"
+            )
+
+        try:
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+            data = {
+                "From": from_number,
+                "To": f"whatsapp:{clean_phone}",
+                "Body": message_body
+            }
+            if media_url:
+                data["MediaUrl"] = media_url
+                
+            r = requests.post(url, data=data, auth=(api_key_sid, api_key_secret), timeout=10)
+            
+            if r.status_code in [200, 201]:
+                logger.info(f"✅ WhatsApp document successfully sent to {clean_phone} via Twilio.")
+                return "Maine WhatsApp par details aur document send kar diya hai."
+            else:
+                logger.error(f"❌ Twilio WhatsApp Send Failed (Status {r.status_code}): {r.text}")
+                return "WhatsApp send failed. Please check the Twilio account credentials or logs."
+        except Exception as e:
+            logger.error(f"❌ Error sending WhatsApp: {e}")
+            return f"Error sending WhatsApp: {e}"
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
