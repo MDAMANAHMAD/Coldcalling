@@ -122,6 +122,8 @@ HINDI_REAL_ESTATE_PROMPT = """# IDENTITY & GREETING FLOW
 - **Objection - Details First**: Offer WhatsApp brochure. Invite to actual site layout.
 - **Booking CTA**: "Aap chahein toh... ek short site visit karke actual layout aur location dekh sakte hain. Kal convenient rahega... ya weekend better rahega?"
   - **Action**: When a preferred day/time is specified, immediately run the `schedule_site_visit` tool.
+  - **Action**: If the client expresses clear interest (e.g., "Haan details send karo", "I am interested", "Haan book kar do" or gives general positive response), immediately call `update_lead_status` with `status="interested"`.
+  - **Action**: If the client explicitly says they are not interested (e.g., "Mujhe nahi chahiye", "No interest", "Not interested"), immediately call `update_lead_status` with `status="not_interested"` and politely end the call.
 """
 
 
@@ -220,6 +222,38 @@ class PriyaRealEstateAgent(Agent):
 
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
+
+    @function_tool(description="Update the client's lead status based on their interest. Call this immediately to log if the client is interested in the property/buying, or if they explicitly state they are not interested.")
+    async def update_lead_status(
+        self,
+        customer_name: str,
+        status: str,  # "interested" or "not_interested"
+        notes: str = ""
+    ) -> str:
+        logger.info("=" * 60)
+        logger.info(f"📋 [LEAD STATUS UPDATED] -> {status.upper()}")
+        logger.info(f"👤 Client Name     : {customer_name}")
+        logger.info(f"📝 Notes           : {notes}")
+        logger.info("=" * 60)
+
+        record = {
+            "customer_name": customer_name,
+            "status": status,
+            "notes": notes,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+        try:
+            os.makedirs("bookings", exist_ok=True)
+            with open("bookings/property_visits.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to save lead status record: {e}")
+
+        if status == "interested":
+            return "Lead marked as interested. You should continue talking and guide them towards a site visit."
+        else:
+            return "Lead marked as not interested. Acknowledge and politely end the call."
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
