@@ -57,7 +57,7 @@ else:
 
 # 2. Benchmark Google Gemini
 if google_key:
-    model_name = "gemini-2.5-flash"
+    model_name = "gemini-3.6-flash"
     print(f"\n⚡ [Google Gemini] Testing '{model_name}' via LiveKit Plugin...")
     t0 = time.perf_counter()
     try:
