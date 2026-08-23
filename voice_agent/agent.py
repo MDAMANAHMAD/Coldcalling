@@ -258,7 +258,7 @@ if is_main_process:
         except Exception as e:
             logger.warning(f"Could not remove stale active call lock: {e}")
 
-SELECTED_MODEL = "gemini-3.6-flash" # default fallback
+SELECTED_MODEL = "gemini-3.5-flash-lite" # default fallback
 SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
 if os.getenv("SAMBANOVA_API_KEY"):
     SELECTED_GROQ_MODEL = "gpt-oss-120b"
@@ -447,7 +447,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
 elif global_google_key:
     from livekit.plugins import google
     
-    preferred_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash"]
+    preferred_models = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
     if os.path.exists("bookings/active_call.lock"):
