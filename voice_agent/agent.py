@@ -260,6 +260,8 @@ if is_main_process:
 
 SELECTED_MODEL = "gemini-3.6-flash" # default fallback
 SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
+if os.getenv("SAMBANOVA_API_KEY"):
+    SELECTED_GROQ_MODEL = "Meta-Llama-3.1-8B-Instruct"
 global_llm = None
 global_llm_compiled = False
 
@@ -273,10 +275,71 @@ if cached_model or cached_groq_model:
     logger.info(f"💾 [IMPORT TIME] Loaded cached models: Gemini={SELECTED_MODEL}, Groq={SELECTED_GROQ_MODEL}")
 
 logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
+global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 
-if global_groq_key and global_groq_key.startswith("gsk_"):
+if global_sambanova_key:
+    from livekit.plugins import openai as lk_openai
+    preferred_samba_models = [
+        "Meta-Llama-3.1-8B-Instruct",
+        "Meta-Llama-3.3-70B-Instruct",
+        "Meta-Llama-3.1-70B-Instruct"
+    ]
+    
+    # If a call is active, skip verification compilation and use cached/default model immediately
+    if os.path.exists("bookings/active_call.lock"):
+        logger.info(f"🔒 Active call detected during import. Selecting SambaNova model '{SELECTED_GROQ_MODEL}' without validation.")
+        global_llm = lk_openai.LLM(
+            base_url="https://api.sambanova.ai/v1",
+            model=SELECTED_GROQ_MODEL,
+            api_key=global_sambanova_key,
+            temperature=0.3
+        )
+    else:
+        try:
+            from livekit.agents import llm as agents_llm
+            agent_dummy = PriyaRealEstateAgent()
+            agent_tools_dummy = agent_dummy.tools
+            chat_ctx_dummy = agents_llm.ChatContext()
+            chat_ctx_dummy.add_message(role="user", content="hello")
+            
+            async def _test_compile_samba(llm_instance):
+                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                async for chunk in chat_stream:
+                    break
+
+            try:
+                loop_static = asyncio.get_event_loop()
+            except RuntimeError:
+                loop_static = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_static)
+
+            for model_name in preferred_samba_models:
+                try:
+                    logger.info(f"Trying to initialize and compile SambaNova model '{model_name}'...")
+                    candidate_llm = lk_openai.LLM(
+                        base_url="https://api.sambanova.ai/v1",
+                        model=model_name,
+                        api_key=global_sambanova_key,
+                        temperature=0.3
+                    )
+                    
+                    # Verify schema compilation works
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_samba(candidate_llm), timeout=5.0))
+                    
+                    global_llm = candidate_llm
+                    SELECTED_GROQ_MODEL = model_name
+                    global_llm_compiled = True
+                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] SambaNova model '{model_name}' successfully compiled and selected!")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to initialize/compile SambaNova model '{model_name}': {e}")
+        except Exception as outer_err:
+            logger.warning(f"SambaNova LLM selector setup failed: {outer_err}")
+
+elif global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
         "openai/gpt-oss-20b",
