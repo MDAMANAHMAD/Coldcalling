@@ -58,26 +58,45 @@ else:
 # 2. Benchmark Google Gemini
 if google_key:
     model_name = "gemini-1.5-flash"
-    print(f"\n⚡ [Google Gemini] Testing '{model_name}' via SDK...")
+    print(f"\n⚡ [Google Gemini] Testing '{model_name}' via LiveKit Plugin...")
     t0 = time.perf_counter()
     try:
-        import google.generativeai as legacy_genai
-        legacy_genai.configure(api_key=google_key)
-        model = legacy_genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=HINDI_REAL_ESTATE_PROMPT
+        from livekit.plugins import google as lk_google
+        from livekit.agents import llm as agents_llm
+        import asyncio
+        
+        llm_instance = lk_google.LLM(
+            model=model_name,
+            api_key=google_key,
+            temperature=0.3
         )
-        response = model.generate_content(
-            "Haan boliye, kya project hai?",
-            generation_config={"temperature": 0.3, "max_output_tokens": 150}
-        )
+        
+        chat_ctx = agents_llm.ChatContext()
+        chat_ctx.add_message(role="system", content=HINDI_REAL_ESTATE_PROMPT)
+        chat_ctx.add_message(role="user", content="Haan boliye, kya project hai?")
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+        async def _run_gemini():
+            chat_stream = llm_instance.chat(chat_ctx=chat_ctx)
+            full_text = ""
+            async for chunk in chat_stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    full_text += chunk.choices[0].delta.content
+            return full_text
+
+        response_text = loop.run_until_complete(_run_gemini())
         dt = time.perf_counter() - t0
         print(f"  Status: Success | Time: {dt:.3f} seconds")
-        print(f"  Response: '{response.text.strip()[:80]}...'")
+        print(f"  Response: '{response_text.strip()[:80]}...'")
         results["Gemini"] = dt
     except Exception as e:
-        print(f"  ❌ SDK Error: {e}")
-        results["Gemini"] = "SDK Error"
+        print(f"  ❌ LiveKit Plugin Error: {e}")
+        results["Gemini"] = "LiveKit Plugin Error"
 else:
     print("\n[Google Gemini] Key not set in .env")
     results["Gemini"] = "Key not set"
