@@ -293,8 +293,7 @@ if global_sambanova_key:
             base_url="https://api.sambanova.ai/v1",
             model=SELECTED_GROQ_MODEL,
             api_key=global_sambanova_key,
-            temperature=0.3,
-            max_tokens=150
+            temperature=0.3
         )
     else:
         try:
@@ -322,8 +321,7 @@ if global_sambanova_key:
                         base_url="https://api.sambanova.ai/v1",
                         model=model_name,
                         api_key=global_sambanova_key,
-                        temperature=0.3,
-                        max_tokens=150
+                        temperature=0.3
                     )
                     
                     # Verify schema compilation works
@@ -357,8 +355,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
             base_url="https://api.groq.com/openai/v1",
             model=SELECTED_GROQ_MODEL,
             api_key=global_groq_key,
-            temperature=0.3,
-            max_tokens=150
+            temperature=0.3
         )
     else:
         try:
@@ -386,8 +383,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                         base_url="https://api.groq.com/openai/v1",
                         model=model_name,
                         api_key=global_groq_key,
-                        temperature=0.3,
-                        max_tokens=150
+                        temperature=0.3
                     )
                     
                     # Verify schema compilation works
@@ -407,11 +403,11 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
                     from livekit.plugins import google
                     global_llm = google.LLM(
-                        model="gemini-3.6-flash",
+                        model="gemini-3.5-flash-lite",
                         api_key=global_google_key,
                         temperature=0.3
                     )
-                    SELECTED_MODEL = "gemini-3.6-flash"
+                    SELECTED_MODEL = "gemini-3.5-flash-lite"
                     SELECTED_GROQ_MODEL = None
                 else:
                     logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
@@ -419,8 +415,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                         base_url="https://api.groq.com/openai/v1",
                         model="llama-3.3-70b-versatile",
                         api_key=global_groq_key,
-                        temperature=0.3,
-                        max_tokens=150
+                        temperature=0.3
                     )
                     SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
         except Exception as outer_err:
@@ -428,11 +423,11 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                 logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
                 from livekit.plugins import google
                 global_llm = google.LLM(
-                    model="gemini-3.6-flash",
+                    model="gemini-3.5-flash-lite",
                     api_key=global_google_key,
                     temperature=0.3
                 )
-                SELECTED_MODEL = "gemini-3.6-flash"
+                SELECTED_MODEL = "gemini-3.5-flash-lite"
                 SELECTED_GROQ_MODEL = None
             else:
                 logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
@@ -440,8 +435,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     base_url="https://api.groq.com/openai/v1",
                     model="llama-3.3-70b-versatile",
                     api_key=global_groq_key,
-                    temperature=0.3,
-                    max_tokens=150
+                    temperature=0.3
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 elif global_google_key:
@@ -744,16 +738,14 @@ async def entrypoint(ctx: JobContext):
                 base_url="https://api.sambanova.ai/v1",
                 model=SELECTED_GROQ_MODEL,
                 api_key=sambanova_key,
-                temperature=0.3,
-                max_tokens=150
+                temperature=0.3
             )
         elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
                 api_key=groq_key,
-                temperature=0.3,
-                max_tokens=150
+                temperature=0.3
             )
         elif google_key:
             from livekit.plugins import google
