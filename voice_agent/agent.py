@@ -279,7 +279,7 @@ global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 
-if global_sambanova_key:
+if global_sambanova_key and False:  # Disabled as per user request (unbilled)
     from livekit.plugins import openai as lk_openai
     preferred_samba_models = [
         "gpt-oss-120b",
@@ -733,14 +733,7 @@ async def entrypoint(ctx: JobContext):
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
         
-        if sambanova_key and SELECTED_GROQ_MODEL:
-            llm = openai.LLM(
-                base_url="https://api.sambanova.ai/v1",
-                model=SELECTED_GROQ_MODEL,
-                api_key=sambanova_key,
-                temperature=0.3
-            )
-        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
+        if groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
@@ -752,6 +745,13 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
+                temperature=0.3
+            )
+        elif sambanova_key and SELECTED_GROQ_MODEL:
+            llm = openai.LLM(
+                base_url="https://api.sambanova.ai/v1",
+                model=SELECTED_GROQ_MODEL,
+                api_key=sambanova_key,
                 temperature=0.3
             )
         ctx.proc.userdata["llm"] = llm
