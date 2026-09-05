@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# bookings cache and locks
+bookings/model_cache.json
+bookings/*.lock
