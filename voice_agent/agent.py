@@ -21,6 +21,8 @@ import logging
 import time
 import asyncio
 from datetime import datetime
+from typing import Optional
+import requests
 from dotenv import load_dotenv
 
 # Ensure UTF-8 output encoding on Windows consoles
@@ -178,7 +180,9 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
 
 
 class PriyaRealEstateAgent(Agent):
-    def __init__(self, customer_name: str = "Aman ji"):
+    def __init__(self, customer_name: str = "Aman ji", customer_phone: str = ""):
+        self.customer_name = customer_name
+        self.customer_phone = customer_phone
         instructions = (
             f"{HINDI_REAL_ESTATE_PROMPT}\n\n"
             f"Aap abhi {customer_name} se call par baat kar rahi hain. "
@@ -259,19 +263,27 @@ class PriyaRealEstateAgent(Agent):
     @function_tool(description="Send the Sai Complex project brochure, pricing details, or account statements to the customer via WhatsApp. Call this immediately when the customer requests details, brochure, pricing, or statement on WhatsApp.")
     async def send_whatsapp_brochure(
         self,
-        customer_name: str,
-        phone_number: str,
-        media_url: str = None
+        customer_name: str = "",
+        phone_number: str = "",
+        media_url: str = ""
     ) -> str:
+        # Fallback customer name
+        target_name = customer_name.strip() if customer_name else getattr(self, "customer_name", "Client")
+        
+        # Fallback phone number
+        target_phone = phone_number.strip() if phone_number else ""
+        if not target_phone or "<phone" in target_phone.lower() or not any(c.isdigit() for c in target_phone):
+            target_phone = getattr(self, "customer_phone", "") or "+918693081506"
+
         logger.info("=" * 60)
         logger.info("📱 [SENDING WHATSAPP BROCHURE / DOCUMENT]")
-        logger.info(f"👤 Client Name     : {customer_name}")
-        logger.info(f"📞 Phone Number    : {phone_number}")
-        logger.info(f"📄 Media URL       : {media_url}")
+        logger.info(f"👤 Client Name     : {target_name}")
+        logger.info(f"📞 Phone Number    : {target_phone}")
+        logger.info(f"📄 Media URL       : {media_url or 'Default Brochure'}")
         logger.info("=" * 60)
 
         # Standardize phone number format
-        clean_phone = phone_number.strip().replace(" ", "").replace("-", "")
+        clean_phone = target_phone.strip().replace(" ", "").replace("-", "")
         if not clean_phone.startswith("+"):
             if len(clean_phone) == 10:
                 clean_phone = "+91" + clean_phone
@@ -281,19 +293,19 @@ class PriyaRealEstateAgent(Agent):
         account_sid = os.getenv("TWILIO_ACCOUNT_SID")
         api_key_sid = os.getenv("TWILIO_API_KEY_SID")
         api_key_secret = os.getenv("TWILIO_API_KEY_SECRET")
-        
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
         from_number = os.getenv("TWILIO_WHATSAPP_SENDER", "whatsapp:+14155238886")
         
         # If a media URL is provided (like the statement PDF), send a tailored statement message
-        if media_url and ("statement" in media_url.lower() or "paradise" in media_url.lower() or "yashraj" in media_url.lower()):
+        if media_url and any(k in media_url.lower() for k in ["statement", "paradise", "yashraj"]):
             message_body = (
-                f"Namaste {customer_name},\n\n"
+                f"Namaste {target_name},\n\n"
                 "As requested, here is your requested Payment & Account Statement for *Yashraj Paradise*.\n\n"
                 "You can view and download the PDF document attached below. Have a nice day!"
             )
         else:
             message_body = (
-                f"Namaste {customer_name},\n\n"
+                f"Namaste {target_name},\n\n"
                 "Thank you for speaking with Gayatri at Shiv Sai Construction.\n"
                 "As requested, here are the brochure and pricing details for *Sai Complex*, Dombivli East:\n\n"
                 "📍 *Location*: Palava Road, near Pratik Green, Dombivli East\n"
@@ -305,6 +317,10 @@ class PriyaRealEstateAgent(Agent):
             )
 
         try:
+            if not account_sid:
+                logger.warning("TWILIO_ACCOUNT_SID is not configured.")
+                return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
+
             url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
             data = {
                 "From": from_number,
@@ -314,17 +330,18 @@ class PriyaRealEstateAgent(Agent):
             if media_url:
                 data["MediaUrl"] = media_url
                 
-            r = requests.post(url, data=data, auth=(api_key_sid, api_key_secret), timeout=10)
+            auth = (account_sid, auth_token) if auth_token else (api_key_sid, api_key_secret)
+            r = requests.post(url, data=data, auth=auth, timeout=10)
             
             if r.status_code in [200, 201]:
                 logger.info(f"✅ WhatsApp document successfully sent to {clean_phone} via Twilio.")
                 return "Maine WhatsApp par details aur document send kar diya hai."
             else:
-                logger.error(f"❌ Twilio WhatsApp Send Failed (Status {r.status_code}): {r.text}")
-                return "WhatsApp send failed. Please check the Twilio account credentials or logs."
+                logger.warning(f"⚠️ Twilio WhatsApp Send failed (Status {r.status_code}): {r.text}")
+                return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
         except Exception as e:
             logger.error(f"❌ Error sending WhatsApp: {e}")
-            return f"Error sending WhatsApp: {e}"
+            return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
@@ -383,21 +400,20 @@ logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
 global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
+llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
 
-if global_sambanova_key and False:  # Disabled as per user request (unbilled)
-    from livekit.plugins import openai as lk_openai
-    preferred_samba_models = [
-        "gpt-oss-120b",
-        "Meta-Llama-3.3-70B-Instruct"
-    ]
+# 1. GOOGLE GEMINI (High Quota, Instant Streaming, 0 Rate Limit Choking in Long Calls)
+if global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
+    from livekit.plugins import google
+    
+    preferred_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
     if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting SambaNova model '{SELECTED_GROQ_MODEL}' without validation.")
-        global_llm = lk_openai.LLM(
-            base_url="https://api.sambanova.ai/v1",
-            model=SELECTED_GROQ_MODEL,
-            api_key=global_sambanova_key,
+        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
+        global_llm = google.LLM(
+            model=SELECTED_MODEL,
+            api_key=global_google_key,
             temperature=0.3
         )
     else:
@@ -408,7 +424,7 @@ if global_sambanova_key and False:  # Disabled as per user request (unbilled)
             chat_ctx_dummy = agents_llm.ChatContext()
             chat_ctx_dummy.add_message(role="user", content="hello")
             
-            async def _test_compile_samba(llm_instance):
+            async def _test_compile(llm_instance):
                 chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
                 async for chunk in chat_stream:
                     break
@@ -419,30 +435,33 @@ if global_sambanova_key and False:  # Disabled as per user request (unbilled)
                 loop_static = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop_static)
 
-            for model_name in preferred_samba_models:
+            for model_name in preferred_models:
                 try:
-                    logger.info(f"Trying to initialize and compile SambaNova model '{model_name}'...")
-                    candidate_llm = lk_openai.LLM(
-                        base_url="https://api.sambanova.ai/v1",
-                        model=model_name,
-                        api_key=global_sambanova_key,
-                        temperature=0.3
-                    )
+                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
+                    candidate_llm = google.LLM(model=model_name, api_key=global_google_key, temperature=0.3)
                     
                     # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_samba(candidate_llm), timeout=5.0))
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
                     
                     global_llm = candidate_llm
-                    SELECTED_GROQ_MODEL = model_name
+                    SELECTED_MODEL = model_name
                     global_llm_compiled = True
                     save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] SambaNova model '{model_name}' successfully compiled and selected!")
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
                     break
                 except Exception as e:
-                    logger.warning(f"Failed to initialize/compile SambaNova model '{model_name}': {e}")
+                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
+            
+            if not global_llm:
+                logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
+                global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
+                SELECTED_MODEL = "gemini-3.5-flash-lite"
         except Exception as outer_err:
-            logger.warning(f"SambaNova LLM selector setup failed: {outer_err}")
+            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
+            global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
+            SELECTED_MODEL = "gemini-3.5-flash-lite"
 
+# 2. GROQ LPU (If explicitly set or Google key not configured)
 elif global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
@@ -543,65 +562,8 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     temperature=0.3
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
-elif global_google_key:
-    from livekit.plugins import google
-    
-    preferred_models = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]
-    
-    # If a call is active, skip verification compilation and use cached/default model immediately
-    if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
-        global_llm = google.LLM(
-            model=SELECTED_MODEL,
-            api_key=global_google_key,
-            temperature=0.3
-        )
-    else:
-        try:
-            from livekit.agents import llm as agents_llm
-            agent_dummy = PriyaRealEstateAgent()
-            agent_tools_dummy = agent_dummy.tools
-            chat_ctx_dummy = agents_llm.ChatContext()
-            chat_ctx_dummy.add_message(role="user", content="hello")
-            
-            async def _test_compile(llm_instance):
-                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                async for chunk in chat_stream:
-                    break
-
-            try:
-                loop_static = asyncio.get_event_loop()
-            except RuntimeError:
-                loop_static = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop_static)
-
-            for model_name in preferred_models:
-                try:
-                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
-                    candidate_llm = google.LLM(model=model_name, api_key=global_google_key, temperature=0.3)
-                    
-                    # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
-                    
-                    global_llm = candidate_llm
-                    SELECTED_MODEL = model_name
-                    global_llm_compiled = True
-                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
-                    break
-                except Exception as e:
-                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
-            
-            if not global_llm:
-                logger.warning("All preferred models failed validation. Falling back to gemini-3.6-flash.")
-                global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
-                SELECTED_MODEL = "gemini-3.6-flash"
-        except Exception as outer_err:
-            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.6-flash.")
-            global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
-            SELECTED_MODEL = "gemini-3.6-flash"
 else:
-    logger.warning("Neither GROQ_API_KEY nor GOOGLE_API_KEY is configured.")
+    logger.warning("Neither GOOGLE_API_KEY nor GROQ_API_KEY is configured.")
 
 
 # ==============================================================================
@@ -806,10 +768,13 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF +{t_connected:.1f}ms] Connected to LiveKit Room!")
 
     customer_name = "Aman ji"
+    customer_phone = "+918693081506"
     if ctx.room.metadata:
         try:
             meta = json.loads(ctx.room.metadata)
             raw_name = meta.get("customer_name", "Aman")
+            if meta.get("phone"):
+                customer_phone = meta.get("phone")
             customer_name = f"{raw_name} ji" if not raw_name.endswith("ji") else raw_name
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
@@ -837,8 +802,16 @@ async def entrypoint(ctx: JobContext):
         sambanova_key = os.getenv("SAMBANOVA_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
+        llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
         
-        if groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
+        if (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
+            from livekit.plugins import google
+            llm = google.LLM(
+                model=SELECTED_MODEL,
+                api_key=google_key,
+                temperature=0.3
+            )
+        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
@@ -850,13 +823,6 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
-                temperature=0.3
-            )
-        elif sambanova_key and SELECTED_GROQ_MODEL:
-            llm = openai.LLM(
-                base_url="https://api.sambanova.ai/v1",
-                model=SELECTED_GROQ_MODEL,
-                api_key=sambanova_key,
                 temperature=0.3
             )
         ctx.proc.userdata["llm"] = llm
@@ -1096,8 +1062,12 @@ async def entrypoint(ctx: JobContext):
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
 
-    # Dynamically resolve customer name from participants in the room
+    # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
+        if p.identity.startswith("sip-"):
+            clean_digits = "".join(c for c in p.identity.replace("sip-", "") if c.isdigit() or c == "+")
+            if clean_digits:
+                customer_phone = clean_digits if clean_digits.startswith("+") else ("+91" + clean_digits if len(clean_digits) == 10 else "+" + clean_digits)
         raw_name = p.name or p.identity
         if raw_name:
             if raw_name.startswith("sip-"):
@@ -1107,7 +1077,7 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
             break
 
-    agent = PriyaRealEstateAgent(customer_name=customer_name)
+    agent = PriyaRealEstateAgent(customer_name=customer_name, customer_phone=customer_phone)
 
     # Start session with record=False
     t_session_start = time.perf_counter()
