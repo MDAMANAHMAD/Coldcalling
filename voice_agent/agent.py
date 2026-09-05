@@ -962,8 +962,13 @@ async def entrypoint(ctx: JobContext):
             duration_minutes = duration_seconds / 60.0
             
             # Determine which LLM was used
-            llm_name = llm.__class__.__name__.lower()
-            if "openai" in llm_name:
+            current_provider = os.getenv("LLM_PROVIDER", "").strip().lower()
+            if current_provider in ["fireworks", "fw"]:
+                # Fireworks AI gpt-oss-120b rates (~$0.20 per 1M tokens)
+                input_rate = (0.20 * 83.5) / 1000000.0
+                output_rate = (0.20 * 83.5) / 1000000.0
+                brain_name = f"Fireworks AI ({SELECTED_MODEL.split('/')[-1] if '/' in SELECTED_MODEL else SELECTED_MODEL})"
+            elif current_provider == "groq" or (groq_key and groq_key.startswith("gsk_") and "openai" in llm.__class__.__module__.lower()):
                 # Groq Rates
                 input_rate = (0.59 * 83.5) / 1000000.0  # cost per token
                 output_rate = (0.79 * 83.5) / 1000000.0
@@ -972,7 +977,7 @@ async def entrypoint(ctx: JobContext):
                 # Gemini Rates
                 input_rate = (0.075 * 83.5) / 1000000.0
                 output_rate = (0.30 * 83.5) / 1000000.0
-                brain_name = "Google Gemini 1.5"
+                brain_name = f"Google Gemini ({SELECTED_MODEL})"
                 
             cost_vobiz = duration_minutes * 0.40
             cost_cartesia = characters_spoken * 0.00163
