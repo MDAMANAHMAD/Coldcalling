@@ -912,7 +912,6 @@ async def entrypoint(ctx: JobContext):
         vad=vad,
         turn_handling={
             "turn_detection": None,
-            "preemptive_generation": True,
             "endpointing": {
                 "mode": "fixed",
                 "min_delay": 0.05,
