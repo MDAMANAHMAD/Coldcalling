@@ -686,7 +686,7 @@ def prewarm_fnc(proc: JobProcess):
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
-            voice="0e3194d6-f1c8-490b-bf6f-149a45437d26",  # Custom Cloned Voice
+            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
             language="hi",
             sample_rate=24000,
             model="sonic-3.5"
@@ -867,10 +867,10 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
         cartesia_key = os.getenv("CARTESIA_API_KEY")
         if cartesia_key and len(cartesia_key) > 10:
-            logger.info("Initializing Cartesia TTS as Primary with Custom Cloned Voice...")
+            logger.info("Initializing Cartesia TTS as Primary with Kusha Cloned Voice...")
             tts = cartesia.TTS(
                 api_key=cartesia_key,
-                voice="0e3194d6-f1c8-490b-bf6f-149a45437d26",  # Custom Cloned Voice
+                voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
                 language="hi",
                 sample_rate=24000,
                 model="sonic-3.5"
@@ -908,10 +908,10 @@ async def entrypoint(ctx: JobContext):
     is_cartesia = tts and "cartesia" in tts.__class__.__module__
     if is_cartesia and hasattr(tts, "update_options"):
         tts.update_options(
-            voice="0e3194d6-f1c8-490b-bf6f-149a45437d26",  # Custom Cloned Voice
+            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
             language="hi"
         )
-        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Custom Cloned Voice.")
+        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Kusha Cloned Voice.")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
@@ -1057,16 +1057,16 @@ async def entrypoint(ctx: JobContext):
                         logger.info("🔄 Switched TTS to Marathi (Anika)")
                     elif current_lang == "en":
                         session.tts.update_options(
-                            voice="0e3194d6-f1c8-490b-bf6f-149a45437d26",  # Custom Cloned Voice
+                            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
                             language="en"
                         )
-                        logger.info("🔄 Switched TTS to English (Custom Cloned Voice)")
+                        logger.info("🔄 Switched TTS to English (Kusha Cloned Voice)")
                     else:
                         session.tts.update_options(
-                            voice="0e3194d6-f1c8-490b-bf6f-149a45437d26",  # Custom Cloned Voice
+                            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
                             language="hi"
                         )
-                        logger.info("🔄 Switched TTS to Hindi (Custom Cloned Voice)")
+                        logger.info("🔄 Switched TTS to Hindi (Kusha Cloned Voice)")
 
     @session.on("conversation_item_added")
     def on_item_added(item):
