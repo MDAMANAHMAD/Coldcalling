@@ -26,8 +26,11 @@ from dotenv import load_dotenv
 from livekit import api
 from livekit.protocol.sip import CreateSIPParticipantRequest
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (support root or voice_agent directory)
+if os.path.exists("voice_agent/.env"):
+    load_dotenv("voice_agent/.env")
+else:
+    load_dotenv()
 
 # Logger setup
 logging.basicConfig(
