@@ -413,7 +413,8 @@ if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
         base_url="https://api.fireworks.ai/inference/v1",
         model=fw_model,
         api_key=global_fireworks_key,
-        temperature=0.3
+        temperature=0.3,
+        reasoning_effort="low"
     )
     SELECTED_MODEL = fw_model
     global_llm_compiled = True
@@ -641,21 +642,21 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (80ms cutoff for ultra-low latency)
+    # 2. Pre-warm Deepgram Nova-2 STT (30ms cutoff for ultra-fast turn taking)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=80,
+        endpointing_ms=30,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (fast 180ms silence detection)
+    # 3. Pre-warm Silero VAD (ultra-fast 120ms silence detection)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.18,
-        min_speech_duration=0.06,
+        min_silence_duration=0.12,
+        min_speech_duration=0.05,
         sample_rate=8000
     )
 
@@ -806,7 +807,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=80,
+            endpointing_ms=30,
             smart_format=True,
             api_key=deepgram_key
         )
@@ -827,7 +828,8 @@ async def entrypoint(ctx: JobContext):
                 base_url="https://api.fireworks.ai/inference/v1",
                 model=fw_model,
                 api_key=fireworks_key,
-                temperature=0.3
+                temperature=0.3,
+                reasoning_effort="low"
             )
         elif (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
             from livekit.plugins import google
@@ -890,8 +892,8 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.18,
-            min_speech_duration=0.06,
+            min_silence_duration=0.12,
+            min_speech_duration=0.05,
             sample_rate=8000
         )
     
@@ -914,7 +916,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": None,
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.05,
+                "min_delay": 0.02,
             },
             "interruption": {
                 "enabled": True,
@@ -1015,18 +1017,47 @@ async def entrypoint(ctx: JobContext):
             logger.error(f"Failed to record call billing: {e}")
 
     from livekit.agents.voice import UserInputTranscribedEvent
+    from livekit.agents.voice.events import UserStateChangedEvent, AgentStateChangedEvent
 
+    t_user_stop = 0.0
+    turn_counter = 0
 
+    @session.on("user_state_changed")
+    def _on_user_state_changed(ev: UserStateChangedEvent):
+        nonlocal t_user_stop
+        try:
+            if ev.old_state == "speaking" and ev.new_state == "listening":
+                t_user_stop = time.perf_counter()
+                logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
+        except Exception as err:
+            logger.debug(f"User state changed error: {err}")
 
-
+    @session.on("agent_state_changed")
+    def _on_agent_state_changed(ev: AgentStateChangedEvent):
+        nonlocal t_user_stop, turn_counter
+        try:
+            if ev.new_state == "speaking" and t_user_stop > 0:
+                elapsed_ms = (time.perf_counter() - t_user_stop) * 1000
+                turn_counter += 1
+                logger.info(
+                    f"⚡⚡⚡ [TURN {turn_counter} RESPONSE LATENCY] "
+                    f"User stopped speaking -> Agent began speaking: {elapsed_ms:.1f}ms ({elapsed_ms/1000.0:.2f}s) 🚀"
+                )
+                t_user_stop = 0.0
+        except Exception as err:
+            logger.debug(f"Agent state changed error: {err}")
 
     current_lang = "hi"
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
-        nonlocal current_lang
+        nonlocal current_lang, t_user_stop
         if ev.transcript:
-            logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
+            if t_user_stop > 0:
+                transcribed_after = (time.perf_counter() - t_user_stop) * 1000
+                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{ev.transcript}'")
+            else:
+                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
             new_lang = current_lang
