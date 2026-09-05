@@ -407,7 +407,7 @@ llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
 # 0. FIREWORKS AI (Dedicated Voice AI Inference, Sub-100ms TTFT, High Quota)
 if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     from livekit.plugins import openai as lk_openai
-    fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p3-70b-instruct")
+    fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b")
     logger.info(f"🎆 [FIREWORKS AI] Selected model '{fw_model}' with sub-100ms streaming!")
     global_llm = lk_openai.LLM(
         base_url="https://api.fireworks.ai/inference/v1",
@@ -822,7 +822,7 @@ async def entrypoint(ctx: JobContext):
         llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
         
         if fireworks_key and llm_provider in ["fireworks", "fw"]:
-            fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p3-70b-instruct")
+            fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b")
             llm = openai.LLM(
                 base_url="https://api.fireworks.ai/inference/v1",
                 model=fw_model,
