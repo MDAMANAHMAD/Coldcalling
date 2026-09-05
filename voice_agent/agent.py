@@ -59,6 +59,7 @@ from livekit.plugins import deepgram, openai, elevenlabs, cartesia
 from livekit import rtc
 
 # Load environment variables
+load_dotenv("voice_agent/.env")
 load_dotenv()
 
 # Configure structured logger
