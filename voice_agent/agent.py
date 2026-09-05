@@ -122,12 +122,11 @@ HINDI_REAL_ESTATE_PROMPT = """# IDENTITY & GREETING FLOW
 # OBJECTIONS & SITE VISIT BOOKING
 - **Objection - Price**: Premium materials used. Mention price is negotiable. Ask: "Kya kal visit par aakar baat karein?"
 - **Objection - Distance**: Explain walking distance metro and Nilje station connectivity.
-- **Objection - Details First**: Offer WhatsApp brochure or statements.
-- **Booking CTA**: "Aap chahein toh... ek short site visit karke actual layout aur location dekh sakte hain. Kal convenient rahega... ya weekend better rahega?"
-  - **Action**: When a preferred day/time is specified, immediately run the `schedule_site_visit` tool.
-  - **Action**: If the client expresses clear interest (e.g., "Haan details send karo", "I am interested", "Haan book kar do" or gives general positive response), immediately call `update_lead_status` with `status="interested"`.
-  - **Action**: If the client explicitly says they are not interested (e.g., "Mujhe nahi chahiye", "No interest", "Not interested"), immediately call `update_lead_status` with `status="not_interested"` and politely end the call.
-  - **Action**: If the client requests details, price list, brochure, or account statements on WhatsApp, immediately call the `send_whatsapp_brochure` tool.
+- **Objection - Details First**: Offer WhatsApp brochure.
+- **Booking CTA**: "Aap chahein toh ek short site visit karke actual layout dekh sakte hain. Kal convenient rahega ya weekend?"
+  - **Action - Schedule Site Visit**: When client mentions a day/date for visit (e.g. "Monday", "Kal", "Weekend"), call ONLY `schedule_site_visit`. This automatically marks the lead as interested in one fast step. NEVER call `update_lead_status` if scheduling a visit.
+  - **Action - Not Interested**: Call `update_lead_status(status="not_interested")` ONLY if the client explicitly refuses (e.g. "Nahi chahiye", "Not interested"), then politely end call.
+  - **Action - WhatsApp Brochure**: If client asks for WhatsApp brochure/pricing, call `send_whatsapp_brochure`.
 """
 
 
@@ -216,7 +215,8 @@ class PriyaRealEstateAgent(Agent):
             "flat_type": flat_type,
             "notes": notes,
             "timestamp": datetime.utcnow().isoformat(),
-            "status": "site_visit_confirmed"
+            "status": "site_visit_confirmed",
+            "lead_status": "interested"
         }
 
         try:
@@ -229,7 +229,7 @@ class PriyaRealEstateAgent(Agent):
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
-    @function_tool(description="Update the client's lead status based on their interest. Call this immediately to log if the client is interested in the property/buying, or if they explicitly state they are not interested.")
+    @function_tool(description="Update client's lead status to 'not_interested' or 'callback_later'. DO NOT call this tool if you are already scheduling a site visit.")
     async def update_lead_status(
         self,
         customer_name: str,
@@ -641,21 +641,21 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT
+    # 2. Pre-warm Deepgram Nova-2 STT (80ms cutoff for ultra-low latency)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=120,
+        endpointing_ms=80,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (optimized with 8kHz sample rate to cut CPU usage by 50%)
+    # 3. Pre-warm Silero VAD (fast 180ms silence detection)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.08,
+        min_silence_duration=0.18,
+        min_speech_duration=0.06,
         sample_rate=8000
     )
 
@@ -806,7 +806,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=120,
+            endpointing_ms=80,
             smart_format=True,
             api_key=deepgram_key
         )
@@ -890,8 +890,8 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.25,
-            min_speech_duration=0.08,
+            min_silence_duration=0.18,
+            min_speech_duration=0.06,
             sample_rate=8000
         )
     
@@ -910,17 +910,18 @@ async def entrypoint(ctx: JobContext):
         llm=llm,
         tts=tts,
         vad=vad,
+        preemptive_generation=True,
         turn_handling={
             "turn_detection": None,
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.1,
+                "min_delay": 0.05,
             },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.25,
+                "min_duration": 0.20,
                 "resume_false_interruption": True,
             }
         }
