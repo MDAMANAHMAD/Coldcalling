@@ -190,13 +190,13 @@ class PriyaRealEstateAgent(Agent):
         )
         super().__init__(instructions=instructions)
 
-    @function_tool(description="Schedule a free property site visit for the client. Call this only when the client agrees to a visit and specifies a preferred day/date.")
+    @function_tool(description="Schedule property site visit when client specifies a day/date.")
     async def schedule_site_visit(
         self,
         customer_name: str,
         preferred_day: str,
         preferred_time: str = "Not specified",
-        flat_type: str = "2BHK / 3BHK",
+        flat_type: str = "2BHK",
         notes: str = ""
     ) -> str:
         logger.info("=" * 60)
@@ -229,7 +229,7 @@ class PriyaRealEstateAgent(Agent):
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon."
 
-    @function_tool(description="Update client's lead status to 'not_interested' or 'callback_later'. DO NOT call this tool if you are already scheduling a site visit.")
+    @function_tool(description="Update lead status to 'not_interested' or 'callback_later'. Do NOT call if scheduling visit.")
     async def update_lead_status(
         self,
         customer_name: str,
@@ -261,7 +261,7 @@ class PriyaRealEstateAgent(Agent):
         else:
             return "Lead marked as not interested. Acknowledge and politely end the call."
 
-    @function_tool(description="Send the Sai Complex project brochure, pricing details, or account statements to the customer via WhatsApp. Call this immediately when the customer requests details, brochure, pricing, or statement on WhatsApp.")
+    @function_tool(description="Send Sai Complex brochure or pricing to client on WhatsApp.")
     async def send_whatsapp_brochure(
         self,
         customer_name: str = "",
@@ -1067,13 +1067,13 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("conversation_item_added")
     def on_item_added(item):
-        # Truncate context aggressively to stay under Groq's 8,000 TPM limit. Keep system prompt (index 0) and the last 6 messages (3 turns).
+        # Clamp context to keep TTFT under 1.0s. Keep system prompt (index 0) and the last 3 items.
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            if len(session._chat_ctx.items) > 7:
+            if len(session._chat_ctx.items) > 4:
                 sys_prompt = session._chat_ctx.items[0]
-                recent = session._chat_ctx.items[-6:]
+                recent = session._chat_ctx.items[-3:]
                 session._chat_ctx.items = [sys_prompt] + recent
-                logger.info(f"✂️ Context Truncated: Keeping system instructions + last 6 items (Total items: {len(session._chat_ctx.items)})")
+                logger.info(f"✂️ Context Truncated: Keeping system instructions + last 3 items (Total items: {len(session._chat_ctx.items)})")
 
     # Start session with record=False
     # Wait for the caller to join the room if not already present.
