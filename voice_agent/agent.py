@@ -400,10 +400,25 @@ logger.info("🔥 [IMPORT TIME] Instantiating LLM...")
 global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
+global_fireworks_key = os.getenv("FIREWORKS_API_KEY")
 llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
 
+# 0. FIREWORKS AI (Dedicated Voice AI Inference, Sub-100ms TTFT, High Quota)
+if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
+    from livekit.plugins import openai as lk_openai
+    fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p3-70b-instruct")
+    logger.info(f"🎆 [FIREWORKS AI] Selected model '{fw_model}' with sub-100ms streaming!")
+    global_llm = lk_openai.LLM(
+        base_url="https://api.fireworks.ai/inference/v1",
+        model=fw_model,
+        api_key=global_fireworks_key,
+        temperature=0.3
+    )
+    SELECTED_MODEL = fw_model
+    global_llm_compiled = True
+
 # 1. GOOGLE GEMINI (High Quota, Instant Streaming, 0 Rate Limit Choking in Long Calls)
-if global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
+elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
     from livekit.plugins import google
     
     preferred_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]
@@ -799,12 +814,21 @@ async def entrypoint(ctx: JobContext):
     llm = ctx.proc.userdata.get("llm")
     if not llm:
         logger.info("⏱️ [LLM] Initializing LLM dynamically on demand...")
+        fireworks_key = os.getenv("FIREWORKS_API_KEY")
         sambanova_key = os.getenv("SAMBANOVA_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
         llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
         
-        if (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
+        if fireworks_key and llm_provider in ["fireworks", "fw"]:
+            fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/llama-v3p3-70b-instruct")
+            llm = openai.LLM(
+                base_url="https://api.fireworks.ai/inference/v1",
+                model=fw_model,
+                api_key=fireworks_key,
+                temperature=0.3
+            )
+        elif (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
             from livekit.plugins import google
             llm = google.LLM(
                 model=SELECTED_MODEL,
