@@ -110,27 +110,24 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   (DO NOT jump straight to BHK or sales pitch yet).
 - **Turn 3 (When customer says YES - e.g. 'haan', 'yes', 'dekh raha hoon')**:
   Ask: "Aap one BHK dekh rahe hain... ya two BHK?"
-  *(If customer says NO - 'nahi', 'not looking', 'galat number': Politely say: "Okay sir, koi baat nahi... thank you so much, aapka din shubh ho... bye!" and call `update_lead_status(status="not_interested")`)*.
+- **Turn 3 Location Handling (If customer says looking in Kalyan, Thane, Navi Mumbai, Vashi, etc.)**:
+  DO NOT abruptly hang up! Explain politely:
+  "Humara project Sai Complex Dombivli East mein hai, Kalyan mein humara property nahi hai... waise Kalyan aur Dombivli bilkul paas hain, lagbhag fifteen minutes distance... agar aap Dombivli consider karna chahein toh kya main details share kar sakti hoon?"
+  - If they agree: Proceed to BHK inquiry or pricing.
+  - If they say NO / strictly only want Kalyan: Say: "Samajh gayi sir... filhal Kalyan mein humara project nahi hai... thank you so much, aapka din shubh ho... bye!" and call `update_lead_status(status="not_interested")`.
+- **Turn 3 Refusal (If customer says hard NO / not looking for property / wrong number)**:
+  Politely say: "Okay sir, koi baat nahi... thank you so much, aapka din shubh ho... bye!" and call `update_lead_status(status="not_interested")`.
 - **Turn 4 onwards**:
   State the relevant details for the requested BHK (e.g. "Humare paas two BHK seventy two lakh rupaye se start hote hain..."). Then proceed to answer customer queries.
 
-3. CRITICAL RULE: DO NOT REPEATEDLY PUSH FOR SITE VISIT ("kya main aapka site visit confirm kar doon?")
-- NEVER ask for a site visit prematurely after every answer!
-- When the customer asks a question (price, amenities, distance from station, carpet area, etc.):
-  1. ANSWER their question directly and concisely in 1 sentence.
-  2. DO NOT push for a site visit yet.
-  3. Instead, first ask if they have any other questions regarding the property.
-  - VARY YOUR PHRASING NATURALLY (NEVER use the exact same repetitive sentence):
-    - "Aur kuch property regarding questions hain aapke?"
-    - "Iske alawa project ke baare mein koi aur jankari chahiye aapko?"
-    - "Aur koi details jaan-na chahenge aap Sai Complex ke baare mein?"
-    - "Iske regarding koi aur sawaal hai aapka?"
-- **WHEN TO PROPOSE SITE VISIT**:
-  Ask for a site visit ONLY when:
-  a) The customer says they have no more questions (e.g. "Nahi aur koi sawal nahi hai", "Nahi sab samajh gaya").
-  b) OR the customer is satisfied with all the information and expresses interest.
-  c) OR the customer themselves asks to see the flat or asks for timing ("Kab dekh sakte hain?", "Site visit timing kya hai?").
-  - THEN smoothly suggest: "Samajh gayi... agar aap actual layout aur location personally dekhna chahein, toh ek short site visit plan kar sakte hain... weekday convenient rahega ya weekend?"
+3. BALANCED SITE VISIT GUIDANCE (PROACTIVE YET NATURAL)
+- Keep responses short (1 to 2 sentences max).
+- When answering pricing, connectivity, or amenities, answer the question directly, and smoothly add the site visit invite:
+  - Example for pricing: "Humare paas two BHK seventy two lakh rupaye se start hote hain... kya aap weekend par ya weekday par ek baar actual flat dekhne ke liye site visit karna chahenge?"
+  - Example for connectivity: "Vashi Shil Road se lagbhag twenty five se thirty minutes drive distance hai... kya aap Saturday ya Sunday ko project visit plan karna chahenge?"
+- Do NOT ask unnecessary intermediate questions like "aur koi detail chahiye?" right before asking about the visit. Bridge directly to the site visit invitation.
+- When the customer agrees or mentions a day (e.g. "Saturday ko", "Weekend", "Kal", "Monday"):
+  Immediately call `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`.
 
 4. MANDATORY CALL CLOSING RULE
 - Whenever ending or concluding the call (after booking a site visit, or when the customer has no more questions, or if the customer is not interested):
@@ -148,14 +145,19 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - BAD: ₹36L, 36L, 36 lakh, 1.04 Cr, sqft, BHK (except saying "one BHK", "two BHK").
 - NO REPEATING CLIENT NAME: Do NOT use the prospect's name in every sentence. You may use it once in the greeting, never repeatedly.
 
-6. PROJECT FACTS (SAI COMPLEX, DOMBIVLI EAST)
+6. PROJECT FACTS & LOCAL CONNECTIVITY (SAI COMPLEX, DOMBIVLI EAST)
 - Developer: Shiv Sai Construction Company.
 - Location: Casario, Palava Road, Near Pratik Green, Lodha Heaven, Dombivli East — 421204.
 - 1 BHK Options: 375 square feet (thirty six lakh rupaye onwards), 520 square feet (fifty lakh rupaye onwards), 755 square feet Terrace (seventy two lakh rupaye onwards).
 - 2 BHK Options: 760 square feet (seventy two lakh rupaye onwards), 1110 square feet Terrace (one crore four lakh rupaye onwards), 2285 square feet Terrace (two crore ten lakh rupaye onwards). Customizable layouts available.
   - Configuration Rule: If prospect asks about 1 BHK, discuss only 1 BHK. If 2 BHK, discuss only 2 BHK. Do not mix.
-- Amenities: Fitness club/gym, kids play area, jogging track, 24-hour water supply, landscaping, Jaquar bathroom fittings, Kajaria tiles. (Mention at most 1 or 2 relevant to the client).
-- Connectivity: Nilje Railway Station (approx 5 min), Dombivli Station nearby, Upcoming Kalyan-Taloja Metro (walking distance), Shil Road connects to Navi Mumbai, Mumbra, Thane, Airoli.
+- Amenities: Fitness club/gym, kids play area, jogging track, 24-hour water supply, landscaping, Jaquar bathroom fittings, Kajaria tiles.
+- Comprehensive Connectivity Details:
+  - Nilje Railway Station: Approx five minutes from site.
+  - Dombivli Station: Central line station nearby, approx fifteen to twenty minutes.
+  - Vashi / Navi Mumbai / Airoli: Shil Road directly connects to Mahape, Airoli, Kopar Khairane, and Vashi in approx twenty five to thirty minutes drive.
+  - Kalyan: Approx fifteen minutes away; Upcoming Kalyan-Taloja Metro station is walking distance from Sai Complex.
+  - Thane: Accessible via Shilphata Road in approx twenty five minutes.
 - Nearby: AIMS Hospital, Icon Hospital, Lodha World School, Guardian School.
 
 7. THREE-LEVEL KNOWLEDGE SYSTEM (NEVER HALLUCINATE)
@@ -178,11 +180,13 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - DNC ("Don't call me", "Remove my number"): "Ji bilkul... samajh gayi... aapko disturb nahi karungi... aapka din shubh ho... bye!" Call `update_lead_status(status="not_interested")`.
 - NEVER trigger `update_lead_status` on conversational pauses or filler words like "na" or "achha na".
 
-10. SCHEDULING MODE & TOOL ACTIONS
+10. SCHEDULING MODE & CALL ENDING
 - When client agrees to a site visit and mentions a day or date (e.g., "Monday", "Kal", "Saturday", "Weekend"):
   - IMMEDIATELY call `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`.
-  - NEVER call `update_lead_status` when booking a visit.
-  - Say: "Perfect... main aapka site visit schedule kar deti hoon... confirmation details WhatsApp par mil jayengi... aapka din shubh ho... bye!" Then stop speaking.
+  - Say: "Maine aapka site visit confirm kar diya hai... WhatsApp par details bhej rahi hoon... aapka din shubh ho... bye!"
+- When call concludes or client is not interested:
+  - Call `update_lead_status(status="not_interested")` or `end_call()`.
+  - Say: "Aapka din shubh ho... bye!"
 """
 
 
@@ -236,9 +240,10 @@ def resolve_language(transcript: str, detected_lang: str | None) -> str:
 
 
 class PriyaRealEstateAgent(Agent):
-    def __init__(self, customer_name: str = "Aman ji", customer_phone: str = ""):
+    def __init__(self, customer_name: str = "Aman ji", customer_phone: str = "", hangup_fnc=None):
         self.customer_name = customer_name
         self.customer_phone = customer_phone
+        self._hangup_fnc = hangup_fnc
         instructions = (
             f"{HINDI_REAL_ESTATE_PROMPT}\n\n"
             f"Aap abhi {customer_name} se call par baat kar rahi hain. "
@@ -282,10 +287,14 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"Failed to save visit record: {e}")
 
+        # Trigger automatic call termination after goodbye message is spoken
+        if self._hangup_fnc:
+            self._hangup_fnc(delay_seconds=4.0)
+
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon... aapka din shubh ho... bye!"
 
-    @function_tool(description="Call ONLY when client explicitly and firmly refuses (e.g. 'nahi chahiye', 'not interested', 'don't call me'). NEVER call on pauses, questions, or casual filler words like 'na'.")
+    @function_tool(description="Call ONLY when client explicitly and firmly refuses (e.g. 'nahi chahiye', 'not interested', 'don't call me', 'wrong number').")
     async def update_lead_status(
         self,
         customer_name: str,
@@ -315,7 +324,16 @@ class PriyaRealEstateAgent(Agent):
         if status == "interested":
             return "Lead marked as interested. You should continue talking and guide them towards a site visit."
         else:
-            return "Lead marked as not interested. Politeness note: Tell the caller 'Aapka din shubh ho... bye!' and end the conversation."
+            if self._hangup_fnc:
+                self._hangup_fnc(delay_seconds=3.5)
+            return "Lead marked as not interested. Say 'Aapka din shubh ho... bye!' and end the conversation."
+
+    @function_tool(description="End the telephone call after saying goodbye ('Aapka din shubh ho... bye!') when the conversation has concluded.")
+    async def end_call(self) -> str:
+        logger.info("📞 [CALL TERMINATION TOOL INVOKED]")
+        if self._hangup_fnc:
+            self._hangup_fnc(delay_seconds=3.5)
+        return "Call will automatically terminate in 3.5 seconds. Say 'Aapka din shubh ho... bye!'."
 
     @function_tool(description="Send Sai Complex brochure or pricing to client on WhatsApp.")
     async def send_whatsapp_brochure(
@@ -471,7 +489,7 @@ if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
         api_key=global_fireworks_key,
         temperature=0.3,
         reasoning_effort="low",
-        max_completion_tokens=80
+        max_completion_tokens=160
     )
     SELECTED_MODEL = fw_model
     global_llm_compiled = True
@@ -640,6 +658,43 @@ else:
     logger.warning("Neither GOOGLE_API_KEY nor GROQ_API_KEY is configured.")
 
 
+# Maharashtra Real Estate Specific STT Keyword Boosting and Phonetic Replacements
+STT_KEYWORDS = [
+    ("Dombivli", 2.5),
+    ("Vashi", 2.5),
+    ("Kalyan", 2.0),
+    ("Nilje", 2.0),
+    ("Palava", 2.0),
+    ("Thane", 2.0),
+    ("Airoli", 2.0),
+    ("Sai Complex", 2.0),
+    ("Shil Road", 2.0),
+    ("BHK", 2.0),
+    ("one BHK", 2.0),
+    ("two BHK", 2.0),
+    ("Lodha", 1.8),
+    ("Casario", 1.8),
+    ("flat", 1.5),
+    ("carpet", 1.5),
+    ("terrace", 1.5),
+    ("lakh", 1.5),
+    ("crore", 1.5),
+    ("budget", 1.5),
+    ("visit", 1.5),
+]
+
+STT_REPLACE = {
+    "washing station": "Vashi station",
+    "washing": "Vashi",
+    "bashi": "Vashi",
+    "kaliyan": "Kalyan",
+    "kalyan station": "Kalyan station",
+    "dombivali": "Dombivli",
+    "dombiwali": "Dombivli",
+    "nilje station": "Nilje station",
+}
+
+
 # ==============================================================================
 # 3. PREWARMING FUNCTION (Pre-Loads All AI Engines in Idle Memory)
 # ==============================================================================
@@ -699,22 +754,24 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (250ms endpointing for reliable word boundary recognition)
+    # 2. Pre-warm Deepgram Nova-2 STT (200ms endpointing + domain keyword boosting)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=250,
+        endpointing_ms=200,
         smart_format=True,
+        keywords=STT_KEYWORDS,
+        replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (350ms natural breathing room, prevents premature cuts and repetition)
+    # 3. Pre-warm Silero VAD (16kHz native rate for zero downsampling lag on VPS CPU)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
         min_silence_duration=0.35,
         min_speech_duration=0.06,
-        sample_rate=8000
+        sample_rate=16000
     )
 
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
@@ -725,7 +782,7 @@ def prewarm_fnc(proc: JobProcess):
             voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
             language="hi",
             sample_rate=24000,
-            model="sonic-3.5"
+            model="sonic-3"
         )
     else:
         eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -864,8 +921,10 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=250,
+            endpointing_ms=200,
             smart_format=True,
+            keywords=STT_KEYWORDS,
+            replace=STT_REPLACE,
             api_key=deepgram_key
         )
         ctx.proc.userdata["stt"] = stt
@@ -887,7 +946,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=fireworks_key,
                 temperature=0.3,
                 reasoning_effort="low",
-                max_completion_tokens=80
+                max_completion_tokens=160
             )
         elif (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
             from livekit.plugins import google
@@ -924,7 +983,7 @@ async def entrypoint(ctx: JobContext):
                 voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
                 language="hi",
                 sample_rate=24000,
-                model="sonic-3.5"
+                model="sonic-3"
             )
         else:
             eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -945,14 +1004,14 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (optimized with 8kHz sample rate to cut CPU usage by 50%)
+    # VAD is pre-warmed, but load as fallback if not present (16kHz native sample rate)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
             min_silence_duration=0.35,
             min_speech_duration=0.06,
-            sample_rate=8000
+            sample_rate=16000
         )
     
     # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
@@ -1156,8 +1215,43 @@ async def entrypoint(ctx: JobContext):
                         )
                         logger.info("🔄 Switched TTS to Hindi (Kusha Cloned Voice)")
 
+    _hangup_scheduled = False
+
+    def trigger_hangup(delay_seconds: float = 3.5):
+        nonlocal _hangup_scheduled
+        if _hangup_scheduled:
+            return
+        _hangup_scheduled = True
+
+        async def _do_disconnect():
+            logger.info(f"📞 [CALL TERMINATION] Disconnecting SIP room in {delay_seconds}s...")
+            await asyncio.sleep(delay_seconds)
+            logger.info("📞 [CALL TERMINATION] Disconnecting SIP room now.")
+            try:
+                await ctx.room.disconnect()
+            except Exception as e:
+                logger.warning(f"Error disconnecting room: {e}")
+
+        asyncio.create_task(_do_disconnect())
+
     @session.on("conversation_item_added")
     def on_item_added(item):
+        # Fail-safe check: If the agent has produced a closing/farewell message,
+        # ensure call termination is triggered even if the model didn't invoke end_call tool
+        try:
+            role = getattr(item, "role", None)
+            if role in ["assistant", "agent"]:
+                content = getattr(item, "content", "")
+                if isinstance(content, list):
+                    content = " ".join(str(c) for c in content)
+                text = str(content).lower()
+                ending_phrases = ["aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!"]
+                if any(phrase in text for phrase in ending_phrases):
+                    logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination in 4.0s...")
+                    trigger_hangup(delay_seconds=4.0)
+        except Exception as e:
+            logger.debug(f"Error in on_item_added goodbye check: {e}")
+
         # Keep up to 14 recent dialogue items + system prompt (avoids forgetting user requirements while keeping TTFT fast)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
             max_dialogue_items = 14
@@ -1204,7 +1298,11 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
             break
 
-    agent = PriyaRealEstateAgent(customer_name=customer_name, customer_phone=customer_phone)
+    agent = PriyaRealEstateAgent(
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        hangup_fnc=trigger_hangup
+    )
 
     # Start session with record=False
     t_session_start = time.perf_counter()
