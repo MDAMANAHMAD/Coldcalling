@@ -100,6 +100,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - You do NOT sound like an advertisement. You do NOT sound like an AI. You do NOT read rigid scripts.
 - You do NOT try to sell the entire property over the phone.
 - You behave like an experienced human property advisor who understands people, asks good questions, answers intelligently, handles objections calmly, and knows when to stop talking.
+- STRICT CONVERSATION BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 20-25 words). Keep answers direct, punchy, and concise so speech generates and starts immediately without long monologues.
 
 2. OPENING CONVERSATION FLOW (MANDATORY STEP-BY-STEP SEQUENCE)
 - **Turn 1 (Spoken by Agent on call connect)**:
@@ -469,7 +470,8 @@ if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
         model=fw_model,
         api_key=global_fireworks_key,
         temperature=0.3,
-        reasoning_effort="low"
+        reasoning_effort="low",
+        max_completion_tokens=80
     )
     SELECTED_MODEL = fw_model
     global_llm_compiled = True
@@ -697,20 +699,20 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (90ms cutoff for balanced endpointing)
+    # 2. Pre-warm Deepgram Nova-2 STT (250ms endpointing for reliable word boundary recognition)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=90,
+        endpointing_ms=250,
         smart_format=True,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (220ms natural breathing room, prevents mid-sentence interruptions)
+    # 3. Pre-warm Silero VAD (350ms natural breathing room, prevents premature cuts and repetition)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
+        min_silence_duration=0.35,
         min_speech_duration=0.06,
         sample_rate=8000
     )
@@ -862,7 +864,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=90,
+            endpointing_ms=250,
             smart_format=True,
             api_key=deepgram_key
         )
@@ -884,7 +886,8 @@ async def entrypoint(ctx: JobContext):
                 model=fw_model,
                 api_key=fireworks_key,
                 temperature=0.3,
-                reasoning_effort="low"
+                reasoning_effort="low",
+                max_completion_tokens=80
             )
         elif (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
             from livekit.plugins import google
@@ -947,7 +950,7 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
+            min_silence_duration=0.35,
             min_speech_duration=0.06,
             sample_rate=8000
         )
@@ -971,7 +974,10 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": None,
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.04,
+                "min_delay": 0.15,
+            },
+            "preemptive_generation": {
+                "enabled": False,  # Prevents aborted/conflicting LLM calls on transcript mutations
             },
             "interruption": {
                 "enabled": True,
