@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# bookings cache and locks
+# bookings cache, logs, and locks
 bookings/model_cache.json
 bookings/*.lock
+bookings/*.jsonl
+bookings/transcripts/
+!bookings/.gitkeep
