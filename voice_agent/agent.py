@@ -780,7 +780,8 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=200,
+        endpointing_ms=50,
+        utterance_end_ms=1000,
         smart_format=True,
         keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
@@ -946,7 +947,8 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=200,
+            endpointing_ms=50,
+            utterance_end_ms=1000,
             smart_format=True,
             keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
@@ -1123,7 +1125,7 @@ async def entrypoint(ctx: JobContext):
                 input_rate = (0.20 * 83.5) / 1000000.0
                 output_rate = (0.20 * 83.5) / 1000000.0
                 brain_name = f"Fireworks AI ({SELECTED_MODEL.split('/')[-1] if '/' in SELECTED_MODEL else SELECTED_MODEL})"
-            elif current_provider == "groq" or (groq_key and groq_key.startswith("gsk_") and "openai" in llm.__class__.__module__.lower()):
+            elif current_provider == "groq" or (global_groq_key and global_groq_key.startswith("gsk_") and "openai" in llm.__class__.__module__.lower()):
                 # Groq Rates
                 input_rate = (0.59 * 83.5) / 1000000.0  # cost per token
                 output_rate = (0.79 * 83.5) / 1000000.0
