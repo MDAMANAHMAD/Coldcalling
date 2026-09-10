@@ -486,7 +486,21 @@ global_fireworks_key = os.getenv("FIREWORKS_API_KEY")
 llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
 
 # 0. FIREWORKS AI (Dedicated Voice AI Inference, Sub-100ms TTFT, High Quota)
+fw_healthy = False
 if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
+    try:
+        from openai import OpenAI as SyncOpenAI
+        _test_fw = SyncOpenAI(base_url="https://api.fireworks.ai/inference/v1", api_key=global_fireworks_key, timeout=2.5)
+        _test_fw.chat.completions.create(
+            model=os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b"),
+            messages=[{"role": "user", "content": "hi"}],
+            max_tokens=5
+        )
+        fw_healthy = True
+    except Exception as fw_err:
+        logger.warning(f"⚠️ Fireworks AI health check failed: {fw_err}. Falling back to Google Gemini immediately.")
+
+if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     from livekit.plugins import openai as lk_openai
     fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b")
     logger.info(f"🎆 [FIREWORKS AI] Selected model '{fw_model}' with sub-100ms streaming!")
@@ -790,6 +804,9 @@ def prewarm_fnc(proc: JobProcess):
             language="hi",
             sample_rate=24000,
             model="sonic-3",
+            speed=1.0,
+            volume=1.0,
+            emotion=["positivity:normal"],
             word_timestamps=False
         )
     else:
@@ -992,6 +1009,9 @@ async def entrypoint(ctx: JobContext):
                 language="hi",
                 sample_rate=24000,
                 model="sonic-3",
+                speed=1.0,
+                volume=1.0,
+                emotion=["positivity:normal"],
                 word_timestamps=False
             )
         else:
@@ -1028,9 +1048,12 @@ async def entrypoint(ctx: JobContext):
     if is_cartesia and hasattr(tts, "update_options"):
         tts.update_options(
             voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-            language="hi"
+            language="hi",
+            speed=1.0,
+            volume=1.0,
+            emotion=["positivity:normal"]
         )
-        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Kusha Cloned Voice.")
+        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Kusha Cloned Voice with locked tone & speed.")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
@@ -1039,10 +1062,10 @@ async def entrypoint(ctx: JobContext):
         tts=tts,
         vad=vad,
         turn_handling={
-            "turn_detection": None,
+            "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.15,
+                "min_delay": 0.45,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls on transcript mutations
@@ -1051,7 +1074,7 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.20,
+                "min_duration": 0.25,
                 "resume_false_interruption": True,
             }
         }
@@ -1246,6 +1269,10 @@ async def entrypoint(ctx: JobContext):
     t_user_stop = 0.0
     turn_counter = 0
 
+    @session.on("error")
+    def _on_session_error(ev):
+        logger.error(f"❌ [AGENT SESSION ERROR] Error={getattr(ev, 'error', ev)}")
+
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
         nonlocal t_user_stop
@@ -1306,21 +1333,30 @@ async def entrypoint(ctx: JobContext):
                     if current_lang == "mr":
                         session.tts.update_options(
                             voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
-                            language="mr"
+                            language="mr",
+                            speed=1.0,
+                            volume=1.0,
+                            emotion=["positivity:normal"]
                         )
-                        logger.info("🔄 Switched TTS to Marathi (Anika)")
+                        logger.info("🔄 Switched TTS to Marathi (Anika) with locked pitch")
                     elif current_lang == "en":
                         session.tts.update_options(
                             voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-                            language="en"
+                            language="en",
+                            speed=1.0,
+                            volume=1.0,
+                            emotion=["positivity:normal"]
                         )
-                        logger.info("🔄 Switched TTS to English (Kusha Cloned Voice)")
+                        logger.info("🔄 Switched TTS to English (Kusha Cloned Voice) with locked pitch")
                     else:
                         session.tts.update_options(
                             voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-                            language="hi"
+                            language="hi",
+                            speed=1.0,
+                            volume=1.0,
+                            emotion=["positivity:normal"]
                         )
-                        logger.info("🔄 Switched TTS to Hindi (Kusha Cloned Voice)")
+                        logger.info("🔄 Switched TTS to Hindi (Kusha Cloned Voice) with locked pitch")
 
     _hangup_scheduled = False
 
@@ -1437,8 +1473,8 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1.2)
 
     greeting_text = (
-        f" Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... "
-        f"kya main {customer_name} se baat kar sakti hoon?"
+        f"Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. "
+        f"Kya main {customer_name} se baat kar sakti hoon?"
     )
 
     # Speak greeting immediately after bridge has settled, allow caller to interrupt
