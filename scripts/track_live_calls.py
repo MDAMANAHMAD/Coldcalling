@@ -132,6 +132,13 @@ def format_line(raw_line: str) -> str:
         return f"   {BOLD}• {line.split('enterprise_voice_agent:')[-1].strip()}{RESET}"
 
     # 10. Call Termination & Disconnect
+    # 10. Silence Watchdog Events
+    if "[SILENCE WATCHDOG]" in line and "Prompting 'Hello'" in line:
+        return f"\n {BOLD}{YELLOW}⏳ [SILENCE DETECTED (>10s)]{RESET} Gayatri: \"Hello? Kya aap sun rahe hain?\""
+
+    if "[SILENCE WATCHDOG]" in line and "Terminating call" in line:
+        return f"\n {BOLD}{RED}⏳ [SILENCE TIMEOUT (>30s)]{RESET} Gayatri: \"Aapka din shubh ho... bye!\" (Auto-terminating call)"
+
     if "Disconnecting SIP room in" in line:
         return f" {MAGENTA}📴 Call ending... Hanging up carrier line.{RESET}"
 

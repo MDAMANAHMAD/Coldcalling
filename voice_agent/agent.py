@@ -798,16 +798,14 @@ def prewarm_fnc(proc: JobProcess):
 
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
+    kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
-            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
+            voice=kusha_voice_id,
             language="hi",
             sample_rate=24000,
-            model="sonic-3",
-            speed=1.0,
-            volume=1.0,
-            emotion=["positivity:normal"],
+            model="sonic-3.5",
             word_timestamps=False
         )
     else:
@@ -1003,17 +1001,15 @@ async def entrypoint(ctx: JobContext):
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
         cartesia_key = os.getenv("CARTESIA_API_KEY")
+        kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
         if cartesia_key and len(cartesia_key) > 10:
-            logger.info("Initializing Cartesia TTS as Primary with Kusha Cloned Voice...")
+            logger.info(f"Initializing Cartesia TTS as Primary with Kusha Cloned Voice ({kusha_voice_id}) on sonic-3.5...")
             tts = cartesia.TTS(
                 api_key=cartesia_key,
-                voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
+                voice=kusha_voice_id,
                 language="hi",
                 sample_rate=24000,
-                model="sonic-3",
-                speed=1.0,
-                volume=1.0,
-                emotion=["positivity:normal"],
+                model="sonic-3.5",
                 word_timestamps=False
             )
         else:
@@ -1046,16 +1042,14 @@ async def entrypoint(ctx: JobContext):
         )
     
     # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
+    kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     is_cartesia = tts and "cartesia" in tts.__class__.__module__
     if is_cartesia and hasattr(tts, "update_options"):
         tts.update_options(
-            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-            language="hi",
-            speed=1.0,
-            volume=1.0,
-            emotion=["positivity:normal"]
+            voice=kusha_voice_id,
+            language="hi"
         )
-        logger.info("🔄 [STATE RESET] Cartesia TTS options reset to default Kusha Cloned Voice with locked tone & speed.")
+        logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}).")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
@@ -1115,6 +1109,8 @@ async def entrypoint(ctx: JobContext):
     @ctx.room.on("disconnected")
     def _on_disconnected():
         try:
+            if watchdog_task and not watchdog_task.done():
+                watchdog_task.cancel()
             duration_seconds = time.time() - t_call_start
             duration_minutes = duration_seconds / 60.0
             
@@ -1270,6 +1266,10 @@ async def entrypoint(ctx: JobContext):
 
     t_user_stop = 0.0
     turn_counter = 0
+    t_last_activity = time.time()
+    has_prompted_silence = False
+    agent_is_speaking = False
+    watchdog_task = None
 
     @session.on("error")
     def _on_session_error(ev):
@@ -1277,26 +1277,35 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop
+        nonlocal t_user_stop, t_last_activity, has_prompted_silence
         try:
-            if ev.old_state == "speaking" and ev.new_state == "listening":
+            if ev.new_state == "speaking":
+                t_last_activity = time.time()
+                has_prompted_silence = False
+            elif ev.old_state == "speaking" and ev.new_state == "listening":
                 t_user_stop = time.perf_counter()
+                t_last_activity = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
     @session.on("agent_state_changed")
     def _on_agent_state_changed(ev: AgentStateChangedEvent):
-        nonlocal t_user_stop, turn_counter
+        nonlocal t_user_stop, turn_counter, agent_is_speaking, t_last_activity
         try:
-            if ev.new_state == "speaking" and t_user_stop > 0:
-                elapsed_ms = (time.perf_counter() - t_user_stop) * 1000
-                turn_counter += 1
-                logger.info(
-                    f"⚡⚡⚡ [TURN {turn_counter} RESPONSE LATENCY] "
-                    f"User stopped speaking -> Agent began speaking: {elapsed_ms:.1f}ms ({elapsed_ms/1000.0:.2f}s) 🚀"
-                )
-                t_user_stop = 0.0
+            if ev.new_state == "speaking":
+                agent_is_speaking = True
+                if t_user_stop > 0:
+                    elapsed_ms = (time.perf_counter() - t_user_stop) * 1000
+                    turn_counter += 1
+                    logger.info(
+                        f"⚡⚡⚡ [TURN {turn_counter} RESPONSE LATENCY] "
+                        f"User stopped speaking -> Agent began speaking: {elapsed_ms:.1f}ms ({elapsed_ms/1000.0:.2f}s) 🚀"
+                    )
+                    t_user_stop = 0.0
+            elif ev.new_state in ["listening", "idle"]:
+                agent_is_speaking = False
+                t_last_activity = time.time()
         except Exception as err:
             logger.debug(f"Agent state changed error: {err}")
 
@@ -1304,7 +1313,9 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
-        nonlocal current_lang, t_user_stop
+        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence
+        t_last_activity = time.time()
+        has_prompted_silence = False
         if ev.transcript:
             if t_user_stop > 0:
                 transcribed_after = (time.perf_counter() - t_user_stop) * 1000
@@ -1335,30 +1346,21 @@ async def entrypoint(ctx: JobContext):
                     if current_lang == "mr":
                         session.tts.update_options(
                             voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
-                            language="mr",
-                            speed=1.0,
-                            volume=1.0,
-                            emotion=["positivity:normal"]
+                            language="mr"
                         )
-                        logger.info("🔄 Switched TTS to Marathi (Anika) with locked pitch")
+                        logger.info("🔄 Switched TTS to Marathi (Anika)")
                     elif current_lang == "en":
                         session.tts.update_options(
-                            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-                            language="en",
-                            speed=1.0,
-                            volume=1.0,
-                            emotion=["positivity:normal"]
+                            voice=kusha_voice_id,
+                            language="en"
                         )
-                        logger.info("🔄 Switched TTS to English (Kusha Cloned Voice) with locked pitch")
+                        logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id})")
                     else:
                         session.tts.update_options(
-                            voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
-                            language="hi",
-                            speed=1.0,
-                            volume=1.0,
-                            emotion=["positivity:normal"]
+                            voice=kusha_voice_id,
+                            language="hi"
                         )
-                        logger.info("🔄 Switched TTS to Hindi (Kusha Cloned Voice) with locked pitch")
+                        logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id})")
 
     _hangup_scheduled = False
 
@@ -1486,6 +1488,46 @@ async def entrypoint(ctx: JobContext):
         call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": 1.2})
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
+
+    # Silence Watchdog: 10s -> "Hello?", 30s -> Auto Hangup
+    t_last_activity = time.time() + 4.0  # Allow 4s buffer for greeting to finish speaking
+
+    async def _silence_watchdog():
+        nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking
+        logger.info("🛡️ [SILENCE WATCHDOG] Active (10s 'Hello' prompt, 30s auto-hangup).")
+        while not _hangup_scheduled:
+            await asyncio.sleep(1.0)
+            if _hangup_scheduled or agent_is_speaking:
+                continue
+
+            silence_duration = time.time() - t_last_activity
+
+            # Stage 1: Caller silent for 10 seconds -> Prompt "Hello?"
+            if silence_duration >= 10.0 and not has_prompted_silence:
+                has_prompted_silence = True
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s). Prompting 'Hello'...")
+                prompt_text = "Hello? Kya aap sun rahe hain?"
+                try:
+                    session.say(prompt_text, allow_interruptions=True)
+                    elapsed_sec = round(time.time() - t_call_start, 1)
+                    call_dialogue.append({"role": "agent", "text": prompt_text, "time": elapsed_sec})
+                except Exception as e:
+                    logger.warning(f"Error speaking silence prompt: {e}")
+
+            # Stage 2: Caller silent for 30 seconds -> End call cleanly
+            elif silence_duration >= 30.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>30s). Terminating call.")
+                farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Aapka din shubh ho... bye!"
+                try:
+                    session.say(farewell_text, allow_interruptions=False)
+                    elapsed_sec = round(time.time() - t_call_start, 1)
+                    call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
+                except Exception as e:
+                    logger.warning(f"Error speaking silence farewell: {e}")
+                trigger_hangup(delay_seconds=3.5)
+                break
+
+    watchdog_task = asyncio.create_task(_silence_watchdog())
 
 
 # ==============================================================================
