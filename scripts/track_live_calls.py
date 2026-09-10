@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import shutil
+import time
 
 # Safe encoding for terminal output
 if hasattr(sys.stdout, 'reconfigure'):
@@ -159,14 +160,27 @@ def main():
     print(f"{BOLD}{CYAN}========================================================================{RESET}")
     print(f" {DIM}Listening to live calls in real-time. Press Ctrl+C to exit.{RESET}\n")
 
+    last_line = ""
+    last_time = 0.0
+
+    def print_clean(text: str):
+        nonlocal last_line, last_time
+        now = time.time()
+        # Suppress identical messages printed within 1.5 seconds (systemd multi-logger duplicates)
+        if text == last_line and (now - last_time) < 1.5:
+            return
+        last_line = text
+        last_time = now
+        print(text)
+        sys.stdout.flush()
+
     # If input is piped (e.g. journalctl -u voice-agent -f | python3 track_live_calls.py)
     if not sys.stdin.isatty():
         try:
             for raw_line in sys.stdin:
                 formatted = format_line(raw_line)
                 if formatted:
-                    print(formatted)
-                    sys.stdout.flush()
+                    print_clean(formatted)
         except KeyboardInterrupt:
             print("\nExiting tracker...")
         return
@@ -179,8 +193,7 @@ def main():
             for line in proc.stdout:
                 formatted = format_line(line)
                 if formatted:
-                    print(formatted)
-                    sys.stdout.flush()
+                    print_clean(formatted)
         except KeyboardInterrupt:
             proc.terminate()
             print("\nExiting tracker...")
