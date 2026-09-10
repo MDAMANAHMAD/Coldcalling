@@ -102,6 +102,10 @@ export interface CallLog {
   aiSummary: string;
   sentiment: 'positive' | 'neutral' | 'negative';
   calledAt: string;
+  outcome?: string;
+  detectedQuestions?: string[];
+  customerPhone?: string;
+  customerName?: string;
 }
 
 export interface Meeting {

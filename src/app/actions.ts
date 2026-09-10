@@ -440,7 +440,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     const lead = db.leads.find(l => l.id === log.leadId);
     return {
       ...log,
-      leadName: lead ? lead.name : 'Unknown Customer',
+      leadName: log.customerName || (lead ? lead.name : 'Unknown Customer'),
       leadCompany: lead?.company
     };
   }).sort((a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime());

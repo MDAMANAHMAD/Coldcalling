@@ -105,26 +105,32 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 2. OPENING CONVERSATION FLOW (MANDATORY STEP-BY-STEP SEQUENCE)
 - **Turn 1 (Spoken by Agent on call connect)**:
   "Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
-- **Turn 2 (When customer responds - e.g. 'haan', 'boliye', 'ji boliye')**:
-  Ask: "Ji... kya aap Dombivli mein property dekh rahe hain?"
-  (DO NOT jump straight to BHK or sales pitch yet).
-- **Turn 3 (When customer says YES - e.g. 'haan', 'yes', 'dekh raha hoon')**:
-  Ask: "Aap one BHK dekh rahe hain... ya two BHK?"
-- **Turn 3 Location Handling (If customer says looking in Kalyan, Thane, Navi Mumbai, Vashi, etc.)**:
-  DO NOT abruptly hang up! Explain politely:
-  "Humara project Sai Complex Dombivli East mein hai, Kalyan mein humara property nahi hai... waise Kalyan aur Dombivli bilkul paas hain, lagbhag fifteen minutes distance... agar aap Dombivli consider karna chahein toh kya main details share kar sakti hoon?"
-  - If they agree: Proceed to BHK inquiry or pricing.
-  - If they say NO / strictly only want Kalyan: Say: "Samajh gayi sir... filhal Kalyan mein humara project nahi hai... thank you so much, aapka din shubh ho... bye!" and call `update_lead_status(status="not_interested")`.
-- **Turn 3 Refusal (If customer says hard NO / not looking for property / wrong number)**:
-  Politely say: "Okay sir, koi baat nahi... thank you so much, aapka din shubh ho... bye!" and call `update_lead_status(status="not_interested")`.
-- **Turn 4 onwards**:
-  State the relevant details for the requested BHK (e.g. "Humare paas two BHK seventy two lakh rupaye se start hote hain..."). Then proceed to answer customer queries.
+- **Turn 2 (Direct Value Pitch when customer responds - e.g. 'haan', 'boliye', 'ji boliye', 'kaun?', 'kya kaam tha?')**:
+  Directly pitch the available property without restrictive qualifying questions:
+  "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium one aur two BHK flats thirty six lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+  (DO NOT ask "Kya aap Dombivli mein property dekh rahe hain?" or other restrictive qualifying questions. Pitch directly).
+- **When customer specifies configuration (e.g. 'one BHK', 'two BHK')**:
+  State the exact options and price, then smoothly bridge to a site visit:
+  - For 1 BHK: "Humare paas one BHK thirty six lakh rupaye se start hote hain. Kya aap weekend par ya weekday par ek baar actual flat dekhne ke liye site visit karna chahenge?"
+  - For 2 BHK: "Humare paas two BHK seventy two lakh rupaye se start hote hain. Kya aap weekend par ya weekday par ek baar actual flat dekhne ke liye site visit karna chahenge?"
+
+- **Location Preference & Shift Handling (CRITICAL - When customer mentions Kalyan, Thane, Navi Mumbai, etc.)**:
+  - If customer says they are looking in Kalyan or any other location:
+    State property unavailability in that location clearly and politely, explain Dombivli proximity, and check interest:
+    "Sir humara property Kalyan mein available nahi hai. Humara project Sai Complex Dombivli East mein hai jo Kalyan se sirf fifteen minutes drive par hai. Agar aap Dombivli East consider karna chahein toh kya main details share kar sakti hoon?"
+  - If customer agrees to hear details: Share the BHK pricing and bridge to a site visit.
+  - If customer says NO / strictly wants Kalyan only / refuses Dombivli:
+    State property unavailability explicitly and end the call gracefully:
+    "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho... bye!"
+    and immediately call `end_call()` or `update_lead_status(status="not_interested")`.
+- **Refusal on Pitch (If customer says hard NO / not looking for property / wrong number)**:
+  Politely say: "Okay sir, koi baat nahi. Thank you so much, aapka din shubh ho... bye!" and call `end_call()`.
 
 3. BALANCED SITE VISIT GUIDANCE (PROACTIVE YET NATURAL)
 - Keep responses short (1 to 2 sentences max).
 - When answering pricing, connectivity, or amenities, answer the question directly, and smoothly add the site visit invite:
-  - Example for pricing: "Humare paas two BHK seventy two lakh rupaye se start hote hain... kya aap weekend par ya weekday par ek baar actual flat dekhne ke liye site visit karna chahenge?"
-  - Example for connectivity: "Vashi Shil Road se lagbhag twenty five se thirty minutes drive distance hai... kya aap Saturday ya Sunday ko project visit plan karna chahenge?"
+  - Example for pricing: "Humare paas two BHK seventy two lakh rupaye se start hote hain. Kya aap weekend par ya weekday par ek baar actual flat dekhne ke liye site visit karna chahenge?"
+  - Example for connectivity: "Vashi Shil Road se lagbhag twenty five se thirty minutes drive distance hai. Kya aap Saturday ya Sunday ko project visit plan karna chahenge?"
 - Do NOT ask unnecessary intermediate questions like "aur koi detail chahiye?" right before asking about the visit. Bridge directly to the site visit invitation.
 - When the customer agrees or mentions a day (e.g. "Saturday ko", "Weekend", "Kal", "Monday"):
   Immediately call `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`.
@@ -137,6 +143,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 
 5. CRITICAL VOICE, SCRIPT & TTS FORMATTING (MANDATORY)
 - SCRIPT & LANGUAGE: ALWAYS write your spoken outputs in natural Hinglish using ONLY the standard English Latin alphabet (e.g., "Ji, Sai Complex Dombivli East mein hai...").
+- CLEAN PUNCTUATION ONLY: Use standard single periods (.) and question marks (?). NEVER use multiple consecutive dots like "..." or hyphens "--" or commas in series, as these cause neural TTS audio breaks and micro-stutters.
 - STRICTLY NO DEVANAGARI: NEVER output Hindi/Marathi Devanagari script under any circumstances.
 - STRICTLY NO MARKDOWN: NEVER use asterisks (NO ** or *), NO hashes (#), NO bullet points, NO quotes. Everything you write is read aloud by Text-To-Speech.
 - STRICTLY NO EMOJIS: Absolutely NO emojis (no 🙏, 🏠, 📞, etc.).
@@ -782,7 +789,8 @@ def prewarm_fnc(proc: JobProcess):
             voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
             language="hi",
             sample_rate=24000,
-            model="sonic-3"
+            model="sonic-3",
+            word_timestamps=False
         )
     else:
         eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -983,7 +991,8 @@ async def entrypoint(ctx: JobContext):
                 voice="68da925c-0163-4b50-a4e6-08862f6dd5de",  # Kusha Cloned Voice
                 language="hi",
                 sample_rate=24000,
-                model="sonic-3"
+                model="sonic-3",
+                word_timestamps=False
             )
         else:
             eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -1050,6 +1059,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] AgentSession instantiated in {(time.perf_counter() - t_session_init)*1000:.1f}ms")
 
     t_call_start = time.time()
+    call_dialogue = []  # List of {"role": "agent"|"customer", "text": str, "time": float}
     input_tokens = 0
     output_tokens = 0
     characters_spoken = 0
@@ -1133,8 +1143,102 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"   🗣️ Speech: {characters_spoken} characters (Cartesia)")
             logger.info(f"   🧠 Brain ({brain_name}): Input={input_tokens}, Output={output_tokens} tokens")
             logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f} (₹{per_minute_cost:.2f}/min)")
+
+            # --- FULL TRANSCRIPT CAPTURE & INTELLIGENCE EXTRACTION ---
+            formatted_lines = []
+            for turn in call_dialogue:
+                role_label = "Gayatri" if turn["role"] == "agent" else customer_name
+                formatted_lines.append(f"[{turn['time']}s] {role_label}: {turn['text']}")
+            formatted_transcript = "\n".join(formatted_lines) if formatted_lines else "No conversation recorded."
+
+            all_customer_text = " ".join(t["text"].lower() for t in call_dialogue if t["role"] == "customer")
+            all_dialogue_text = " ".join(t["text"].lower() for t in call_dialogue)
+
+            detected_questions = []
+            if any(w in all_customer_text for w in ["kalyan", "kaliyan"]):
+                detected_questions.append("Kalyan Location Inquiry")
+            if any(w in all_customer_text for w in ["2 bhk", "two bhk", "price", "pricing", "kitna", "budget", "lakh", "cost"]):
+                detected_questions.append("Pricing & Budget (2 BHK / 1 BHK)")
+            if any(w in all_customer_text for w in ["vashi", "station", "nilje", "distance", "door", "connectivity", "metro", "thane"]):
+                detected_questions.append("Station & Metro Connectivity")
+            if any(w in all_customer_text for w in ["possession", "ready", "rera", "builder", "kab tak"]):
+                detected_questions.append("Possession Date & RERA")
+            if any(w in all_customer_text for w in ["gym", "amenities", "water", "parking", "lift"]):
+                detected_questions.append("Amenities & Facilities")
+            if any(w in all_customer_text for w in ["visit", "dekhne", "aana", "saturday", "sunday", "weekend", "kal"]):
+                detected_questions.append("Site Visit Planning")
+
+            # Classify Call Outcome
+            if any("site visit confirm" in t["text"].lower() or "schedule_site_visit" in t["text"].lower() for t in call_dialogue if t["role"] == "agent"):
+                call_outcome = "Site Visit Scheduled"
+            elif any("kalyan mein humara project available nahi hai" in t["text"].lower() or "kalyan" in all_customer_text for t in call_dialogue):
+                call_outcome = "Location Mismatch (Kalyan)"
+            elif any(w in all_customer_text for w in ["nahi chahiye", "not interested", "dont call", "wrong number"]):
+                call_outcome = "Not Interested"
+            elif detected_questions:
+                call_outcome = "Inquiry Completed"
+            else:
+                call_outcome = "Short / Call Dropped"
+
+            transcript_record = {
+                "call_id": ctx.room.name,
+                "timestamp": datetime.utcnow().isoformat(),
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                "duration_seconds": round(duration_seconds, 1),
+                "duration_minutes": round(duration_minutes, 2),
+                "outcome": call_outcome,
+                "detected_questions": detected_questions,
+                "turns_count": len(call_dialogue),
+                "dialogue": call_dialogue,
+                "full_transcript": formatted_transcript,
+                "billing": billing_record
+            }
+
+            os.makedirs("bookings/transcripts", exist_ok=True)
+            with open("bookings/call_transcripts.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(transcript_record, ensure_ascii=False) + "\n")
+
+            with open(f"bookings/transcripts/{ctx.room.name}.json", "w", encoding="utf-8") as f:
+                json.dump(transcript_record, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Outcome: {call_outcome})")
+
+            # Sync with db.json for the Next.js Cold Calling Dashboard
+            try:
+                db_path = "db.json"
+                if os.path.exists(db_path):
+                    with open(db_path, "r", encoding="utf-8") as f:
+                        db_data = json.load(f)
+                    
+                    if "callLogs" not in db_data:
+                        db_data["callLogs"] = []
+
+                    if not any(log.get("callSid") == ctx.room.name for log in db_data["callLogs"]):
+                        new_log = {
+                            "id": f"call-{int(time.time()*1000)}",
+                            "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
+                            "callSid": ctx.room.name,
+                            "durationSeconds": round(duration_seconds),
+                            "recordingUrl": "",
+                            "transcript": formatted_transcript,
+                            "aiSummary": f"Call with {customer_name}. Outcome: {call_outcome}. Questions: {', '.join(detected_questions) if detected_questions else 'General'}.",
+                            "sentiment": "positive" if "Site Visit" in call_outcome else ("negative" if "Not Interested" in call_outcome else "neutral"),
+                            "calledAt": datetime.utcnow().isoformat(),
+                            "outcome": call_outcome,
+                            "detectedQuestions": detected_questions,
+                            "customerPhone": customer_phone,
+                            "customerName": customer_name
+                        }
+                        db_data["callLogs"].insert(0, new_log)
+                        with open(db_path, "w", encoding="utf-8") as f:
+                            json.dump(db_data, f, ensure_ascii=False, indent=2)
+                        logger.info("📑 Synced live call transcript and intelligence to db.json for Web Dashboard!")
+            except Exception as db_err:
+                logger.warning(f"Could not update db.json: {db_err}")
+
         except Exception as e:
-            logger.error(f"Failed to record call billing: {e}")
+            logger.error(f"Failed to record call billing or transcript: {e}")
 
     from livekit.agents.voice import UserInputTranscribedEvent
     from livekit.agents.voice.events import UserStateChangedEvent, AgentStateChangedEvent
@@ -1180,6 +1284,9 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
+            # Append customer turn to transcript history
+            elapsed_sec = round(time.time() - t_call_start, 1)
+            call_dialogue.append({"role": "customer", "text": ev.transcript.strip(), "time": elapsed_sec})
             new_lang = current_lang
             
             # Switch ONLY when explicitly requested by name
@@ -1226,31 +1333,42 @@ async def entrypoint(ctx: JobContext):
         async def _do_disconnect():
             logger.info(f"📞 [CALL TERMINATION] Disconnecting SIP room in {delay_seconds}s...")
             await asyncio.sleep(delay_seconds)
-            logger.info("📞 [CALL TERMINATION] Disconnecting SIP room now.")
+            logger.info("📞 [CALL TERMINATION] Terminating SIP call and deleting room now.")
             try:
-                await ctx.room.disconnect()
+                if hasattr(ctx, "delete_room"):
+                    await ctx.delete_room()
+                else:
+                    await ctx.room.disconnect()
             except Exception as e:
-                logger.warning(f"Error disconnecting room: {e}")
+                logger.warning(f"Error terminating room via delete_room: {e}")
+                try:
+                    await ctx.room.disconnect()
+                except Exception:
+                    pass
 
         asyncio.create_task(_do_disconnect())
 
     @session.on("conversation_item_added")
     def on_item_added(item):
-        # Fail-safe check: If the agent has produced a closing/farewell message,
-        # ensure call termination is triggered even if the model didn't invoke end_call tool
+        # Capture agent speech in transcript and check for goodbye closing phrase
         try:
             role = getattr(item, "role", None)
             if role in ["assistant", "agent"]:
                 content = getattr(item, "content", "")
                 if isinstance(content, list):
                     content = " ".join(str(c) for c in content)
-                text = str(content).lower()
+                raw_text = str(content).strip()
+                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text):
+                    elapsed_sec = round(time.time() - t_call_start, 1)
+                    call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
+
+                text = raw_text.lower()
                 ending_phrases = ["aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!"]
                 if any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination in 4.0s...")
                     trigger_hangup(delay_seconds=4.0)
         except Exception as e:
-            logger.debug(f"Error in on_item_added goodbye check: {e}")
+            logger.debug(f"Error in on_item_added check: {e}")
 
         # Keep up to 14 recent dialogue items + system prompt (avoids forgetting user requirements while keeping TTFT fast)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
@@ -1327,6 +1445,7 @@ async def entrypoint(ctx: JobContext):
     logger.info("🎙️ Speaking Greeting to caller...")
     try:
         session.say(greeting_text, allow_interruptions=True)
+        call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": 1.2})
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 

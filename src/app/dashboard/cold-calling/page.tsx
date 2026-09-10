@@ -34,7 +34,12 @@ import {
   Volume2,
   Radio,
   Zap,
-  PhoneOutgoing
+  PhoneOutgoing,
+  MessageSquare,
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -83,6 +88,12 @@ export default function ColdCallingDashboard() {
 
   // Audio Playback Mock
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+
+  // Call Log Filtering & Expandable Dialogue
+  const [callSearchTerm, setCallSearchTerm] = useState('');
+  const [callOutcomeFilter, setCallOutcomeFilter] = useState('All');
+  const [callQuestionFilter, setCallQuestionFilter] = useState('All');
+  const [expandedCallId, setExpandedCallId] = useState<string | null>(null);
 
   // LiveKit Direct Dialing states
   const [livekitDialing, setLivekitDialing] = useState(false);
@@ -351,6 +362,65 @@ export default function ColdCallingDashboard() {
       setTimeout(() => setPlayingAudioId(prev => prev === logId ? null : prev), 5000);
     }
   };
+
+  // Helper to parse transcript lines into speaker turns
+  const parseTranscriptTurns = (transcript: string) => {
+    if (!transcript) return [];
+    const lines = transcript.split('\n').filter(l => l.trim().length > 0);
+    return lines.map(line => {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0 && colonIdx < 35) {
+        const speaker = line.substring(0, colonIdx).trim();
+        const text = line.substring(colonIdx + 1).trim();
+        const isAgent = speaker.toLowerCase().includes('agent') || speaker.toLowerCase().includes('gayatri');
+        return { speaker: isAgent ? 'Gayatri (Advisor)' : speaker, text, isAgent };
+      }
+      return { speaker: 'Note', text: line, isAgent: false };
+    });
+  };
+
+  // Repeated question analytics aggregated across all call logs (for reviewing 400+ calls)
+  const questionFrequencies = callLogs.reduce((acc, log) => {
+    const questions = log.detectedQuestions || [];
+    const transLower = (log.transcript || '').toLowerCase();
+    const effectiveQuestions = questions.length > 0 ? questions : [
+      ...(transLower.includes('kalyan') ? ['Kalyan Location Inquiry'] : []),
+      ...(transLower.includes('price') || transLower.includes('budget') || transLower.includes('lakh') ? ['Pricing & Budget'] : []),
+      ...(transLower.includes('station') || transLower.includes('metro') || transLower.includes('distance') ? ['Station / Metro Connectivity'] : []),
+      ...(transLower.includes('visit') || transLower.includes('kal') || transLower.includes('weekend') ? ['Site Visit Planning'] : []),
+      ...(transLower.includes('rera') || transLower.includes('possession') ? ['Possession / RERA Date'] : []),
+    ];
+    effectiveQuestions.forEach(q => {
+      acc[q] = (acc[q] || 0) + 1;
+    });
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Filtered call logs based on search, outcome, and question topic
+  const filteredCallLogs = callLogs.filter(log => {
+    if (callOutcomeFilter !== 'All') {
+      const outcome = (log.outcome || log.sentiment || '').toLowerCase();
+      if (!outcome.includes(callOutcomeFilter.toLowerCase())) return false;
+    }
+    if (callQuestionFilter !== 'All') {
+      const questions = (log.detectedQuestions || []).map(q => q.toLowerCase());
+      const transLower = (log.transcript || '').toLowerCase();
+      const matches = questions.some(q => q.includes(callQuestionFilter.toLowerCase())) ||
+                      transLower.includes(callQuestionFilter.toLowerCase());
+      if (!matches) return false;
+    }
+    if (callSearchTerm.trim()) {
+      const term = callSearchTerm.toLowerCase();
+      const name = (log.leadName || log.customerName || '').toLowerCase();
+      const phone = (log.customerPhone || '').toLowerCase();
+      const summary = (log.aiSummary || '').toLowerCase();
+      const transcript = (log.transcript || '').toLowerCase();
+      if (!name.includes(term) && !phone.includes(term) && !summary.includes(term) && !transcript.includes(term)) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   const handleDeleteLeadEntry = async (id: string) => {
     if (!confirm("Are you sure you want to delete this lead?")) return;
@@ -904,72 +974,305 @@ export default function ColdCallingDashboard() {
                 </div>
               )}
 
-              {/* CALL LOGS TAB PANEL */}
+              {/* CALL LOGS & TRANSCRIPT INTELLIGENCE TAB PANEL */}
               {activeTab === 'calls' && (
-                <div className="p-4 space-y-4">
-                  {callLogs.length === 0 ? (
-                    <p className="text-slate-400 text-center py-12">No call log entries recorded yet.</p>
-                  ) : (
-                    callLogs.map((log) => (
-                      <div key={log.id} className="p-4 bg-slate-50 dark:bg-slate-900/50 border border-slate-150 dark:border-slate-800 rounded-2xl space-y-3">
-                        <div className="flex justify-between items-start gap-4">
-                          <div>
-                            <h5 className="font-bold text-slate-800 dark:text-white leading-tight">
-                              AI Outbound Call to: <strong>{log.leadName}</strong> {log.leadCompany ? `(${log.leadCompany})` : ''}
-                            </h5>
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              ID: {log.callSid} • {new Date(log.calledAt).toLocaleString()}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center space-x-2">
-                            {/* Sentiment badge */}
-                            <span className={`px-2 py-0.5 rounded font-extrabold text-[8px] uppercase tracking-widest ${
-                              log.sentiment === 'positive'
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400'
-                                : log.sentiment === 'negative'
-                                ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/20 dark:text-rose-450'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                            }`}>
-                              {log.sentiment} sentiment
-                            </span>
-                            
-                            <span className="text-[10px] text-slate-400 flex items-center font-bold">
-                              <Clock className="h-3.5 w-3.5 mr-0.5 text-slate-350" />
-                              {log.durationSeconds}s
-                            </span>
-                          </div>
+                <div className="p-5 space-y-6">
+                  {/* TOP ANALYTICS: QUESTION & OBJECTION FREQUENCY FOR 400+ CALLS */}
+                  <div className="bg-gradient-to-br from-indigo-900/10 via-slate-900/5 to-blue-900/10 dark:from-indigo-950/40 dark:via-slate-900/50 dark:to-blue-950/40 border border-indigo-200/50 dark:border-indigo-800/40 rounded-2xl p-5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="p-2 bg-indigo-600/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                          <BarChart3 className="h-5 w-5" />
                         </div>
-
-                        {/* Summary & Transcript collapsible */}
-                        <div className="space-y-2 text-xs">
-                          <p className="text-slate-500 dark:text-slate-400 leading-relaxed bg-white dark:bg-slate-950 p-2.5 border border-slate-100 dark:border-slate-900 rounded-lg">
-                            <strong>AI Summary:</strong> {log.aiSummary}
+                        <div>
+                          <h4 className="font-bold text-slate-850 dark:text-white text-sm">
+                            Real Estate Call Intelligence & Question Frequency
+                          </h4>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                            Aggregated inquiry topics and objections across all {callLogs.length} calls to refine Gayatri&apos;s dialogue script.
                           </p>
-
-                          {/* Recording simulation player */}
-                          <div className="flex items-center justify-between p-2 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100/30 text-[11px]">
-                            <button
-                              onClick={() => handleMockAudio(log.id)}
-                              className="flex items-center space-x-1 text-blue-600 dark:text-blue-400 font-bold"
-                            >
-                              <Volume2 className="h-3.5 w-3.5 animate-bounce" style={{ animationPlayState: playingAudioId === log.id ? 'running' : 'paused' }} />
-                              <span>{playingAudioId === log.id ? "Mock Playing Audio Recording..." : "Listen Call Recording"}</span>
-                            </button>
-                            {playingAudioId === log.id && (
-                              <span className="text-[10px] text-slate-400">0:03 / 2:22</span>
-                            )}
-                          </div>
-
-                          <div className="bg-slate-100 dark:bg-slate-950 p-3 rounded-lg border border-slate-200/50 dark:border-slate-900 max-h-36 overflow-y-auto">
-                            <span className="block font-bold text-[10px] text-slate-400 uppercase tracking-wide mb-1.5">Dialogue Transcript Log:</span>
-                            <p className="font-mono text-[10px] whitespace-pre-line text-slate-600 dark:text-slate-400 leading-normal">
-                              {log.transcript}
-                            </p>
-                          </div>
                         </div>
                       </div>
-                    ))
+
+                      <div className="flex items-center space-x-3 text-xs">
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                          {callLogs.filter(c => (c.outcome || c.sentiment || '').toLowerCase().includes('visit')).length} Visits Booked
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20">
+                          {callLogs.filter(c => (c.outcome || c.transcript || '').toLowerCase().includes('kalyan')).length} Kalyan Inquiries
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Repeated Question Topic Bars */}
+                    <div className="space-y-2 pt-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                        Top Repeated Customer Questions / Inquiries:
+                      </span>
+
+                      {Object.keys(questionFrequencies).length === 0 ? (
+                        <p className="text-xs text-slate-400 italic">No tagged question inquiries yet. Complete outbound calls to populate real-time topic frequency.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {Object.entries(questionFrequencies)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([question, count]) => {
+                              const pct = callLogs.length > 0 ? Math.round((count / callLogs.length) * 100) : 0;
+                              const isSelected = callQuestionFilter === question;
+                              return (
+                                <button
+                                  key={question}
+                                  onClick={() => setCallQuestionFilter(isSelected ? 'All' : question)}
+                                  className={`text-left p-2.5 rounded-xl border transition-all ${
+                                    isSelected
+                                      ? 'bg-indigo-600/15 border-indigo-500 dark:bg-indigo-950/60 shadow-sm'
+                                      : 'bg-white/70 dark:bg-slate-900/60 border-slate-200/70 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center text-xs mb-1.5">
+                                    <span className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                                      <HelpCircle className="h-3.5 w-3.5 text-indigo-500" />
+                                      {question}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-slate-400 font-bold">
+                                      {count} calls ({pct}%)
+                                    </span>
+                                  </div>
+                                  {/* Progress bar */}
+                                  <div className="w-full h-1.5 bg-slate-200/70 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                                      style={{ width: `${Math.min(pct, 100)}%` }}
+                                    />
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* SEARCH & FILTERS BAR */}
+                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
+                    <div className="relative w-full sm:w-72">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search caller, phone, transcript..."
+                        value={callSearchTerm}
+                        onChange={(e) => setCallSearchTerm(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <select
+                        value={callOutcomeFilter}
+                        onChange={(e) => setCallOutcomeFilter(e.target.value)}
+                        className="px-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 dark:text-slate-300"
+                      >
+                        <option value="All">All Call Outcomes</option>
+                        <option value="Visit">Site Visit Scheduled</option>
+                        <option value="Kalyan">Kalyan Location Inquiry</option>
+                        <option value="Price">Pricing & Budget</option>
+                        <option value="Not Interested">Not Interested</option>
+                      </select>
+
+                      <select
+                        value={callQuestionFilter}
+                        onChange={(e) => setCallQuestionFilter(e.target.value)}
+                        className="px-3 py-1.5 text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 dark:text-slate-300"
+                      >
+                        <option value="All">All Question Topics</option>
+                        {Object.keys(questionFrequencies).map((q) => (
+                          <option key={q} value={q}>{q}</option>
+                        ))}
+                      </select>
+
+                      {(callSearchTerm || callOutcomeFilter !== 'All' || callQuestionFilter !== 'All') && (
+                        <button
+                          onClick={() => {
+                            setCallSearchTerm('');
+                            setCallOutcomeFilter('All');
+                            setCallQuestionFilter('All');
+                          }}
+                          className="px-2.5 py-1.5 text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg font-bold"
+                        >
+                          Clear Filters
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CALL CARDS LIST */}
+                  {filteredCallLogs.length === 0 ? (
+                    <div className="text-center py-12 space-y-2">
+                      <p className="text-slate-400 text-sm">No call logs matched your current filters.</p>
+                      <button
+                        onClick={() => {
+                          setCallSearchTerm('');
+                          setCallOutcomeFilter('All');
+                          setCallQuestionFilter('All');
+                        }}
+                        className="text-xs text-indigo-500 font-bold underline"
+                      >
+                        Reset filters
+                      </button>
+                    </div>
+                  ) : (
+                    filteredCallLogs.map((log) => {
+                      const turns = parseTranscriptTurns(log.transcript);
+                      const isExpanded = expandedCallId === log.id;
+                      const outcomeStr = log.outcome || (log.sentiment === 'positive' ? 'Site Visit / Interested' : log.sentiment === 'negative' ? 'Not Interested' : 'Undecided');
+                      const isVisit = outcomeStr.toLowerCase().includes('visit');
+                      const isKalyan = outcomeStr.toLowerCase().includes('kalyan') || (log.transcript || '').toLowerCase().includes('kalyan');
+                      const isNotInterested = outcomeStr.toLowerCase().includes('not interested') || log.sentiment === 'negative';
+
+                      return (
+                        <div
+                          key={log.id}
+                          className="p-5 bg-white dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl space-y-4 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                          {/* Card Header */}
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <h5 className="font-bold text-slate-900 dark:text-white text-base leading-tight">
+                                  {log.leadName || log.customerName || 'Caller'}
+                                </h5>
+                                {(log.customerPhone || log.leadCompany) && (
+                                  <span className="text-xs text-slate-400 font-medium">
+                                    • {log.customerPhone || log.leadCompany}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                Room: {log.callSid} • {new Date(log.calledAt).toLocaleString()}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                              {/* Outcome badge */}
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full font-extrabold text-[9px] uppercase tracking-wider ${
+                                  isVisit
+                                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                                    : isKalyan
+                                    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
+                                    : isNotInterested
+                                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                                }`}
+                              >
+                                {outcomeStr}
+                              </span>
+
+                              {/* Duration badge */}
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
+                                <Clock className="h-3 w-3 mr-1 text-slate-400" />
+                                {log.durationSeconds}s
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Detected Question Badges */}
+                          {log.detectedQuestions && log.detectedQuestions.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] font-bold text-slate-400 mr-1">Questions Asked:</span>
+                              {log.detectedQuestions.map((q, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold border border-indigo-200/60 dark:border-indigo-900/60"
+                                >
+                                  <HelpCircle className="h-2.5 w-2.5 text-indigo-500" />
+                                  {q}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Summary Box */}
+                          <div className="text-xs bg-slate-50 dark:bg-slate-950/70 p-3 border border-slate-200/60 dark:border-slate-800/80 rounded-xl space-y-1">
+                            <span className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400 block">AI Executive Summary</span>
+                            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                              {log.aiSummary}
+                            </p>
+                          </div>
+
+                          {/* Recording Player & Turn Dialogue Trigger */}
+                          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1">
+                            <button
+                              onClick={() => handleMockAudio(log.id)}
+                              className="flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:bg-blue-100 transition-colors"
+                            >
+                              <Volume2
+                                className="h-3.5 w-3.5 animate-bounce"
+                                style={{ animationPlayState: playingAudioId === log.id ? 'running' : 'paused' }}
+                              />
+                              <span>{playingAudioId === log.id ? "Playing Audio Recording..." : "Listen Call Audio"}</span>
+                              {playingAudioId === log.id && (
+                                <span className="text-[10px] text-slate-400 ml-2">0:03 / {log.durationSeconds}s</span>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => setExpandedCallId(isExpanded ? null : log.id)}
+                              className="flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-indigo-500" />
+                              <span>{isExpanded ? "Hide Turn-by-Turn Dialogue" : `Inspect Turn-by-Turn Dialogue (${turns.length} turns)`}</span>
+                              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+
+                          {/* EXPANDABLE TURN-BY-TURN DIALOGUE DRAWER */}
+                          {isExpanded && (
+                            <div className="mt-3 p-4 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                                <span className="font-extrabold text-[10px] uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                  <MessageSquare className="h-3.5 w-3.5 text-indigo-500" />
+                                  Live Turn-by-Turn Conversation Transcript
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {turns.length} total turns
+                                </span>
+                              </div>
+
+                              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                                {turns.length === 0 ? (
+                                  <p className="text-xs text-slate-400 italic">No dialogue recorded in this transcript.</p>
+                                ) : (
+                                  turns.map((turn, tIdx) => {
+                                    return (
+                                      <div
+                                        key={tIdx}
+                                        className={`flex flex-col ${
+                                          turn.isAgent ? 'items-start' : 'items-end'
+                                        }`}
+                                      >
+                                        <span className="text-[10px] font-bold text-slate-400 mb-0.5 px-1">
+                                          {turn.isAgent ? 'Gayatri (Sai Complex Advisor)' : `${log.leadName || log.customerName || 'Customer'}`}
+                                        </span>
+                                        <div
+                                          className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${
+                                            turn.isAgent
+                                              ? 'bg-indigo-600/10 text-slate-850 dark:text-slate-100 border border-indigo-300/60 dark:border-indigo-800/60 rounded-tl-sm'
+                                              : 'bg-amber-500/10 text-slate-850 dark:text-slate-100 border border-amber-300/60 dark:border-amber-700/60 rounded-tr-sm'
+                                          }`}
+                                        >
+                                          {turn.text}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               )}
