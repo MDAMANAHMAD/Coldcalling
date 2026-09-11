@@ -56,7 +56,7 @@ async def make_outbound_call(
     phone_number: str,
     customer_name: str,
     company: str = "",
-    wait_until_answered: bool = False
+    wait_until_answered: bool = True
 ) -> dict:
     """
     Creates a dedicated LiveKit room and dispatches a SIP participant
@@ -172,7 +172,7 @@ async def process_batch_csv(csv_path: str):
             continue
 
         logger.info(f"\n--- Dialing Lead {idx}/{len(leads)}: {name} ({phone}) ---")
-        result = await make_outbound_call(phone, name, company, wait_until_answered=False)
+        result = await make_outbound_call(phone, name, company, wait_until_answered=True)
         logger.info(f"Result: {result['status']}")
 
         # Gentle delay between campaign dispatches to respect rate limits

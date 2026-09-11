@@ -1590,19 +1590,45 @@ async def entrypoint(ctx: JobContext):
     # Wait for the caller to join the room if not already present.
     # We wait BEFORE calling session.start() to prevent Deepgram from starting its WebSocket 
     # connection during the ringing phase, which would trigger 1006 connection timeouts.
-    if not ctx.room.remote_participants:
+    caller_participant = None
+    for p in ctx.room.remote_participants.values():
+        if p.identity.startswith("sip-") or not p.identity.startswith("agent-"):
+            caller_participant = p
+            break
+
+    if caller_participant is None:
         logger.info("⏳ Room is empty. Waiting for caller to join...")
         caller_joined = asyncio.Event()
         
         @ctx.room.on("participant_connected")
         def _on_participant_connected(p):
-            logger.info(f"📞 Caller joined: {p.identity}")
-            caller_joined.set()
+            nonlocal caller_participant
+            if p.identity.startswith("sip-") or not p.identity.startswith("agent-"):
+                logger.info(f"📞 Caller joined: {p.identity}")
+                caller_participant = p
+                caller_joined.set()
             
         try:
             await asyncio.wait_for(caller_joined.wait(), timeout=60.0)
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
+
+    # Defensive check: If caller is present but in JOINING state, wait for ACTIVE answer
+    if caller_participant and hasattr(caller_participant, "state"):
+        if caller_participant.state != rtc.ParticipantState.PARTICIPANT_STATE_ACTIVE:
+            logger.info(f"⏳ Caller {caller_participant.identity} is in state {caller_participant.state}. Waiting for ACTIVE answer...")
+            caller_active = asyncio.Event()
+
+            @ctx.room.on("participant_active")
+            def _on_participant_active(p):
+                if caller_participant and p.identity == caller_participant.identity:
+                    logger.info(f"📞 Caller answered! Participant is now ACTIVE: {p.identity}")
+                    caller_active.set()
+
+            try:
+                await asyncio.wait_for(caller_active.wait(), timeout=45.0)
+            except asyncio.TimeoutError:
+                logger.warning("Timeout waiting for caller participant to become active. Proceeding.")
 
     # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
@@ -1644,11 +1670,14 @@ async def entrypoint(ctx: JobContext):
         f"Kya main {customer_name} se baat kar sakti hoon?"
     )
 
-    # Speak greeting immediately after bridge has settled, allow caller to interrupt
-    logger.info("🎙️ Speaking Greeting to caller...")
+    # Speak greeting immediately after bridge has settled.
+    # CRITICAL: allow_interruptions=False guarantees the opening greeting is NOT truncated
+    # by line pickup clicks, initial background noise, or caller saying 'Hello' as they lift the phone.
+    logger.info("🎙️ Speaking Greeting to caller (protected from false interruption)...")
     try:
-        session.say(greeting_text, allow_interruptions=True)
-        call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": 1.2})
+        session.say(greeting_text, allow_interruptions=False)
+        elapsed_sec = round(time.time() - t_call_start, 1)
+        call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": elapsed_sec})
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 
