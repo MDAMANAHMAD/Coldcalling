@@ -125,10 +125,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 
 2. OPENING CONVERSATION FLOW (MANDATORY STEP-BY-STEP SEQUENCE)
 - **Turn 1 (Spoken by Agent on call connect)**:
-  "Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main [Customer Name] se baat kar sakti hoon?"
+  "Hello! Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se, kya main [Customer Name] se baat kar sakti hoon?"
 - **Turn 2 (Direct Value Pitch when customer responds - e.g. 'haan', 'boliye', 'ji boliye', 'kaun?', 'kya kaam tha?')**:
   Directly pitch the available property without restrictive qualifying questions:
-  "Ji, Sai Complex Dombivli East ke regarding call kiya hai. Yahan premium one aur two BHK flats thirty six lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+  "Ji, Sai Complex Dombivli East ke regarding call kiya hai, yahan premium one aur two BHK flats thirty six lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye one BHK dekh rahe hain ya two BHK?"
   (DO NOT ask "Kya aap Dombivli mein property dekh rahe hain?" or other restrictive qualifying questions. Pitch directly).
 - **When customer specifies configuration (e.g. 'one BHK', 'two BHK')**:
   State the exact options and price, and ask if they have questions:
@@ -177,7 +177,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   You MUST switch to 100% PURE, FLUENT MARATHI (शुद्ध मराठी).
   STRICT RULE: Strictly ZERO Hindi words are allowed (DO NOT use 'hai', 'aapka', 'humara', 'ke liye', 'kya', 'boliye', 'bhai', 'ji', 'accha', etc.).
   Write your responses in natural Devanagari Marathi text for Text-to-Speech:
-  - Greeting: "नमस्कार! मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली ईस्ट मधून."
+  - Greeting: "नमस्कार, मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली ईस्ट मधून."
   - Direct Pitch: "आमच्याकडे वन बीएचके छत्तीस लाख रुपयांपासून आणि टू बीएचके बहात्तर लाख रुपयांपासून उपलब्ध आहेत. तुम्ही स्वतःसाठी वन बीएचके शोधत आहात की टू बीएचके?"
   - 1 BHK: "आमच्याकडे वन बीएचके छत्तीस लाख रुपयांपासून सुरू होतात. प्रोजेक्टबद्दल अजून काही प्रश्न आहेत का?"
   - 2 BHK: "आमच्याकडे टू बीएचके बहात्तर लाख रुपयांपासून सुरू होतात. प्रोजेक्टबद्दल अजून काही प्रश्न आहेत का?"
@@ -868,16 +868,16 @@ def prewarm_fnc(proc: JobProcess):
     # 3. Pre-warm Silero VAD (16kHz native rate for zero downsampling lag on VPS CPU)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.06,
+        min_silence_duration=0.50,
+        min_speech_duration=0.18,
         sample_rate=16000
     )
 
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.90"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.95"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
@@ -1079,8 +1079,8 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.90"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.95"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
@@ -1121,8 +1121,8 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.06,
+            min_silence_duration=0.50,
+            min_speech_duration=0.18,
             sample_rate=16000
         )
     
@@ -1147,7 +1147,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.45,
+                "min_delay": 0.50,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls on transcript mutations
@@ -1156,8 +1156,8 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.25,
-                "resume_false_interruption": True,
+                "min_duration": 0.65,
+                "resume_false_interruption": False,
             }
         }
     )
@@ -1617,8 +1617,8 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(1.2)
 
     greeting_text = (
-        f"Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. "
-        f"Kya main {customer_name} se baat kar sakti hoon?"
+        f"Hello! Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se, "
+        f"kya main {customer_name} se baat kar sakti hoon?"
     )
 
     # Speak greeting immediately after bridge has settled, allow caller to interrupt
