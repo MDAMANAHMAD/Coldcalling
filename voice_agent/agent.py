@@ -151,9 +151,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   (Example: "Thank you so much, aapka din shubh ho, bye!" or "Ji bilkul, aapka din shubh ho, bye!").
 
 5. CRITICAL VOICE, SCRIPT & TTS FORMATTING (MANDATORY)
-- SCRIPT & LANGUAGE: ALWAYS write your spoken outputs in natural Hinglish using ONLY the standard English Latin alphabet (e.g., "Ji, Sai Complex Dombivli East mein hai...").
+- SCRIPT & LANGUAGE:
+  - For Hindi/Hinglish turns: Write spoken outputs in natural Hinglish using ONLY the standard English Latin alphabet (e.g., "Ji, Sai Complex Dombivli East mein hai...").
+  - For Marathi turns: Speak in 100% PURE MARATHI (शुद्ध मराठी). You can write in clean Devanagari Marathi script (e.g., "डोंबिवली रेल्वे स्थानक येथून अंदाजे पंधरा मिनिटांच्या अंतरावर आहे.") so the Cartesia neural voice model articulates with authentic Marathi phonetics.
 - CLEAN PUNCTUATION ONLY: Use standard single periods (.) and question marks (?). NEVER use multiple consecutive dots like "..." or hyphens "--" or commas in series, as these cause neural TTS audio breaks and micro-stutters.
-- STRICTLY NO DEVANAGARI: NEVER output Hindi/Marathi Devanagari script under any circumstances.
 - STRICTLY NO MARKDOWN: NEVER use asterisks (NO ** or *), NO hashes (#), NO bullet points, NO quotes. Everything you write is read aloud by Text-To-Speech.
 - STRICTLY NO EMOJIS: Absolutely NO emojis (no 🙏, 🏠, 📞, etc.).
 - PHONETIC PRICING ONLY: Write all numbers and pricing phonetically in words only.
@@ -210,56 +211,85 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - When call concludes or client is not interested:
   - Call `update_lead_status(status="not_interested")` or `end_call()`.
   - Say: "Aapka din shubh ho... bye!"
+
+11. 100% PURE MARATHI MODE (WHEN CALLER SPEAKS OR ASKS FOR MARATHI)
+- TRIGGER: If the caller speaks in Marathi (e.g. "Dombivli station kiti laam ahe?", "Kasa ahat?", "Kiti padel?") OR asks to speak in Marathi (e.g. "Marathi madhe bola", "मराठीत सांगा"):
+- STRICT RULE: You MUST immediately respond in 100% PURE, fluent, authentic Marathi (शुद्ध मराठी).
+- ZERO HINDI TOLERANCE: Do NOT mix even a single Hindi word or Hindi grammatical construct.
+  - ❌ FORBIDDEN HINDI WORDS: hai, humara, kijiye, shubh ho, kitna, kahan, poochiye, aao, dekhne.
+  - ✅ MANDATORY MARATHI EQUIVALENTS:
+    - The verb is "आहे" (aahe), NEVER "hai".
+    - "आमचा प्रोजेक्ट" (our project), NEVER "humara project".
+    - "करा / विचारा" (do / ask), NEVER "kijiye / poochiye".
+    - "किती लांब" (how far), NEVER "kitna door".
+    - "भेट द्यायला / बघायला" (to visit), NEVER "visit karne".
+    - Closing: "तुमचा दिवस चांगला जावो, नमस्कार!" (NOT "aapka din shubh ho").
+- MARATHI REAL ESTATE PROJECT FACTS & KNOWLEDGE:
+  - 1 BHK: "आमच्याकडे एक बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात. प्रोजेक्टबद्दल तुमचे आणखी काही प्रश्न आहेत का?"
+  - 2 BHK: "आमच्याकडे दोन बीएचके फ्लॅट्स बहात्तर लाख रुपयांपासून सुरू होतात. प्रोजेक्टबद्दल तुमचे आणखी काही प्रश्न आहेत का?"
+  - Dombivli Station Distance: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे." (STRICT RULE: Mention Nilje station ONLY if specifically asked!).
+  - Weekend Site Visit Invitation: "छान! मग प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का? शनिवारी यायला आवडेल की रविवारी?"
+  - Confirming Visit: "मी तुमची भेट नक्की केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. तुमचा दिवस चांगला जावो, नमस्कार!"
+- BREVITY: Keep Marathi answers short and conversational (1 to 2 sentences max, 15-20 words).
 """
 
 
 # ==============================================================================
 # 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS
 # ==============================================================================
-def resolve_language(transcript: str, detected_lang: str | None) -> str:
-    """Detects spoken language, preferring Hindi unless a strong shift to English or Marathi occurs."""
+def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
+    """Detects spoken language, detecting explicit requests and spoken Marathi/English/Hindi."""
+    import string
     text = transcript.strip().lower()
     words = text.split()
+    clean_words = [w.strip(string.punctuation) for w in words]
     
-    # 0. Explicit language request overrides (user asks to switch language)
-    if "marathi" in text or "मराठी" in text:
-        return "mr"
-    if "english" in text or "इंग्लिश" in text:
-        return "en"
-    if "hindi" in text or "हिंदी" in text or "हिन्दी" in text:
-        return "hi"
+    # 0. Explicit language request overrides
+    marathi_explicit = ['marathi', 'मराठी', 'marathit', 'marathi madhe', 'marathit bola', 'marathi bola', 'marathi sanga', 'marathi madhun']
+    if any(m in text for m in marathi_explicit):
+        return 'mr'
+    if 'english' in text or 'इंग्लिश' in text:
+        return 'en'
+    if 'hindi' in text or 'हिंदी' in text or 'हिन्दी' in text:
+        return 'hi'
     
-    # Count Latin letters vs total
-    latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
-    total_chars = len(transcript.replace(" ", ""))
-    
-    # Common Hinglish grammatical words/filler words. If the user uses these, they are speaking Hindi/Hinglish.
-    hinglish_markers = {
-        "hai", "kya", "ka", "ki", "ko", "se", "par", "ji", "haan", "han", "achha", "acha", 
-        "bataiye", "batao", "btao", "he", "ho", "me", "mein", "ke", "ne", "aur", "ya", "toh", 
-        "to", "bhai", "na", "ab", "kab", "sab", "kar", "karna", "krna", "do", "dena", "dedo"
-    }
-    
-    # 1. English Check: Only switch to English if:
-    # - Sentence is at least 4 words
-    # - More than 80% of the characters are Latin
-    # - None of the words are common Hinglish markers
-    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.8
-    if len(words) >= 4 and is_mostly_latin:
-        if not any(w in hinglish_markers for w in words):
-            return "en"
-            
-    # 2. Marathi Check
-    marathi_keywords = [
-        "मला", "आहे", "आहात", "नाही", "काय", "करतो", "माहिती", "पाहिजे", "बोलतो", 
-        "बघतो", "चालू", "करून", "पुढील", "नका", "चालेल", "नको", "कधी", "कसा", 
-        "कशी", "कसे", "सांगा", "दाखवा", "पाहू", "तुम्ही", "आम्ही", "मध्ये"
+    # 1. Devanagari Marathi script markers
+    if 'ळ' in transcript:
+        return 'mr'
+    devanagari_marathi_words = [
+        'आहे', 'आहात', 'नाही', 'काय', 'माहिती', 'पाहिजे', 'बोलतो', 'बोलते',
+        'चालेल', 'नको', 'कधी', 'कसा', 'कशी', 'कसे', 'सांगा', 'दाखवा', 'तुम्ही',
+        'आम्ही', 'मध्ये', 'आमचा', 'आमचे', 'किती', 'कुठे', 'लांब', 'दिवस', 'शनिवारी', 'रविवारी'
     ]
-    if "ळ" in transcript or (len(words) >= 3 and any(word in text for word in marathi_keywords)):
-        return "mr"
+    if any(w in text for w in devanagari_marathi_words):
+        return 'mr'
+
+    # 2. Phonetic / Latin Romanized Marathi markers
+    phonetic_marathi_markers = [
+        'kiti', 'kuthe', 'kute', 'laam', 'kasa', 'kase', 'kashi', 'sanga', 'sang na',
+        'ahe', 'aahe', 'ahet', 'aahet', 'nako', 'pahije', 'tumhi', 'tumche', 'tumchya',
+        'tumhala', 'amhi', 'amche', 'amchya', 'amhala', 'madhe', 'madhun', 'baddal',
+        'vishayi', 'shaniwari', 'raviwari', 'somwari', 'yaaycha', 'yenar', 'chalel',
+        'ho chalel', 'bolat aahat', 'aiku yetay', 'kay challay', 'kay kartay'
+    ]
+    if any(w in clean_words or w in text for w in phonetic_marathi_markers):
+        return 'mr'
+
+    # 3. English Check
+    latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
+    total_chars = len(transcript.replace(' ', ''))
+    hinglish_markers = {
+        'hai', 'kya', 'ka', 'ki', 'ko', 'se', 'par', 'ji', 'haan', 'han', 'achha', 'acha', 
+        'bataiye', 'batao', 'btao', 'me', 'mein', 'ke', 'ne', 'aur', 'ya', 'toh', 
+        'to', 'bhai', 'na', 'ab', 'kab', 'sab', 'kar', 'karna', 'krna', 'do', 'dena', 'dedo',
+        'kitna', 'kitne', 'kitni', 'door', 'dur', 'kahan', 'kaha', 'kaise', 'hoga', 'hogi', 'milega'
+    }
+    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.8
+    if len(clean_words) >= 4 and is_mostly_latin and not any(w in hinglish_markers for w in clean_words):
+        return 'en'
         
     # Default to Hindi
-    return "hi"
+    return 'hi'
 
 
 class PriyaRealEstateAgent(Agent):
@@ -1359,31 +1389,29 @@ async def entrypoint(ctx: JobContext):
             # Append customer turn to transcript history
             elapsed_sec = round(time.time() - t_call_start, 1)
             call_dialogue.append({"role": "customer", "text": ev.transcript.strip(), "time": elapsed_sec})
-            new_lang = current_lang
+            new_lang = resolve_language(ev.transcript, None)
             
-            # Switch ONLY when explicitly requested by name
-            if "marathi" in text or "मराठी" in text:
-                new_lang = "mr"
-            elif "english" in text or "इंग्लिश" in text:
-                new_lang = "en"
-            elif "hindi" in text or "हिंदी" in text or "हिन्दी" in text:
-                new_lang = "hi"
-                
             if new_lang != current_lang:
                 current_lang = new_lang
-                logger.info(f"🗣️ Explicit Language Switch: '{current_lang}' requested for text: '{ev.transcript}'")
+                logger.info(f"🗣️ Language Switch Detected: '{current_lang}' for text: '{ev.transcript}'")
                 
                 is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
                 if is_cartesia and hasattr(session.tts, "update_options"):
                     if current_lang == "mr":
                         session.tts.update_options(
-                            voice="5c32dce6-936a-4892-b131-bafe474afe5f",  # Anika (Marathi Feminine)
+                            voice=kusha_voice_id,
                             language="mr",
                             speed=cartesia_speed if cartesia_speed != 1.0 else 1.0,
                             emotion=[cartesia_emotion] if cartesia_emotion else None,
                             volume=cartesia_volume
                         )
-                        logger.info("🔄 Switched TTS to Marathi (Anika)")
+                        logger.info(f"🔄 Switched TTS to Pure Marathi with Kusha Cloned Voice ({kusha_voice_id}, volume={cartesia_volume}, speed={cartesia_speed})")
+                        try:
+                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                            if hist and hasattr(hist, "add_message"):
+                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: PURE MARATHI] The caller is speaking Marathi or requested Marathi. You MUST answer in 100% PURE, fluent Marathi (शुद्ध मराठी) with ZERO Hindi words. Keep it short (1-2 sentences).")
+                        except Exception as e:
+                            logger.debug(f"Could not inject Marathi steering message: {e}")
                     elif current_lang == "en":
                         session.tts.update_options(
                             voice=kusha_voice_id,
@@ -1402,6 +1430,12 @@ async def entrypoint(ctx: JobContext):
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
+                        try:
+                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                            if hist and hasattr(hist, "add_message"):
+                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: HINDI] The caller is speaking Hindi. Answer in natural Hindi/Hinglish.")
+                        except Exception as e:
+                            logger.debug(f"Could not inject Hindi steering message: {e}")
 
     _hangup_scheduled = False
     _hangup_task = None
@@ -1484,7 +1518,10 @@ async def entrypoint(ctx: JobContext):
                     call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
 
                 text = raw_text.lower()
-                ending_phrases = ["aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida"]
+                ending_phrases = [
+                    "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
+                    "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या"
+                ]
                 if any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
                     trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
