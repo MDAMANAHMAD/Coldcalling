@@ -121,10 +121,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - If customer agrees to hear details: Share the BHK pricing and bridge to a site visit.
   - If customer says NO / strictly wants Kalyan only / refuses Dombivli:
     State property unavailability explicitly and end the call gracefully:
-    "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho... bye!"
+    "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye!"
     and immediately call `end_call()` or `update_lead_status(status="not_interested")`.
 - **Refusal on Pitch (If customer says hard NO / not looking for property / wrong number)**:
-  Politely say: "Okay sir, koi baat nahi. Thank you so much, aapka din shubh ho... bye!" and call `end_call()`.
+  Politely say: "Okay sir, koi baat nahi. Thank you so much, aapka din shubh ho, bye!" and call `end_call()`.
 
 3. BALANCED SITE VISIT GUIDANCE (PROACTIVE YET NATURAL)
 - Keep responses short (1 to 2 sentences max).
@@ -138,8 +138,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 4. MANDATORY CALL CLOSING RULE
 - Whenever ending or concluding the call (after booking a site visit, or when the customer has no more questions, or if the customer is not interested):
 - ALWAYS politely conclude with:
-  "Aapka din shubh ho... bye!"
-  (Example: "Thank you so much... aapka din shubh ho... bye!" or "Ji bilkul... aapka din shubh ho... bye!").
+  "Aapka din shubh ho, bye!"
+  (Example: "Thank you so much, aapka din shubh ho, bye!" or "Ji bilkul, aapka din shubh ho, bye!").
 
 5. CRITICAL VOICE, SCRIPT & TTS FORMATTING (MANDATORY)
 - SCRIPT & LANGUAGE: ALWAYS write your spoken outputs in natural Hinglish using ONLY the standard English Latin alphabet (e.g., "Ji, Sai Complex Dombivli East mein hai...").
@@ -296,10 +296,10 @@ class PriyaRealEstateAgent(Agent):
 
         # Trigger automatic call termination after goodbye message is spoken
         if self._hangup_fnc:
-            self._hangup_fnc(delay_seconds=4.0)
+            self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
 
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
-        return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai... Main is number par details WhatsApp kar deti hoon... aapka din shubh ho... bye!"
+        return f"Maine {preferred_day}{time_str} ko site visit confirm kar diya hai. Main is number par details WhatsApp kar deti hoon. Aapka din shubh ho, bye!"
 
     @function_tool(description="Call ONLY when client explicitly and firmly refuses (e.g. 'nahi chahiye', 'not interested', 'don't call me', 'wrong number').")
     async def update_lead_status(
@@ -332,15 +332,15 @@ class PriyaRealEstateAgent(Agent):
             return "Lead marked as interested. You should continue talking and guide them towards a site visit."
         else:
             if self._hangup_fnc:
-                self._hangup_fnc(delay_seconds=3.5)
-            return "Lead marked as not interested. Say 'Aapka din shubh ho... bye!' and end the conversation."
+                self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+            return "Lead marked as not interested. Say 'Aapka din shubh ho, bye!' and end the conversation."
 
-    @function_tool(description="End the telephone call after saying goodbye ('Aapka din shubh ho... bye!') when the conversation has concluded.")
+    @function_tool(description="End the telephone call after saying goodbye ('Aapka din shubh ho, bye!') when the conversation has concluded.")
     async def end_call(self) -> str:
         logger.info("📞 [CALL TERMINATION TOOL INVOKED]")
         if self._hangup_fnc:
-            self._hangup_fnc(delay_seconds=3.5)
-        return "Call will automatically terminate in 3.5 seconds. Say 'Aapka din shubh ho... bye!'."
+            self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+        return "Call will automatically terminate after saying 'Aapka din shubh ho, bye!'."
 
     @function_tool(description="Send Sai Complex brochure or pricing to client on WhatsApp.")
     async def send_whatsapp_brochure(
@@ -1120,6 +1120,8 @@ async def entrypoint(ctx: JobContext):
         try:
             if watchdog_task and not watchdog_task.done():
                 watchdog_task.cancel()
+            if _hangup_task and not _hangup_task.done():
+                _hangup_task.cancel()
             duration_seconds = time.time() - t_call_start
             duration_minutes = duration_seconds / 60.0
             
@@ -1378,16 +1380,56 @@ async def entrypoint(ctx: JobContext):
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
 
     _hangup_scheduled = False
+    _hangup_task = None
 
-    def trigger_hangup(delay_seconds: float = 3.5):
-        nonlocal _hangup_scheduled
+    def trigger_hangup(wait_for_speech: bool = True, delay_seconds: float = 2.5):
+        nonlocal _hangup_scheduled, _hangup_task
         if _hangup_scheduled:
             return
         _hangup_scheduled = True
 
         async def _do_disconnect():
-            logger.info(f"📞 [CALL TERMINATION] Disconnecting SIP room in {delay_seconds}s...")
-            await asyncio.sleep(delay_seconds)
+            logger.info(f"📞 [CALL TERMINATION TRIGGERED] (wait_for_speech={wait_for_speech}, telecom_grace={delay_seconds}s)")
+            
+            if wait_for_speech:
+                # 1. Give up to 3.5s for the agent to start speaking if not already speaking
+                # (Allows LLM response generation and Cartesia TTS audio stream initialization)
+                t_wait_start = time.time()
+                while time.time() - t_wait_start < 3.5:
+                    if session.agent_state == "speaking" or session.current_speech is not None:
+                        break
+                    await asyncio.sleep(0.1)
+
+                # 2. Lock interruptions and wait until agent speech has completely finished playing out
+                t_speech_wait = time.time()
+                while time.time() - t_speech_wait < 20.0:
+                    speech = session.current_speech
+                    if speech:
+                        if hasattr(speech, "allow_interruptions"):
+                            try:
+                                speech.allow_interruptions = False
+                            except Exception:
+                                pass
+                        if not speech.done():
+                            try:
+                                await speech.wait_for_playout()
+                            except Exception as e:
+                                logger.debug(f"Speech playout exception: {e}")
+                    
+                    # Ensure agent state has transitioned to listening/idle and current speech has fully played out
+                    if session.agent_state != "speaking" and (session.current_speech is None or session.current_speech.done()):
+                        logger.info("🎙️ [CALL TERMINATION] Final agent speech has completely finished playing out!")
+                        break
+                    await asyncio.sleep(0.15)
+
+            # 3. Telecom RTP Jitter Buffer Grace Period
+            # Telecom SIP trunks (Vobiz/Twilio) and carrier networks have ~1.0-1.5s jitter buffer latency.
+            # Adding 2.5s guarantees the phone speaker delivers the final word ("bye!") in full clarity,
+            # followed by a natural human conversational pause before the carrier line disconnects.
+            grace = max(delay_seconds, 2.5)
+            logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s telecom buffer grace period before sending SIP BYE...")
+            await asyncio.sleep(grace)
+
             logger.info("📞 [CALL TERMINATION] Terminating SIP call and deleting room now.")
             try:
                 if hasattr(ctx, "delete_room"):
@@ -1401,7 +1443,7 @@ async def entrypoint(ctx: JobContext):
                 except Exception:
                     pass
 
-        asyncio.create_task(_do_disconnect())
+        _hangup_task = asyncio.create_task(_do_disconnect())
 
     @session.on("conversation_item_added")
     def on_item_added(item):
@@ -1418,10 +1460,10 @@ async def entrypoint(ctx: JobContext):
                     call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
 
                 text = raw_text.lower()
-                ending_phrases = ["aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!"]
+                ending_phrases = ["aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida"]
                 if any(phrase in text for phrase in ending_phrases):
-                    logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination in 4.0s...")
-                    trigger_hangup(delay_seconds=4.0)
+                    logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
+                    trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
@@ -1532,14 +1574,16 @@ async def entrypoint(ctx: JobContext):
             # Stage 2: Caller silent for 30 seconds -> End call cleanly
             elif silence_duration >= 30.0:
                 logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>30s). Terminating call.")
-                farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Aapka din shubh ho... bye!"
+                farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Aapka din shubh ho, bye!"
                 try:
-                    session.say(farewell_text, allow_interruptions=False)
+                    speech_handle = session.say(farewell_text, allow_interruptions=False)
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
+                    if speech_handle:
+                        await speech_handle.wait_for_playout()
                 except Exception as e:
                     logger.warning(f"Error speaking silence farewell: {e}")
-                trigger_hangup(delay_seconds=3.5)
+                trigger_hangup(wait_for_speech=False, delay_seconds=2.5)
                 break
 
     watchdog_task = asyncio.create_task(_silence_watchdog())
