@@ -76,6 +76,9 @@ def format_line(raw_line: str) -> str:
         name = line.split("participants:")[-1].strip()
         return f" {CYAN}🏷️  Customer Name:{RESET} {BOLD}{GREEN}{name}{RESET}"
 
+    if "Kusha Cloned Voice" in line and ("Initializing Cartesia TTS" in line or "STATE RESET" in line):
+        return f" {MAGENTA}🎙️ Voice Engine:{RESET} {BOLD}Cartesia Kusha Cloned Voice (ID: 68da925c-0163-4b50-a4e6-08862f6dd5de){RESET}"
+
     # 3. Agent Session Ready
     if "Speaking Greeting to caller" in line:
         return f" {MAGENTA}👋 Gayatri is greeting caller...{RESET}"
