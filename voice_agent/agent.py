@@ -876,7 +876,9 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.95"))
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.6"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
@@ -884,8 +886,9 @@ def prewarm_fnc(proc: JobProcess):
             voice=kusha_voice_id,
             language="hi",
             sample_rate=24000,
-            model="sonic-3.5",
+            model=cartesia_model,
             speed=cartesia_speed,
+            volume=cartesia_volume,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             word_timestamps=False
         )
@@ -1079,21 +1082,24 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.95"))
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.6"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
         cartesia_key = os.getenv("CARTESIA_API_KEY")
         if cartesia_key and len(cartesia_key) > 10:
-            logger.info(f"Initializing Cartesia TTS as Primary with Kusha Cloned Voice ({kusha_voice_id}) on sonic-3.5 (speed={cartesia_speed}, emotion={cartesia_emotion})...")
+            logger.info(f"Initializing Cartesia TTS as Primary with Kusha Cloned Voice ({kusha_voice_id}) on {cartesia_model} (speed={cartesia_speed}, volume={cartesia_volume}, emotion={cartesia_emotion})...")
             tts = cartesia.TTS(
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="hi",
                 sample_rate=24000,
-                model="sonic-3.5",
+                model=cartesia_model,
                 speed=cartesia_speed,
+                volume=cartesia_volume,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
                 word_timestamps=False
             )
@@ -1116,6 +1122,7 @@ async def entrypoint(ctx: JobContext):
     
 
 
+
     # VAD is pre-warmed, but load as fallback if not present (16kHz native sample rate)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
@@ -1133,9 +1140,10 @@ async def entrypoint(ctx: JobContext):
             voice=kusha_voice_id,
             language="hi",
             speed=cartesia_speed,
+            volume=cartesia_volume,
             emotion=[cartesia_emotion] if cartesia_emotion else None
         )
-        logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}, speed={cartesia_speed}, emotion={cartesia_emotion}).")
+        logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}, model={cartesia_model}, speed={cartesia_speed}, volume={cartesia_volume}).")
 
     t_session_init = time.perf_counter()
     session = AgentSession(
@@ -1439,28 +1447,34 @@ async def entrypoint(ctx: JobContext):
                 if is_cartesia and hasattr(session.tts, "update_options"):
                     if current_lang == "mr":
                         session.tts.update_options(
+                            model=cartesia_model,
                             voice=kusha_voice_id,
                             language="mr",
                             speed=cartesia_speed,
+                            volume=min(cartesia_volume + 0.2, 2.0),
                             emotion=[cartesia_emotion] if cartesia_emotion else None
                         )
-                        logger.info(f"🔄 Switched TTS to Marathi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
+                        logger.info(f"🔄 Switched TTS to Marathi (Kusha Cloned Voice: {kusha_voice_id}, model={cartesia_model}, speed={cartesia_speed}, volume={min(cartesia_volume + 0.2, 2.0)})")
                     elif current_lang == "en":
                         session.tts.update_options(
+                            model=cartesia_model,
                             voice=kusha_voice_id,
                             language="en",
                             speed=cartesia_speed,
+                            volume=cartesia_volume,
                             emotion=[cartesia_emotion] if cartesia_emotion else None
                         )
-                        logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
+                        logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, model={cartesia_model}, speed={cartesia_speed}, volume={cartesia_volume})")
                     else:
                         session.tts.update_options(
+                            model=cartesia_model,
                             voice=kusha_voice_id,
                             language="hi",
                             speed=cartesia_speed,
+                            volume=cartesia_volume,
                             emotion=[cartesia_emotion] if cartesia_emotion else None
                         )
-                        logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
+                        logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, model={cartesia_model}, speed={cartesia_speed}, volume={cartesia_volume})")
 
     _hangup_scheduled = False
     _hangup_task = None
@@ -1624,7 +1638,8 @@ async def entrypoint(ctx: JobContext):
     # Speak greeting immediately after bridge has settled, allow caller to interrupt
     logger.info("🎙️ Speaking Greeting to caller...")
     try:
-        session.say(greeting_text, allow_interruptions=True)
+        # Speak opening greeting cleanly without line-connect noise cutting off the start
+        session.say(greeting_text, allow_interruptions=False)
         call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": 1.2})
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
