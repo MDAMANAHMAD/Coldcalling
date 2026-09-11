@@ -1376,6 +1376,7 @@ async def entrypoint(ctx: JobContext):
     t_last_activity = time.time()
     has_prompted_silence = False
     agent_is_speaking = False
+    intro_finished = False
     watchdog_task = None
 
     @session.on("error")
@@ -1675,34 +1676,64 @@ async def entrypoint(ctx: JobContext):
     # by line pickup clicks, initial background noise, or caller saying 'Hello' as they lift the phone.
     logger.info("🎙️ Speaking Greeting to caller (protected from false interruption)...")
     try:
-        session.say(greeting_text, allow_interruptions=False)
+        greeting_speech = session.say(greeting_text, allow_interruptions=False)
         elapsed_sec = round(time.time() - t_call_start, 1)
         call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": elapsed_sec})
+        
+        # Block until Gayatri has COMPLETELY finished speaking the entire intro part!
+        if greeting_speech:
+            try:
+                logger.info("⏳ Waiting for Gayatri intro speech to completely finish playing to caller...")
+                await greeting_speech.wait_for_playout()
+                logger.info("🎙️ [INTRO FINISHED] Gayatri has completed speaking the entire intro part! 10s silence countdown starts NOW.")
+            except Exception as playout_err:
+                logger.debug(f"Greeting playout exception: {playout_err}")
     except Exception as e:
         logger.warning(f"Greeting error: {e}")
 
     # Silence Watchdog: 10s -> "Hello?", 30s -> Auto Hangup
-    t_last_activity = time.time() + 4.0  # Allow 4s buffer for greeting to finish speaking
+    # The countdown of 10s ONLY starts now, AFTER Gayatri has finished speaking her entire intro!
+    t_last_activity = time.time()
+    has_prompted_silence = False
+    intro_finished = True
 
     async def _silence_watchdog():
         nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking
-        logger.info("🛡️ [SILENCE WATCHDOG] Active (10s 'Hello' prompt, 30s auto-hangup).")
+        logger.info("🛡️ [SILENCE WATCHDOG] Task active. Waiting for Gayatri to finish intro before counting silence...")
+        
+        # 1. Block and DO NOT count ANY silence while call is ringing or while Gayatri is speaking the intro!
+        while not intro_finished and not _hangup_scheduled:
+            await asyncio.sleep(0.2)
+
+        if _hangup_scheduled:
+            return
+
+        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 10s of caller silence.")
+        
         while not _hangup_scheduled:
-            await asyncio.sleep(1.0)
-            if _hangup_scheduled or agent_is_speaking:
+            await asyncio.sleep(0.5)
+            if _hangup_scheduled:
+                break
+                
+            # If agent is currently speaking or generating speech, reset caller silence timer
+            if agent_is_speaking or (session.current_speech and not session.current_speech.done()):
+                t_last_activity = time.time()
                 continue
 
             silence_duration = time.time() - t_last_activity
 
-            # Stage 1: Caller silent for 10 seconds -> Prompt "Hello?"
+            # Stage 1: Caller silent for 10 full seconds AFTER Gayatri finished intro / speech -> Prompt "Hello?"
             if silence_duration >= 10.0 and not has_prompted_silence:
                 has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s). Prompting 'Hello'...")
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s after Gayatri intro). Prompting 'Hello'...")
                 prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
-                    session.say(prompt_text, allow_interruptions=True)
+                    p_speech = session.say(prompt_text, allow_interruptions=True)
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": prompt_text, "time": elapsed_sec})
+                    if p_speech:
+                        await p_speech.wait_for_playout()
+                    t_last_activity = time.time()
                 except Exception as e:
                     logger.warning(f"Error speaking silence prompt: {e}")
 
