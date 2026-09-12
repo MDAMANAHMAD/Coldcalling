@@ -20,6 +20,8 @@ import json
 import logging
 import time
 import asyncio
+import shutil
+from pathlib import Path
 from datetime import datetime
 from typing import Optional
 import requests
@@ -1617,6 +1619,38 @@ async def entrypoint(ctx: JobContext):
             ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")
             detected_questions = intel.get("detectedQuestions", [])
 
+            # --- AUDIO RECORDING PERSISTENCE ---
+            recording_url = ""
+            try:
+                # 1. If session has RecorderIO active, cleanly aclose to flush all audio frames
+                if hasattr(session, "_recorder_io") and session._recorder_io:
+                    logger.info("🎙️ [AUDIO RECORDING] Flushing RecorderIO stream to disk...")
+                    try:
+                        await session._recorder_io.aclose()
+                    except Exception as close_rec_err:
+                        logger.debug(f"RecorderIO aclose note: {close_rec_err}")
+
+                # 2. Check source recording file in job_ctx.session_directory
+                src_session_dir = getattr(ctx, "session_directory", None)
+                if src_session_dir:
+                    src_file = Path(src_session_dir) / "audio.ogg"
+                    if src_file.exists() and src_file.stat().st_size > 0:
+                        os.makedirs("bookings/recordings", exist_ok=True)
+                        os.makedirs("public/recordings", exist_ok=True)
+                        dest_bookings = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
+                        dest_public = Path("public/recordings") / f"{ctx.room.name}.ogg"
+                        
+                        shutil.copy2(src_file, dest_bookings)
+                        try:
+                            shutil.copy2(src_file, dest_public)
+                        except Exception:
+                            pass
+                        
+                        recording_url = f"/api/recordings/{ctx.room.name}.ogg"
+                        logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call recording saved to {dest_bookings} ({src_file.stat().st_size} bytes)")
+            except Exception as rec_err:
+                logger.warning(f"Warning persisting call recording: {rec_err}")
+
             transcript_record = {
                 "call_id": ctx.room.name,
                 "user_email": user_account_email,
@@ -1625,6 +1659,7 @@ async def entrypoint(ctx: JobContext):
                 "customer_phone": customer_phone,
                 "duration_seconds": round(duration_seconds, 1),
                 "duration_minutes": round(duration_minutes, 2),
+                "recording_url": recording_url,
                 "outcome": call_outcome,
                 "sentiment": sentiment,
                 "ai_summary": ai_summary,
@@ -1642,7 +1677,7 @@ async def entrypoint(ctx: JobContext):
             with open(f"bookings/transcripts/{ctx.room.name}.json", "w", encoding="utf-8") as f:
                 json.dump(transcript_record, f, ensure_ascii=False, indent=2)
 
-            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Account: {user_account_email}, Outcome: {call_outcome}, Sentiment: {sentiment})")
+            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Account: {user_account_email}, Outcome: {call_outcome}, Sentiment: {sentiment}, Recording: {recording_url})")
 
             # 1. Sync with local db.json for the Cold Calling Dashboard
             try:
@@ -1660,7 +1695,7 @@ async def entrypoint(ctx: JobContext):
                         "callSid": ctx.room.name,
                         "userEmail": user_account_email,
                         "durationSeconds": round(duration_seconds),
-                        "recordingUrl": "",
+                        "recordingUrl": recording_url,
                         "transcript": formatted_transcript,
                         "aiSummary": ai_summary,
                         "sentiment": sentiment,
@@ -1696,6 +1731,8 @@ async def entrypoint(ctx: JobContext):
                     "userEmail": user_account_email,
                     "user_email": user_account_email,
                     "durationSeconds": round(duration_seconds),
+                    "recordingUrl": recording_url,
+                    "recording_url": recording_url,
                     "transcript": formatted_transcript,
                     "aiSummary": ai_summary,
                     "outcome": call_outcome,
@@ -2041,10 +2078,14 @@ async def entrypoint(ctx: JobContext):
         hangup_fnc=trigger_hangup
     )
 
-    # Start session with record=False
+    # Start session with dual-channel stereo recording (Caller on input, Gayatri AI on output)
     t_session_start = time.perf_counter()
-    logger.info("⏱️ [PERF] Calling session.start()...")
-    await session.start(agent=agent, room=ctx.room, record=False)
+    logger.info("⏱️ [RECORDING & PERF] Calling session.start(record={'audio': True})...")
+    try:
+        await session.start(agent=agent, room=ctx.room, record={"audio": True})
+    except Exception as rec_err:
+        logger.warning(f"Warning starting recording: {rec_err}. Falling back to record=False")
+        await session.start(agent=agent, room=ctx.room, record=False)
     
     t_session_ready = (time.perf_counter() - t_session_start) * 1000
     t_total_ready = (time.perf_counter() - t_start) * 1000

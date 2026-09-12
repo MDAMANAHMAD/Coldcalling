@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       customerName = body.customerName || 'Valued Customer';
       callSid = body.callSid || body.room_name || `call-${Date.now()}`;
       durationSeconds = body.durationSeconds || body.duration_seconds || 0;
+      recordingUrl = body.recordingUrl || body.recording_url || '';
       transcript = body.transcript || '';
       aiSummary = body.aiSummary || body.ai_summary || `Voice call with ${customerName}.`;
       sentiment = body.sentiment || 'neutral';

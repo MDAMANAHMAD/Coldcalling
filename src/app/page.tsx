@@ -710,6 +710,14 @@ export default function ColdCallingHomePage() {
                           <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
                           <span>{tag.label}</span>
                         </span>
+
+                        {/* Audio Recording Badge */}
+                        {call.recordingUrl && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                            <Volume2 className="h-3 w-3" />
+                            <span>Audio</span>
+                          </span>
+                        )}
                       </div>
 
                       {/* AI Summary / Notes */}
@@ -801,6 +809,31 @@ export default function ColdCallingHomePage() {
                 <span className="font-bold">AI Call Summary: </span>
                 {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
               </div>
+
+              {/* Call Audio Player */}
+              {selectedCall.recordingUrl && (
+                <div className="px-6 py-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 dark:from-slate-800/80 dark:to-blue-950/40 border-b border-blue-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm shrink-0">
+                      <Volume2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Call Audio Recording</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Dual-channel stereo (Caller + Gayatri AI)</p>
+                    </div>
+                  </div>
+                  <div className="flex-1 max-w-sm">
+                    <audio 
+                      controls 
+                      className="w-full h-8 rounded-lg accent-blue-600" 
+                      src={selectedCall.recordingUrl} 
+                      preload="metadata"
+                    >
+                      Your browser does not support audio playback.
+                    </audio>
+                  </div>
+                </div>
+              )}
 
               {/* Modal Body: Turn-by-Turn Dialogue */}
               <div className="p-6 overflow-y-auto space-y-4 flex-1">
