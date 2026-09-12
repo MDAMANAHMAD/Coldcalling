@@ -1,360 +1,627 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getLeads, getEmails, getTickets, getInvoices } from '@/app/actions';
-import { Lead, ClassifiedEmail, Ticket, Invoice } from '@/lib/types';
+import { 
+  getCallLogsWithLeads, 
+  getColdCallingStats,
+  deleteCallLog 
+} from '@/app/actions';
+import { CallLog } from '@/lib/types';
 import { 
   PhoneCall, 
-  Mail, 
-  Ticket as TicketIcon, 
-  FileText, 
-  ArrowUpRight, 
-  UserCheck, 
-  TrendingUp, 
+  PhoneOutgoing, 
+  User, 
   Clock, 
-  ChevronRight,
-  ExternalLink,
-  Plus,
-  Compass,
-  AlertTriangle,
-  Calendar
+  Calendar, 
+  CheckCircle2, 
+  XCircle, 
+  AlertCircle, 
+  Search, 
+  RefreshCw, 
+  MessageSquare, 
+  X, 
+  Sparkles, 
+  Building2, 
+  Tag, 
+  Volume2, 
+  ArrowRight,
+  TrendingUp,
+  Trash2
 } from 'lucide-react';
-import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function DashboardOverview() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [emails, setEmails] = useState<ClassifiedEmail[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+export default function ColdCallingHomePage() {
+  const [callLogs, setCallLogs] = useState<(CallLog & { leadName: string; leadPhone?: string })[]>([]);
+  const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0 });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // 1-Click Dialing Form State
+  const [dialName, setDialName] = useState('Raj');
+  const [dialPhone, setDialPhone] = useState('+918693081506');
+  const [isDialing, setIsDialing] = useState(false);
+  const [dialResult, setDialResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Interested' | 'Site Visit' | 'Not Interested'>('All');
+
+  // Selected Call Log for Modal Transcript
+  const [selectedCall, setSelectedCall] = useState<(CallLog & { leadName: string; leadPhone?: string }) | null>(null);
+
+  const loadData = async () => {
+    try {
+      const [logs, statsData] = await Promise.all([
+        getCallLogsWithLeads(),
+        getColdCallingStats()
+      ]);
+      setCallLogs(logs);
+      setStats(statsData);
+    } catch (err) {
+      console.error('Error loading call logs:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const leadList = await getLeads();
-        const emailList = await getEmails();
-        const ticketList = await getTickets();
-        const invoiceList = await getInvoices();
-        
-        setLeads(leadList);
-        setEmails(emailList);
-        setTickets(ticketList);
-        setInvoices(invoiceList);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    loadData();
   }, []);
 
-  // Filter urgent / VC emails
-  const priorityEmails = emails.filter(e => e.category === 'Urgent' || e.category === 'VC').slice(0, 3);
-  
-  const pendingCallbacks = leads.filter(l => {
-    if (!l.followUpDate || l.status !== 'callback_required') return false;
-    const today = new Date().toDateString();
-    const followDate = new Date(l.followUpDate).toDateString();
-    return today === followDate;
-  }).slice(0, 3);
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
-  // Filter pending support tickets
-  const activeTickets = tickets.filter(t => t.status === 'Pending' || t.status === 'In Progress').slice(0, 3);
+  const handleOutboundCall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dialPhone) return;
 
-  // Calculated totals
-  const totalLeads = leads.length;
-  const pipelineValue = invoices.reduce((sum, inv) => sum + (inv.status === 'Paid' ? 0 : inv.total), 0);
-  const ticketsCount = tickets.filter(t => t.status !== 'Resolved').length;
+    setIsDialing(true);
+    setDialResult(null);
+
+    try {
+      const res = await fetch('/api/outbound-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: dialPhone,
+          customerName: dialName || 'Valued Customer'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setDialResult({
+          success: true,
+          message: `Calling ${dialName} (${dialPhone})... Gayatri is connected and ringing the phone now!`
+        });
+        // Reload call logs so the new call immediately shows up
+        await loadData();
+      } else {
+        setDialResult({
+          success: false,
+          message: data.message || 'Could not dispatch call. Please check network/credentials.'
+        });
+      }
+    } catch (err: any) {
+      setDialResult({
+        success: false,
+        message: err.message || 'Network exception while placing outbound call.'
+      });
+    } finally {
+      setIsDialing(false);
+    }
+  };
+
+  const handleDeleteCall = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Are you sure you want to remove this call log?')) return;
+    await deleteCallLog(id);
+    await loadData();
+  };
+
+  // Helper to determine status tag styling and label
+  const getOutcomeTag = (call: CallLog) => {
+    const outcome = (call.outcome || '').toLowerCase();
+    const summary = (call.aiSummary || '').toLowerCase();
+    const transcript = (call.transcript || '').toLowerCase();
+
+    if (outcome.includes('site visit') || summary.includes('site visit') || transcript.includes('site visit confirm')) {
+      return {
+        label: 'Site Visit Scheduled',
+        bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        dot: 'bg-blue-500',
+        icon: Calendar
+      };
+    }
+
+    if (outcome.includes('not interested') || summary.includes('not interested') || call.sentiment === 'negative') {
+      return {
+        label: 'Not Interested',
+        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        dot: 'bg-rose-500',
+        icon: XCircle
+      };
+    }
+
+    if (outcome.includes('interested') || call.sentiment === 'positive') {
+      return {
+        label: 'Interested',
+        bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+        dot: 'bg-emerald-500',
+        icon: CheckCircle2
+      };
+    }
+
+    if (outcome.includes('calling')) {
+      return {
+        label: 'Ringing / Calling',
+        bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+        dot: 'bg-amber-500 animate-pulse',
+        icon: Clock
+      };
+    }
+
+    return {
+      label: 'Inquiry Completed',
+      bg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+      dot: 'bg-slate-400',
+      icon: CheckCircle2
+    };
+  };
+
+  // Filtered call logs
+  const filteredCalls = callLogs.filter(call => {
+    const nameMatch = (call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const phoneMatch = (call.customerPhone || call.leadPhone || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const queryMatches = nameMatch || phoneMatch;
+
+    if (!queryMatches) return false;
+
+    if (statusFilter === 'All') return true;
+    const tag = getOutcomeTag(call).label;
+    if (statusFilter === 'Interested') return tag === 'Interested';
+    if (statusFilter === 'Site Visit') return tag === 'Site Visit Scheduled';
+    if (statusFilter === 'Not Interested') return tag === 'Not Interested';
+
+    return true;
+  });
+
+  // Format Turn-by-Turn transcript
+  const parseTranscript = (rawTranscript: string) => {
+    if (!rawTranscript) return [];
+
+    const lines = rawTranscript.split('\n').filter(l => l.trim().length > 0);
+    const parsed: { speaker: 'agent' | 'customer' | 'system'; text: string }[] = [];
+
+    for (const line of lines) {
+      if (line.startsWith('[') && line.endsWith(']')) {
+        parsed.push({ speaker: 'system', text: line });
+      } else if (line.toLowerCase().startsWith('agent:') || line.toLowerCase().startsWith('agent (gayatri):')) {
+        parsed.push({
+          speaker: 'agent',
+          text: line.replace(/^agent(\s*\(gayatri\))?:\s*/i, '').trim()
+        });
+      } else if (line.toLowerCase().startsWith('customer:') || line.toLowerCase().startsWith('customer (')) {
+        parsed.push({
+          speaker: 'customer',
+          text: line.replace(/^customer(\s*\(.*?\))?:\s*/i, '').trim()
+        });
+      } else {
+        parsed.push({ speaker: 'system', text: line });
+      }
+    }
+
+    return parsed;
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Banner */}
-      <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black leading-tight">Welcome Back, Tony</h2>
-          <p className="text-xs text-blue-100 mt-1 font-medium">Your automated business operations CRM is active. Here is your operational agenda today.</p>
+    <div className="space-y-8 pb-12">
+      
+      {/* 1. 1-CLICK OUTBOUND VOICE AI DIALER */}
+      <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-blue-800/40 rounded-3xl p-6 sm:p-8 text-white shadow-2xl shadow-blue-950/40 relative overflow-hidden">
+        
+        {/* Background glow effects */}
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="max-w-xl space-y-2">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+              1-Click Outbound Voice AI Call
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+              Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically.
+            </p>
+          </div>
+
+          {/* Dialing Form */}
+          <form onSubmit={handleOutboundCall} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white/5 p-2 sm:p-3 rounded-2xl border border-white/10 backdrop-blur-md">
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
+                Customer Name
+              </label>
+              <input
+                type="text"
+                value={dialName}
+                onChange={(e) => setDialName(e.target.value)}
+                placeholder="e.g. Raj"
+                className="w-full sm:w-36 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
+                Phone Number (E.164)
+              </label>
+              <input
+                type="text"
+                value={dialPhone}
+                onChange={(e) => setDialPhone(e.target.value)}
+                placeholder="+918693081506"
+                className="w-full sm:w-48 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
+                required
+              />
+            </div>
+
+            <div className="sm:self-end">
+              <button
+                type="submit"
+                disabled={isDialing}
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+              >
+                {isDialing ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Dialing...</span>
+                  </>
+                ) : (
+                  <>
+                    <PhoneOutgoing className="h-4 w-4" />
+                    <span>Call Phone Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-        <div className="flex space-x-3">
-          <Link
-            href="/client-portal"
-            target="_blank"
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-semibold border border-white/20 transition-all"
+
+        {/* Real-Time Call Feedback */}
+        {dialResult && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-4 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
+              dialResult.success 
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+            }`}
           >
-            Client Facing Chatbot Portal
-          </Link>
-        </div>
+            <div className="flex items-center space-x-2">
+              {dialResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertCircle className="h-4 w-4 text-rose-400" />}
+              <span>{dialResult.message}</span>
+            </div>
+            <button
+              onClick={() => setDialResult(null)}
+              className="text-xs opacity-70 hover:opacity-100"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* 2. KPI METRICS CARDS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         
-        {/* CRM Pipeline */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">CRM Lead Pipeline</p>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1.5">{totalLeads} Leads</h3>
-            <span className="text-[10px] text-emerald-500 dark:text-emerald-450 font-bold flex items-center mt-1">
-              <TrendingUp className="h-3.5 w-3.5 mr-0.5" />
-              +15% week-over-week
-            </span>
+            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Calls Talked</p>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.totalCalls}</h3>
+            <span className="text-[10px] text-slate-400 font-medium">Logged conversations</span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            <PhoneCall className="h-6 w-6" />
+          <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+            <PhoneCall className="h-5 w-5" />
           </div>
         </div>
 
-        {/* AI Inbox */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Urgent AI Mails</p>
-            <h3 className="text-2xl font-black text-rose-600 dark:text-rose-450 mt-1.5">
-              {emails.filter(e => e.category === 'Urgent').length} Pending
+            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Interested Clients</p>
+            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{stats.interested}</h3>
+            <span className="text-[10px] text-slate-400 font-medium">High positive intent</span>
+          </div>
+          <div className="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Site Visits Booked</p>
+            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{stats.siteVisits}</h3>
+            <span className="text-[10px] text-slate-400 font-medium">Weekend appointments</span>
+          </div>
+          <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+            <Calendar className="h-5 w-5" />
+          </div>
+        </div>
+
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-rose-500 font-bold uppercase tracking-wider">Not Interested</p>
+            <h3 className="text-2xl font-black text-rose-500 mt-1">{stats.notInterested}</h3>
+            <span className="text-[10px] text-slate-400 font-medium">Opted out / DNC</span>
+          </div>
+          <div className="h-11 w-11 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+            <XCircle className="h-5 w-5" />
+          </div>
+        </div>
+
+      </div>
+
+      {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+        
+        {/* Table Header Controls */}
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center space-x-2">
+              <PhoneCall className="h-5 w-5 text-blue-600" />
+              <span>Gayatri AI Call Logs & Transcripts</span>
             </h3>
-            <span className="text-[10px] text-slate-400 font-semibold flex items-center mt-1">
-              Auto-purged Trash: active
-            </span>
+            <p className="text-xs text-slate-400 mt-0.5 font-medium">
+              Every customer conversation recorded, transcribed, and tagged with lead sentiment.
+            </p>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-            <Mail className="h-6 w-6" />
-          </div>
-        </div>
 
-        {/* Helpdesk */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center">
-          <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Unresolved Support</p>
-            <h3 className="text-2xl font-black text-slate-800 dark:text-white mt-1.5">{ticketsCount} Tickets</h3>
-            <span className="text-[10px] text-slate-400 font-semibold flex items-center mt-1">
-              Average response: 4.2m
-            </span>
-          </div>
-          <div className="h-12 w-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-            <TicketIcon className="h-6 w-6" />
-          </div>
-        </div>
-
-        {/* Unpaid Invoices / Revenue */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 shadow-sm flex justify-between items-center">
-          <div>
-            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Accounts Receivable</p>
-            <h3 className="text-2xl font-black text-amber-600 dark:text-amber-450 mt-1.5">${pipelineValue.toLocaleString()}</h3>
-            <span className="text-[10px] text-slate-400 font-semibold flex items-center mt-1">
-              Total invoiced: ${invoices.reduce((sum, inv) => sum + inv.total, 0).toLocaleString()}
-            </span>
-          </div>
-          <div className="h-12 w-12 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-            <FileText className="h-6 w-6" />
-          </div>
-        </div>
-
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* COLUMN 1: Daily Action Items (lg:col-span-8) */}
-        <div className="lg:col-span-8 space-y-6">
-          
-          {/* CRM Callback Queue */}
-          <div className="p-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center">
-                <PhoneCall className="h-5 w-5 mr-2 text-blue-500" />
-                CRM Daily Callback Queue
-              </h3>
-              <Link href="/sales/crm" className="text-xs text-blue-600 dark:text-blue-400 font-bold flex items-center hover:underline">
-                View CRM Pipeline
-                <ChevronRight className="h-4 w-4" />
-              </Link>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search name or phone..."
+                className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium w-48 sm:w-56"
+              />
             </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-850">
-              {loading ? (
-                <p className="text-slate-400 text-xs py-4 text-center">Loading queue...</p>
-              ) : pendingCallbacks.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 space-y-1">
-                  <p>No cold-calling callbacks scheduled for today.</p>
-                  <p className="text-[10px] text-slate-450">Add follow-up dates in the CRM dashboard to populate this queue.</p>
-                </div>
-              ) : (
-                pendingCallbacks.map((lead) => (
-                  <div key={lead.id} className="py-3 flex justify-between items-center gap-4">
-                    <div>
-                      <h4 className="font-bold text-xs text-slate-800 dark:text-white">{lead.name}</h4>
-                      <p className="text-[10px] text-slate-400 mt-0.5">{lead.phone || lead.email}</p>
+            {/* Filter Pills */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
+              {(['All', 'Interested', 'Site Visit', 'Not Interested'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setStatusFilter(tab)}
+                  className={`px-3 py-1 font-bold rounded-lg transition-all ${
+                    statusFilter === tab
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Refresh Call Logs"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Call Logs Feed / Table */}
+        <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
+          {loading ? (
+            <div className="py-16 text-center text-xs text-slate-400">
+              <div className="h-6 w-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
+              Loading Gayatri call logs...
+            </div>
+          ) : filteredCalls.length === 0 ? (
+            <div className="py-16 text-center text-xs text-slate-400 space-y-2">
+              <MessageSquare className="h-8 w-8 mx-auto text-slate-300 dark:text-slate-700" />
+              <p className="font-bold text-slate-600 dark:text-slate-300 text-sm">No call logs found</p>
+              <p>Place an outbound call above to populate the live transcript feed.</p>
+            </div>
+          ) : (
+            filteredCalls.map((call) => {
+              const tag = getOutcomeTag(call);
+              const TagIcon = tag.icon;
+              const dateStr = call.calledAt ? new Date(call.calledAt).toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Recent';
+
+              const durationFormatted = call.durationSeconds > 0 
+                ? `${Math.floor(call.durationSeconds / 60)}m ${call.durationSeconds % 60}s`
+                : 'In Progress';
+
+              return (
+                <div
+                  key={call.id}
+                  onClick={() => setSelectedCall(call)}
+                  className="p-4 sm:p-6 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
+                >
+                  {/* Left: Customer Info & Summary */}
+                  <div className="flex items-start space-x-4 max-w-2xl">
+                    <div className="h-10 w-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="h-5 w-5" />
                     </div>
-                    
-                    <div className="flex items-center space-x-2 text-[10px] text-amber-600 font-semibold bg-amber-50 dark:bg-amber-950/20 px-2 py-1 rounded-lg">
-                      <Calendar className="h-3.5 w-3.5 mr-0.5" />
-                      <span>{lead.followUpDate ? new Date(lead.followUpDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}</span>
-                    </div>
 
-                    <Link
-                      href="/sales/crm"
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px]"
-                    >
-                      Call Lead
-                    </Link>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* AI Email Classifier Priority Peeks */}
-          <div className="p-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center">
-                <Mail className="h-5 w-5 mr-2 text-indigo-500" />
-                Founder AI Priority Inbox
-              </h3>
-              <Link href="/productivity/emails" className="text-xs text-blue-600 dark:text-blue-400 font-bold flex items-center hover:underline">
-                View Smart Inbox
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="divide-y divide-slate-100 dark:divide-slate-850">
-              {loading ? (
-                <p className="text-slate-400 text-xs py-4 text-center">Loading email stream...</p>
-              ) : priorityEmails.length === 0 ? (
-                <p className="py-6 text-center text-xs text-slate-400">No high-priority (Urgent or VC) emails found today.</p>
-              ) : (
-                priorityEmails.map((email) => (
-                  <div key={email.id} className="py-3.5 flex justify-between items-start gap-4">
-                    <div className="space-y-1 max-w-[70%]">
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                          email.category === 'Urgent' 
-                            ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/20 dark:text-rose-450' 
-                            : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/20 dark:text-indigo-400'
-                        }`}>
-                          {email.category}
-                        </span>
-                        <h4 className="font-bold text-xs text-slate-855 dark:text-white truncate" title={email.subject}>
-                          {email.subject}
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">
+                          {call.leadName}
                         </h4>
-                      </div>
-                      <p className="text-[10px] text-slate-400 truncate">{email.sender}</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 italic">"{email.body}"</p>
-                    </div>
-
-                    {email.actionableLink && (
-                      <a
-                        href={email.actionableLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-1 text-[10px] text-blue-600 dark:text-blue-400 font-bold hover:underline py-1.5"
-                      >
-                        <span>Action</span>
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-        </div>
-
-        {/* COLUMN 2: Shortcuts & Support Consoles (lg:col-span-4) */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          {/* Quick Shortcuts */}
-          <div className="p-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
-            <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center">
-              <Compass className="h-5 w-5 mr-2 text-amber-500" />
-              Founder Actions
-            </h3>
-            
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <Link
-                href="/sales/crm"
-                className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center group hover:border-blue-500/50 transition-all duration-200"
-              >
-                <Plus className="h-5 w-5 text-blue-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-450 mt-1.5">New CRM Lead</span>
-              </Link>
-
-              <Link
-                href="/sales/campaigns"
-                className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center group hover:border-indigo-500/50 transition-all duration-200"
-              >
-                <Plus className="h-5 w-5 text-indigo-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-450 mt-1.5">New Campaign</span>
-              </Link>
-
-              <Link
-                href="/productivity/invoices"
-                className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center group hover:border-amber-500/50 transition-all duration-200"
-              >
-                <Plus className="h-5 w-5 text-amber-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-450 mt-1.5">New Invoice</span>
-              </Link>
-
-              <Link
-                href="/client-portal"
-                target="_blank"
-                className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center group hover:border-rose-500/50 transition-all duration-200"
-              >
-                <ArrowUpRight className="h-5 w-5 text-rose-500 group-hover:scale-110 transition-transform" />
-                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-450 mt-1.5">Client Help Portal</span>
-              </Link>
-            </div>
-          </div>
-
-          {/* Active Support Tickets */}
-          <div className="p-6 bg-white dark:bg-dark-card border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="font-extrabold text-base text-slate-800 dark:text-white flex items-center">
-                <TicketIcon className="h-5 w-5 mr-2 text-purple-500" />
-                Helpdesk Tickets
-              </h3>
-              <Link href="/support/tickets" className="text-xs text-blue-600 dark:text-blue-400 font-bold flex items-center hover:underline">
-                Console
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
-
-            <div className="divide-y divide-slate-100 dark:divide-slate-850">
-              {loading ? (
-                <p className="text-slate-400 text-xs py-4 text-center">Loading ticket logs...</p>
-              ) : activeTickets.length === 0 ? (
-                <p className="py-6 text-center text-xs text-slate-400">All customer tickets resolved!</p>
-              ) : (
-                activeTickets.map((t) => (
-                  <div key={t.id} className="py-2.5 flex justify-between items-center gap-3">
-                    <div className="max-w-[70%]">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="font-bold text-[10px] text-slate-800 dark:text-white">{t.id}</span>
-                        <span className={`px-1 rounded text-[7px] font-black uppercase tracking-wide ${
-                          t.status === 'In Progress' ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/20 dark:text-amber-450'
-                        }`}>
-                          {t.status}
+                        <span className="text-xs text-slate-400 font-medium">
+                          {call.customerPhone || call.leadPhone || '+918693081506'}
+                        </span>
+                        
+                        {/* Outcome Tag */}
+                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${tag.bg}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
+                          <span>{tag.label}</span>
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 truncate mt-1">{t.issueDescription}</p>
+
+                      {/* AI Summary / Notes */}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
+                        {call.aiSummary || 'Outbound sales call discussing Sai Complex Dombivli East project.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Timing, Duration & View Script Button */}
+                  <div className="flex items-center space-x-4 self-end md:self-center shrink-0">
+                    <div className="text-right">
+                      <div className="flex items-center space-x-1 text-xs font-semibold text-slate-700 dark:text-slate-300 justify-end">
+                        <Clock className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{durationFormatted}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {dateStr}
+                      </span>
                     </div>
 
-                    <Link
-                      href="/support/tickets"
-                      className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                    {/* View Script Button */}
+                    <button
+                      onClick={() => setSelectedCall(call)}
+                      className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-200/60 dark:border-blue-800/60 flex items-center space-x-1.5 transition-all group-hover:bg-blue-600 group-hover:text-white"
                     >
-                      Resolve
-                    </Link>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      <span>View Full Script</span>
+                    </button>
+
+                    {/* Delete button */}
+                    <button
+                      onClick={(e) => handleDeleteCall(call.id, e)}
+                      className="p-2 text-slate-300 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      title="Delete log"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
+                </div>
+              );
+            })
+          )}
         </div>
-
       </div>
+
+      {/* 4. CONVERSATION SCRIPT MODAL / DRAWER */}
+      <AnimatePresence>
+        {selectedCall && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-800/40">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                      Conversation with {selectedCall.leadName}
+                    </h3>
+                    {(() => {
+                      const tag = getOutcomeTag(selectedCall);
+                      return (
+                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tag.bg}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
+                          <span>{tag.label}</span>
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <p className="text-xs text-slate-400 font-medium">
+                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: {selectedCall.durationSeconds > 0 ? `${selectedCall.durationSeconds}s` : 'Active'}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedCall(null)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* AI Summary Banner */}
+              <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium">
+                <span className="font-bold">AI Call Summary: </span>
+                {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
+              </div>
+
+              {/* Modal Body: Turn-by-Turn Dialogue */}
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {parseTranscript(selectedCall.transcript).map((turn, idx) => {
+                  if (turn.speaker === 'system') {
+                    return (
+                      <div key={idx} className="text-center my-2">
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3 py-1 rounded-full font-medium italic">
+                          {turn.text}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const isAgent = turn.speaker === 'agent';
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`flex flex-col ${isAgent ? 'items-start' : 'items-end'}`}
+                    >
+                      <div className="flex items-center space-x-1.5 mb-1 px-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          {isAgent ? 'Gayatri (AI Property Advisor)' : selectedCall.leadName}
+                        </span>
+                      </div>
+
+                      <div
+                        className={`max-w-[85%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed ${
+                          isAgent
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-slate-800 dark:text-slate-100 border border-blue-100 dark:border-blue-900/50 rounded-tl-sm'
+                            : 'bg-emerald-600 text-white rounded-tr-sm shadow-sm'
+                        }`}
+                      >
+                        {turn.text}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex justify-end">
+                <button
+                  onClick={() => setSelectedCall(null)}
+                  className="px-5 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all"
+                >
+                  Close Script
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
