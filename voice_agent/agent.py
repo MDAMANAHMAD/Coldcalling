@@ -1137,36 +1137,32 @@ def classify_call_intelligence(formatted_transcript: str, dialogue: list, custom
     # 1. Try Gemini 3.6 Flash / Flash-Lite
     google_key = os.getenv("GOOGLE_API_KEY")
     if google_key and dialogue:
-        for m_name in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
+        for m_name in ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.0-flash"]:
             try:
                 from google import genai
                 from google.genai import types
                 client = genai.Client(api_key=google_key)
-                prompt = f"""You are an enterprise Real Estate Call Intelligence analyzer.
+                prompt = f"""You are an expert Real Estate Telephony Call Outcome & Lead Intent Classifier.
 Analyze this recorded telephone conversation between Gayatri (AI Property Advisor) and customer {customer_name}:
 
 --- TRANSCRIPT ---
 {formatted_transcript}
 --- END TRANSCRIPT ---
 
-Task:
-1. Determine the Call Outcome category strictly as one of:
-   - "Site Visit Scheduled" (Customer agreed to/confirmed a day or time to visit Sai Complex Dombivli East)
-   - "Interested" (Customer showed genuine interest in 1/2 BHK flats, pricing, amenities, floor plans, asked for WhatsApp brochure, or plans to discuss with family)
-   - "Not Interested" (Customer said no, not interested, refused visit, told not to call, wrong number, or showed clear disinterest in Hindi/Marathi/English)
-   - "Location Mismatch (Kalyan)" (Customer strictly wanted another city/location e.g. Kalyan)
-   - "Short / Call Dropped" (Call dropped, silence, or no meaningful exchange)
-   - "Inquiry Completed" (Customer asked general questions without expressing clear interest or disinterest)
-2. Determine sentiment: "positive", "neutral", or "negative".
-3. Write a 1-sentence executive AI summary in English.
-4. List key topics/questions asked by customer.
+STRICT CLASSIFICATION RULES:
+1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, or refuses site visit/details.
+2. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East. (Note: Gayatri asking does NOT mean scheduled unless the customer agreed!)
+3. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
+4. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
+5. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
+6. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
 
 Respond ONLY with valid JSON:
 {{
   "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
   "sentiment": "positive" | "neutral" | "negative",
-  "aiSummary": "...",
-  "detectedQuestions": ["..."]
+  "aiSummary": "Concise 1-sentence executive summary in English",
+  "detectedQuestions": ["Topic 1", "Topic 2"]
 }}"""
                 resp = client.models.generate_content(
                     model=m_name,
@@ -1193,6 +1189,12 @@ Respond ONLY with valid JSON:
             import urllib.request
             groq_prompt = f"""Analyze this recorded phone call between Gayatri (AI Property Advisor) and {customer_name}:
 {formatted_transcript}
+
+Rules:
+- "Not Interested" if caller refuses, says nahi chahiye, wrong number, or no interest.
+- "Site Visit Scheduled" ONLY if caller agreed to visit (e.g. Sunday/weekend).
+- "Interested" if caller asked for price/brochure/flats.
+- "Inquiry Completed" for general inquiries.
 
 Classify into valid JSON:
 {{
@@ -1226,6 +1228,7 @@ Return ONLY raw JSON."""
             logger.warning(f"Groq post-call classification fallback triggered: {groq_err}")
 
     # 3. Multilingual Regex Fallback (Hindi, Devanagari, Marathi, English)
+    import re
     customer_texts = [t["text"].lower() for t in dialogue if t["role"] == "customer"]
     all_cust = " ".join(customer_texts)
     all_agent = " ".join(t["text"].lower() for t in dialogue if t["role"] == "agent")
@@ -1244,49 +1247,59 @@ Return ONLY raw JSON."""
     if any(w in all_cust for w in ["visit", "dekhne", "aana", "saturday", "sunday", "weekend", "kal", "बघायला", "येणार"]):
         detected_questions.append("Site Visit Planning")
 
-    # Outcome matching
-    has_site_visit = any(phrase in all_agent for phrase in ["site visit confirm", "schedule_site_visit", "visit confirm", "site visit"])
-    has_location_mismatch = "kalyan mein humara project available nahi hai" in all_agent or "kalyan" in all_cust
+    # STRICT PRECEDENCE IN RULE-BASED FALLBACK:
+    # 1. NOT INTERESTED (Top priority)
+    not_int_patterns = [
+        r"not\s*interested", r"no\s*interest", r"nahi\s*chahiye", r"dont\s*call", r"wrong\s*number",
+        r"interest\s*nah[i|ee]", r"nahi\s*karna", r"mat\s*karo", r"mat\s*lagao", r"phone\s*mat",
+        r"नही\s*करना", r"नहीं\s*करना", r"नको", r"गरज\s*नाही", r"रुचि\s*नही", r"रुची\s*नाही",
+        r"interest\s*नही", r"interest\s*नहीं", r"site\s*(?:visit|sai)?\s*नही", r"site\s*(?:visit|sai)?\s*नहीं",
+        r"मझ\s*interest\s*नही", r"मुझे\s*interest\s*नहीं", r"plan\s*cancel", r"cut\s*the\s*call"
+    ]
+    is_not_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in not_int_patterns)
 
-    if has_site_visit:
-        outcome = "Site Visit Scheduled"
-        sentiment = "positive"
+    # 2. LOCATION MISMATCH
+    has_location_mismatch = "kalyan mein humara project available nahi hai" in all_agent or ("kalyan" in all_cust and "dombivli" not in all_cust)
+
+    # 3. SITE VISIT CONFIRMED (Customer MUST have agreed to visit!)
+    cust_confirmed_visit = (
+        any(w in all_cust for w in ["haan", "ha", "haa", "theek", "chalega", "aaunga", "aayenge", "sunday", "saturday", "weekend", "kal", "yes", "confirm"])
+        and ("site visit" in all_cust or "site visit" in all_agent)
+        and ("confirm" in all_agent or "sunday" in all_cust or "saturday" in all_cust)
+    )
+
+    # 4. INTERESTED (Showed interest in flats, pricing, brochure)
+    int_patterns = [
+        r"interested", r"interest\s*hai", r"details\s*bhej", r"brochure", r"whatsapp",
+        r"rate\s*bhej", r"kharidna", r"planning", r"acha\s*hai", r"रुचि\s*है", r"आवडल",
+        r"बघायच", r"फोटो\s*पाठवा", r"details\s*पाठवा", r"price", r"2\s*bhk"
+    ]
+    is_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in int_patterns)
+
+    if is_not_interested:
+        outcome = "Not Interested"
+        sentiment = "negative"
+        ai_summary = f"{customer_name} declined the offer and stated not interested."
     elif has_location_mismatch:
         outcome = "Location Mismatch (Kalyan)"
         sentiment = "neutral"
+        ai_summary = f"{customer_name} was looking for property in Kalyan rather than Dombivli East."
+    elif cust_confirmed_visit:
+        outcome = "Site Visit Scheduled"
+        sentiment = "positive"
+        ai_summary = f"{customer_name} agreed to visit Sai Complex Dombivli East. Site visit confirmed."
+    elif is_interested:
+        outcome = "Interested"
+        sentiment = "positive"
+        ai_summary = f"{customer_name} showed interest in project specifications and pricing. Follow up required."
+    elif len(dialogue) <= 2:
+        outcome = "Short / Call Dropped"
+        sentiment = "neutral"
+        ai_summary = f"Call with {customer_name} ended quickly before detailed discussion."
     else:
-        # Check Not Interested patterns (including Devanagari Hindi and Marathi)
-        not_int_patterns = [
-            r"not\s*interested", r"no\s*interest", r"nahi\s*chahiye", r"dont\s*call", r"wrong\s*number",
-            r"interest\s*nah[i|ee]", r"nahi\s*karna", r"mat\s*karo", r"mat\s*lagao", r"phone\s*mat",
-            r"नही\s*करना", r"नहीं\s*करना", r"नको", r"गरज\s*नाही", r"रुचि\s*नही", r"रुची\s*नाही",
-            r"interest\s*नही", r"interest\s*नहीं", r"site\s*(?:visit|sai)?\s*नही", r"site\s*(?:visit|sai)?\s*नहीं",
-            r"मझ\s*interest\s*नही", r"मुझे\s*interest\s*नहीं", r"plan\s*cancel"
-        ]
-        is_not_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in not_int_patterns)
-        if is_not_interested:
-            outcome = "Not Interested"
-            sentiment = "negative"
-        else:
-            # Check Interested patterns
-            int_patterns = [
-                r"interested", r"interest\s*hai", r"details\s*bhej", r"brochure", r"whatsapp",
-                r"rate\s*bhej", r"kharidna", r"planning", r"acha\s*hai", r"रुचि\s*है", r"आवडल",
-                r"बघायच", r"फोटो\s*पाठवा", r"details\s*पाठवा"
-            ]
-            is_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in int_patterns)
-            if is_interested:
-                outcome = "Interested"
-                sentiment = "positive"
-            elif len(dialogue) <= 2:
-                outcome = "Short / Call Dropped"
-                sentiment = "neutral"
-            elif detected_questions:
-                outcome = "Inquiry Completed"
-                sentiment = "neutral"
-            else:
-                outcome = "Inquiry Completed"
-                sentiment = "neutral"
+        outcome = "Inquiry Completed"
+        sentiment = "neutral"
+        ai_summary = f"Call with {customer_name} completed. Discussed project details."
 
     q_str = f" Questions: {', '.join(detected_questions)}." if detected_questions else ""
     summary = f"Call with {customer_name}. Outcome: {outcome}.{q_str}"
@@ -1596,23 +1609,50 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f} (₹{per_minute_cost:.2f}/min)")
 
             # --- FULL TRANSCRIPT CAPTURE & INTELLIGENCE EXTRACTION ---
+            # 1. Backfill any dialogue items from session._chat_ctx or session.history
+            try:
+                chat_items = []
+                if hasattr(session, "_chat_ctx") and session._chat_ctx and hasattr(session._chat_ctx, "messages"):
+                    chat_items = session._chat_ctx.messages
+                elif hasattr(session, "history") and session.history:
+                    chat_items = getattr(session.history, "messages", [])
+
+                existing_texts = {t["text"].strip().lower() for t in call_dialogue}
+                for msg in chat_items:
+                    m_role = getattr(msg, "role", "")
+                    if m_role in ["system", "tool"]:
+                        continue
+                    m_content = getattr(msg, "content", "")
+                    if isinstance(m_content, list):
+                        m_content = " ".join(str(c) for c in m_content)
+                    raw_m = str(m_content).strip()
+                    if raw_m and raw_m.lower() not in existing_texts:
+                        role_key = "agent" if m_role in ["assistant", "agent"] else "customer"
+                        call_dialogue.append({
+                            "role": role_key,
+                            "text": raw_m,
+                            "time": round(time.time() - t_call_start, 1)
+                        })
+                        existing_texts.add(raw_m.lower())
+            except Exception as backfill_err:
+                logger.debug(f"Chat context backfill notice: {backfill_err}")
+
             formatted_lines = []
             for turn in call_dialogue:
                 role_label = "Gayatri" if turn["role"] == "agent" else customer_name
                 formatted_lines.append(f"[{turn['time']}s] {role_label}: {turn['text']}")
             formatted_transcript = "\n".join(formatted_lines) if formatted_lines else "No conversation recorded."
 
-            # Run Post-Call Intelligence Classifier (Gemini / Groq / Multilingual Regex)
+            # Run Post-Call Intelligence Classifier (Gemini 3.6 / Groq / Multilingual Regex)
             try:
                 intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
             except Exception as classify_err:
                 logger.error(f"Error in classify_call_intelligence: {classify_err}", exc_info=True)
-                has_visit = "site visit" in formatted_transcript.lower() or "visit confirm" in formatted_transcript.lower()
                 intel = {
-                    "outcome": "Site Visit Scheduled" if has_visit else "Inquiry Completed",
-                    "sentiment": "positive" if has_visit else "neutral",
-                    "aiSummary": f"Call with {customer_name}. Outcome: {'Site Visit Scheduled' if has_visit else 'Inquiry Completed'}.",
-                    "detectedQuestions": ["Site Visit Inquiry"] if has_visit else []
+                    "outcome": "Inquiry Completed",
+                    "sentiment": "neutral",
+                    "aiSummary": f"Call with {customer_name}. Discussed Sai Complex project details.",
+                    "detectedQuestions": ["General Inquiry"]
                 }
             call_outcome = intel.get("outcome", "Inquiry Completed")
             sentiment = intel.get("sentiment", "neutral")
@@ -1969,17 +2009,24 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("conversation_item_added")
     def on_item_added(item):
-        # Capture agent speech in transcript and check for goodbye closing phrase
         try:
             role = getattr(item, "role", None)
-            if role in ["assistant", "agent"]:
-                content = getattr(item, "content", "")
-                if isinstance(content, list):
-                    content = " ".join(str(c) for c in content)
-                raw_text = str(content).strip()
-                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text):
+            content = getattr(item, "content", "")
+            if isinstance(content, list):
+                content = " ".join(str(c) for c in content)
+            raw_text = str(content).strip()
+
+            if role in ["user", "customer"]:
+                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text or call_dialogue[-1].get("role") != "customer"):
+                    elapsed_sec = round(time.time() - t_call_start, 1)
+                    call_dialogue.append({"role": "customer", "text": raw_text, "time": elapsed_sec})
+                    logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] '{raw_text}' at {elapsed_sec}s")
+
+            elif role in ["assistant", "agent"]:
+                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text or call_dialogue[-1].get("role") != "agent"):
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
+                    logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] '{raw_text}' at {elapsed_sec}s")
 
                 text = raw_text.lower()
                 ending_phrases = [

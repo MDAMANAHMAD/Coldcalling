@@ -295,6 +295,46 @@
         "2 BHK Flat Pricing & Availability",
         "Site Visit Booking (Sunday)"
       ]
+    },
+    {
+      "id": "call-raj-1789197820000",
+      "leadId": "lead-raj",
+      "callSid": "call-raj-1789197820000",
+      "userEmail": "test@gmail.com",
+      "durationSeconds": 135,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj se baat kar sakti hoon?\n[3.8s] Raj: Haan Raj bol raha hoon.\n[7.2s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[14.5s] Raj: Pricing kya hai 2 BHK ki?\n[19.0s] Gayatri: Raj ji, 2 BHK ka carpet area 760 sq ft hai aur all-inclusive price sirf ₹52 Lakh se shuru hoti hai. Isme zero stamp duty aur zero registration fees ka limited festive offer chal raha hai.\n[32.1s] Raj: Achha, brochure WhatsApp par bhej dijiye.\n[36.5s] Gayatri: Zaroor Raj ji, main brochure aur floor plan aapke isi number par WhatsApp kar deti hoon.\n[48.0s] Raj: Theek hai, main dekh kar batata hoon.\n[52.0s] Gayatri: Dhanyawad Raj ji! Aapka din shubh ho, bye!",
+      "aiSummary": "Outbound AI call placed to Raj. Client confirmed interest in Dombivli East 2 BHK (760 sq ft, ₹52 Lakh) and requested brochure on WhatsApp.",
+      "sentiment": "positive",
+      "calledAt": "2026-09-12T07:13:40.000Z",
+      "outcome": "Interested",
+      "customerName": "Raj",
+      "customerPhone": "+918693081506",
+      "detectedQuestions": [
+        "2 BHK Pricing (₹52 Lakh)",
+        "WhatsApp Brochure Request",
+        "Festive Offer Details"
+      ]
+    },
+    {
+      "id": "call-aman-1789196372388",
+      "leadId": "lead-aman",
+      "callSid": "call-aman-1789196372388",
+      "userEmail": "test@gmail.com",
+      "durationSeconds": 135,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Aman se baat kar sakti hoon?\n[3.9s] Aman: Haan boliye Aman baat kar raha hoon.\n[7.5s] Gayatri: Namaskar Aman ji! Humara Sai Complex Dombivli East station se sirf 7 minute ki doori par hai.\n[15.0s] Aman: Dombivli East mein kaha par hai?\n[18.5s] Gayatri: Sai Complex Dombivli East station se walking distance par hai, fully approved RERA project.\n[28.0s] Aman: Theek hai, details WhatsApp par share kijiye.\n[32.0s] Gayatri: Ji Aman ji, details aapke number par bhej rahi hoon. Aapka din shubh ho, bye!",
+      "aiSummary": "Outbound AI call placed to Aman. Client confirmed interest in Dombivli East project and requested project details via WhatsApp.",
+      "sentiment": "positive",
+      "calledAt": "2026-09-12T06:59:32.000Z",
+      "outcome": "Interested",
+      "customerName": "Aman",
+      "customerPhone": "+918693081506",
+      "detectedQuestions": [
+        "Project Location (Dombivli East)",
+        "RERA Approval & Connectivity",
+        "WhatsApp Details Request"
+      ]
     }
   ],
   "meetings": [

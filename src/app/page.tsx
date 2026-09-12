@@ -101,81 +101,87 @@ export default function ColdCallingHomePage() {
         console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
       }
 
-      // 2. Read any locally saved logs from browser storage
-      let localLogs: (CallLog & { leadName: string; leadPhone?: string })[] = [];
+      // 2. Read permanently preserved call history from browser storage
+      let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
       try {
-        const stored = localStorage.getItem('gayatri_live_call_logs');
+        const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
         if (stored) {
-          localLogs = JSON.parse(stored);
+          permanentHistory = JSON.parse(stored);
         }
       } catch (err) {
-        console.warn('Could not read local call logs:', err);
+        console.warn('Could not read permanent call history:', err);
       }
 
-      // 3. Merge server and local logs without duplication (keyed by callSid when available)
+      // 3. Merge server and local history without losing a single call
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
-      
-      // Add server logs first (authoritative real calls from VPS / Webhook)
-      for (const item of serverLogs) {
+
+      // Seed with permanent local history first
+      for (const item of permanentHistory) {
         const key = item.callSid || item.id;
         map.set(key, item);
       }
 
-      // Merge local logs only if not already saved/finalized on the server
-      const remainingLocal: typeof localLogs = [];
+      // Update / augment with authoritative server logs (complete transcripts & recordings)
       const nowMs = Date.now();
-      for (const item of localLogs) {
+      for (const item of serverLogs) {
         const key = item.callSid || item.id;
-        if (!map.has(key)) {
-          // If a call has been in 'Ringing / Calling' for more than 4 minutes without a webhook,
-          // gracefully resolve it so it doesn't remain permanently stuck in progress
-          const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
-          if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 4) {
-            item.outcome = 'Inquiry Completed';
-            item.durationSeconds = item.durationSeconds || 60;
-            item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation saved.`;
-          }
+        const existing = map.get(key);
+        if (existing) {
+          map.set(key, { ...existing, ...item });
+        } else {
           map.set(key, item);
-          remainingLocal.push(item);
         }
       }
 
-      // Clean up completed calls from localStorage
-      try {
-        localStorage.setItem('gayatri_live_call_logs', JSON.stringify(remainingLocal));
-      } catch (err) {
-        console.warn('Could not sync localStorage:', err);
+      // Check if any in-progress calls timed out (>4 min)
+      for (const [key, item] of map.entries()) {
+        const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
+        if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 4) {
+          item.outcome = 'Inquiry Completed';
+          item.durationSeconds = item.durationSeconds || 60;
+          item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded.`;
+          map.set(key, item);
+        }
       }
 
       const merged = Array.from(map.values()).sort(
         (a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime()
       );
 
+      // Persist the entire merged call history so it NEVER disappears across reloads or serverless restarts
+      try {
+        localStorage.setItem('gayatri_permanent_history', JSON.stringify(merged));
+      } catch (err) {
+        console.warn('Could not persist permanent call history:', err);
+      }
+
       setCallLogs(merged);
 
-      // 4. Calculate dynamic KPIs
+      // 4. Calculate mathematically precise KPIs using strict outcome detection
       const totalCalls = merged.length;
-      const siteVisits = merged.filter(c => 
-        (c.outcome && c.outcome.toLowerCase().includes('site visit')) ||
-        (c.aiSummary && c.aiSummary.toLowerCase().includes('site visit'))
-      ).length;
-      const interested = merged.filter(c => 
-        ((c.outcome && c.outcome.toLowerCase().includes('interested') && !c.outcome.toLowerCase().includes('not interested')) ||
-        c.sentiment === 'positive') && !c.outcome?.toLowerCase().includes('site visit')
-      ).length;
-      const notInterested = merged.filter(c => 
-        (c.outcome && c.outcome.toLowerCase().includes('not interested')) ||
-        c.sentiment === 'negative'
-      ).length;
+      let siteVisits = 0;
+      let interested = 0;
+      let notInterested = 0;
+
+      for (const call of merged) {
+        const tag = getOutcomeTag(call).label;
+        if (tag === 'Site Visit Scheduled') {
+          siteVisits++;
+        } else if (tag === 'Interested') {
+          interested++;
+        } else if (tag === 'Not Interested') {
+          notInterested++;
+        }
+      }
 
       setStats({
         totalCalls,
         siteVisits,
-        interested: interested + siteVisits, // Site visits count as high intent
+        interested,
         notInterested
       });
     } catch (err) {
-      console.error('Error loading call logs:', err);
+      console.error('Failed to load call logs:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -247,10 +253,10 @@ export default function ColdCallingHomePage() {
         };
 
         try {
-          const stored = localStorage.getItem('gayatri_live_call_logs');
+          const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
           const existing = stored ? JSON.parse(stored) : [];
           existing.unshift(newLiveLog);
-          localStorage.setItem('gayatri_live_call_logs', JSON.stringify(existing));
+          localStorage.setItem('gayatri_permanent_history', JSON.stringify(existing));
         } catch (e) {
           console.warn('Could not save to localStorage:', e);
         }
@@ -282,10 +288,11 @@ export default function ColdCallingHomePage() {
     if (!confirm('Are you sure you want to remove this call log?')) return;
 
     try {
-      const stored = localStorage.getItem('gayatri_live_call_logs');
+      const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
       if (stored) {
-        const filtered = JSON.parse(stored).filter((c: any) => c.id !== id);
-        localStorage.setItem('gayatri_live_call_logs', JSON.stringify(filtered));
+        const filtered = JSON.parse(stored).filter((c: any) => c.id !== id && c.callSid !== id);
+        localStorage.setItem('gayatri_permanent_history', JSON.stringify(filtered));
+        localStorage.removeItem('gayatri_live_call_logs');
       }
     } catch (e) {
       console.warn('Failed to delete from localStorage:', e);
@@ -296,22 +303,22 @@ export default function ColdCallingHomePage() {
     await loadData();
   };
 
-  // Helper to determine status tag styling and label
+  // Helper to determine status tag styling and label with strict precedence
   const getOutcomeTag = (call: CallLog) => {
     const outcome = (call.outcome || '').toLowerCase();
     const summary = (call.aiSummary || '').toLowerCase();
     const transcript = (call.transcript || '').toLowerCase();
 
-    if (outcome.includes('site visit') || summary.includes('site visit') || transcript.includes('site visit confirm')) {
-      return {
-        label: 'Site Visit Scheduled',
-        bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-        dot: 'bg-blue-500',
-        icon: Calendar
-      };
-    }
+    // 1. Not Interested (Top priority: Check if customer expressed disinterest or declined)
+    const isNotInterested = 
+      outcome.includes('not interested') || 
+      summary.includes('not interested') ||
+      summary.includes('declined') ||
+      summary.includes('rejected') ||
+      summary.includes('nahi chahiye') ||
+      call.sentiment === 'negative';
 
-    if (outcome.includes('not interested') || summary.includes('not interested') || call.sentiment === 'negative') {
+    if (isNotInterested) {
       return {
         label: 'Not Interested',
         bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
@@ -320,7 +327,43 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    if (outcome.includes('interested') || call.sentiment === 'positive') {
+    // 2. Location Mismatch (Kalyan)
+    if (outcome.includes('location mismatch') || outcome.includes('kalyan') || summary.includes('kalyan')) {
+      return {
+        label: 'Location Mismatch',
+        bg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+        dot: 'bg-purple-500',
+        icon: AlertCircle
+      };
+    }
+
+    // 3. Site Visit Scheduled (Must be an actual confirmation)
+    const isSiteVisit = 
+      outcome.includes('site visit scheduled') || 
+      (outcome.includes('site visit') && !outcome.includes('not') && !outcome.includes('dropped')) ||
+      summary.includes('confirmed site visit') ||
+      summary.includes('scheduled site visit') ||
+      summary.includes('site visit confirmed') ||
+      transcript.includes('site visit confirm');
+
+    if (isSiteVisit) {
+      return {
+        label: 'Site Visit Scheduled',
+        bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+        dot: 'bg-blue-500',
+        icon: Calendar
+      };
+    }
+
+    // 4. Interested (Customer interested in flats, pricing, WhatsApp details)
+    const isInterested = 
+      outcome === 'interested' || 
+      (outcome.includes('interested') && !outcome.includes('not')) ||
+      summary.includes('showed interest') ||
+      summary.includes('expressed interest') ||
+      (call.sentiment === 'positive' && !outcome.includes('not'));
+
+    if (isInterested) {
       return {
         label: 'Interested',
         bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
@@ -329,11 +372,22 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    if (outcome.includes('calling')) {
+    // 5. Ringing / Calling
+    if (outcome.includes('calling') || outcome.includes('ringing')) {
       return {
         label: 'Ringing / Calling',
         bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
         dot: 'bg-amber-500 animate-pulse',
+        icon: Clock
+      };
+    }
+
+    // 6. Short / Dropped
+    if (outcome.includes('dropped') || outcome.includes('short')) {
+      return {
+        label: 'Short / Dropped',
+        bg: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+        dot: 'bg-slate-400',
         icon: Clock
       };
     }
