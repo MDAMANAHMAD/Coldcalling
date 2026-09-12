@@ -22,6 +22,7 @@ import time
 import asyncio
 import shutil
 import subprocess
+import base64
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -1810,7 +1811,19 @@ async def entrypoint(ctx: JobContext):
                         logger.warning(f"ffmpeg conversion error: {ff_err}")
 
                     if mp3_success:
-                        recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                        # If under 4MB, embed as Data URL for instant, zero-latency browser playback
+                        # without requiring Vercel or cloud storage to host the file.
+                        try:
+                            if dest_bookings_mp3.stat().st_size <= 4 * 1024 * 1024:
+                                with open(dest_bookings_mp3, "rb") as f_aud:
+                                    b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
+                                    recording_url = f"data:audio/mp3;base64,{b64_str}"
+                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) for instant browser playback.")
+                            else:
+                                recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                        except Exception as b64_err:
+                            logger.warning(f"Error encoding MP3 to data URL: {b64_err}")
+                            recording_url = f"/api/recordings/{ctx.room.name}.mp3"
                     else:
                         recording_url = f"/api/recordings/{ctx.room.name}.ogg"
                         logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call OGG recording saved to {dest_bookings_ogg} ({found_src.stat().st_size} bytes)")

@@ -26,7 +26,8 @@ import {
   Volume2, 
   ArrowRight,
   TrendingUp,
-  Trash2
+  Trash2,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -876,7 +877,7 @@ export default function ColdCallingHomePage() {
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Dual-channel stereo (Caller + Gayatri AI)</p>
                     </div>
                   </div>
-                  <div className="flex-1 max-w-sm">
+                  <div className="flex-1 max-w-sm flex items-center gap-2">
                     <audio 
                       controls 
                       className="w-full h-8 rounded-lg accent-blue-600" 
@@ -885,6 +886,14 @@ export default function ColdCallingHomePage() {
                     >
                       Your browser does not support audio playback.
                     </audio>
+                    <a
+                      href={selectedCall.recordingUrl}
+                      download={`${selectedCall.callSid || 'recording'}.mp3`}
+                      className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shrink-0"
+                      title="Download MP3"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
                   </div>
                 </div>
               )}
