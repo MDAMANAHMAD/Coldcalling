@@ -45,4 +45,10 @@ bookings/model_cache.json
 bookings/*.lock
 bookings/*.jsonl
 bookings/transcripts/
+bookings/recordings/*.mp3
+bookings/recordings/*.ogg
+public/recordings/*.mp3
+public/recordings/*.ogg
 !bookings/.gitkeep
+!bookings/recordings/.gitkeep
+!public/recordings/.gitkeep
