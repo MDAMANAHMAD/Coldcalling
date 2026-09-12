@@ -995,23 +995,23 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (200ms endpointing + domain keyword boosting)
+    # 2. Pre-warm Deepgram Nova-2 STT (Instant endpointing + domain keyword boosting)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=50,
-        utterance_end_ms=1000,
+        endpointing_ms=25,
+        utterance_end_ms=500,
         smart_format=True,
         keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (16kHz native rate for zero downsampling lag on VPS CPU)
+    # 3. Pre-warm Silero VAD (16kHz native rate, fast 0.25s silence cutoff)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
+        min_silence_duration=0.25,
         min_speech_duration=0.06,
         sample_rate=16000
     )
@@ -1171,8 +1171,8 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=50,
-            utterance_end_ms=1000,
+            endpointing_ms=25,
+            utterance_end_ms=500,
             smart_format=True,
             keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
@@ -1268,7 +1268,7 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
+            min_silence_duration=0.25,
             min_speech_duration=0.06,
             sample_rate=16000
         )
@@ -1295,10 +1295,12 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.45,
+                "min_delay": 0.28,
             },
             "preemptive_generation": {
-                "enabled": False,  # Prevents aborted/conflicting LLM calls on transcript mutations
+                "enabled": True,
+                "preemptive_tts": False,
+                "max_speech_duration": 10.0,
             },
             "interruption": {
                 "enabled": True,
