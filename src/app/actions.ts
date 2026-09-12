@@ -49,8 +49,39 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
   const db = getDb();
   const dbLogs = db.callLogs || [];
 
-  // Also check if bookings/property_visits.jsonl or call_transcripts.jsonl has records
+  // Also check if bookings/call_transcripts.jsonl or property_visits.jsonl has records
   try {
+    const transcriptsPath = path.join(process.cwd(), 'bookings', 'call_transcripts.jsonl');
+    if (fs.existsSync(transcriptsPath)) {
+      const content = fs.readFileSync(transcriptsPath, 'utf-8');
+      const lines = content.split('\n').filter(l => l.trim().length > 0);
+      for (const line of lines) {
+        try {
+          const rec = JSON.parse(line);
+          const callId = rec.call_id || `call-${rec.timestamp || Math.random()}`;
+          if (!dbLogs.some(log => log.callSid === callId || log.calledAt === rec.timestamp)) {
+            dbLogs.push({
+              id: callId,
+              leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
+              callSid: callId,
+              durationSeconds: Math.round(rec.duration_seconds || 0),
+              recordingUrl: '',
+              transcript: rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : ''),
+              aiSummary: `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
+              sentiment: rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : 'neutral'),
+              calledAt: rec.timestamp || new Date().toISOString(),
+              outcome: rec.outcome || 'Inquiry Completed',
+              customerName: rec.customer_name || 'Client',
+              customerPhone: rec.customer_phone || '+918693081506',
+              detectedQuestions: rec.detected_questions || []
+            });
+          }
+        } catch {
+          // ignore malformed line
+        }
+      }
+    }
+
     const visitsPath = path.join(process.cwd(), 'bookings', 'property_visits.jsonl');
     if (fs.existsSync(visitsPath)) {
       const content = fs.readFileSync(visitsPath, 'utf-8');

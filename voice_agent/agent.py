@@ -1340,16 +1340,24 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.warning(f"Error extracting TTS metrics: {e}")
 
-    @ctx.room.on("disconnected")
-    def _on_disconnected():
+    call_finalized = False
+
+    async def _finalize_and_save_call(trigger_reason: str):
+        nonlocal call_finalized, customer_name, customer_phone
+        if call_finalized:
+            return
+        call_finalized = True
+        logger.info(f"💾 [SAVING CALL RECORD] Triggered by: {trigger_reason}")
+
         try:
             if watchdog_task and not watchdog_task.done():
                 watchdog_task.cancel()
-            if _hangup_task and not _hangup_task.done():
+            if _hangup_task and not _hangup_task.done() and trigger_reason != "agent_hangup":
                 _hangup_task.cancel()
-            duration_seconds = time.time() - t_call_start
+
+            duration_seconds = max(0.0, time.time() - t_call_start)
             duration_minutes = duration_seconds / 60.0
-            
+
             # Determine which LLM was used
             current_provider = os.getenv("LLM_PROVIDER", "").strip().lower()
             if current_provider in ["fireworks", "fw"]:
@@ -1359,7 +1367,7 @@ async def entrypoint(ctx: JobContext):
                 brain_name = f"Fireworks AI ({SELECTED_MODEL.split('/')[-1] if '/' in SELECTED_MODEL else SELECTED_MODEL})"
             elif current_provider == "groq" or (global_groq_key and global_groq_key.startswith("gsk_") and "openai" in llm.__class__.__module__.lower()):
                 # Groq Rates
-                input_rate = (0.59 * 83.5) / 1000000.0  # cost per token
+                input_rate = (0.59 * 83.5) / 1000000.0
                 output_rate = (0.79 * 83.5) / 1000000.0
                 brain_name = "Groq Llama 3.3"
             else:
@@ -1367,13 +1375,13 @@ async def entrypoint(ctx: JobContext):
                 input_rate = (0.075 * 83.5) / 1000000.0
                 output_rate = (0.30 * 83.5) / 1000000.0
                 brain_name = f"Google Gemini ({SELECTED_MODEL})"
-                
+
             cost_vobiz = duration_minutes * 0.40
             cost_cartesia = characters_spoken * 0.00163
             cost_llm = (input_tokens * input_rate) + (output_tokens * output_rate)
             total_cost = cost_vobiz + cost_cartesia + cost_llm
             per_minute_cost = total_cost / duration_minutes if duration_minutes > 0 else 0
-            
+
             billing_record = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "room_name": ctx.room.name,
@@ -1390,11 +1398,11 @@ async def entrypoint(ctx: JobContext):
                 "total_cost_inr": round(total_cost, 3),
                 "cost_per_minute_inr": round(per_minute_cost, 3)
             }
-            
+
             os.makedirs("bookings", exist_ok=True)
             with open("bookings/call_billing_log.jsonl", "a", encoding="utf-8") as f:
                 f.write(json.dumps(billing_record) + "\n")
-                
+
             logger.info("📊 [BILLING RECORDED]")
             logger.info(f"   📞 Duration: {duration_minutes:.2f} mins")
             logger.info(f"   🗣️ Speech: {characters_spoken} characters (Cartesia)")
@@ -1461,13 +1469,13 @@ async def entrypoint(ctx: JobContext):
 
             logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Outcome: {call_outcome})")
 
-            # Sync with db.json for the Next.js Cold Calling Dashboard
+            # 1. Sync with local db.json for the Cold Calling Dashboard
             try:
                 db_path = "db.json"
                 if os.path.exists(db_path):
                     with open(db_path, "r", encoding="utf-8") as f:
                         db_data = json.load(f)
-                    
+
                     if "callLogs" not in db_data:
                         db_data["callLogs"] = []
 
@@ -1494,8 +1502,50 @@ async def entrypoint(ctx: JobContext):
             except Exception as db_err:
                 logger.warning(f"Could not update db.json: {db_err}")
 
+            # 2. Sync to remote Web Dashboard on Vercel via Webhook
+            dashboard_url = os.getenv("WEB_DASHBOARD_URL", "https://coldcalling-rho.vercel.app").rstrip("/")
+            try:
+                webhook_payload = {
+                    "callSid": ctx.room.name,
+                    "customerName": customer_name,
+                    "customerPhone": customer_phone,
+                    "phone": customer_phone,
+                    "durationSeconds": round(duration_seconds),
+                    "transcript": formatted_transcript,
+                    "aiSummary": f"Call with {customer_name}. Outcome: {call_outcome}. Questions: {', '.join(detected_questions) if detected_questions else 'General'}.",
+                    "outcome": call_outcome,
+                    "sentiment": "positive" if "Site Visit" in call_outcome else ("negative" if "Not Interested" in call_outcome else "neutral"),
+                    "detectedQuestions": detected_questions,
+                    "called_at": datetime.utcnow().isoformat()
+                }
+                logger.info(f"🌐 [WEBHOOK SYNC] Delivering call intelligence to {dashboard_url}/api/webhooks/voice-agent ...")
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(
+                    None,
+                    lambda: requests.post(f"{dashboard_url}/api/webhooks/voice-agent", json=webhook_payload, timeout=6)
+                )
+                logger.info("🌐 [WEBHOOK SYNC] Successfully synced call transcript and outcome to Web Dashboard!")
+            except Exception as sync_err:
+                logger.warning(f"Could not deliver webhook to {dashboard_url}: {sync_err}")
+
         except Exception as e:
-            logger.error(f"Failed to record call billing or transcript: {e}")
+            logger.error(f"Failed to record call billing or transcript: {e}", exc_info=True)
+
+    @ctx.room.on("participant_disconnected")
+    def _on_participant_disconnected(participant):
+        try:
+            p_ident = getattr(participant, "identity", "")
+            if p_ident.startswith("sip-") or not p_ident.startswith("agent-"):
+                logger.info(f"📞 Caller {p_ident} hung up phone! Finalizing transcript and intelligence immediately.")
+                asyncio.create_task(_finalize_and_save_call("caller_hungup"))
+                asyncio.create_task(ctx.room.disconnect())
+        except Exception as e:
+            logger.warning(f"Error in participant_disconnected handler: {e}")
+
+    @ctx.room.on("disconnected")
+    def _on_disconnected(*args, **kwargs):
+        logger.info(f"📞 Room disconnected: {args}. Finalizing transcript and intelligence.")
+        asyncio.create_task(_finalize_and_save_call("room_disconnected"))
 
     from livekit.agents.voice import UserInputTranscribedEvent
     from livekit.agents.voice.events import UserStateChangedEvent, AgentStateChangedEvent
@@ -1662,6 +1712,11 @@ async def entrypoint(ctx: JobContext):
             grace = max(delay_seconds, 2.5)
             logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s telecom buffer grace period before sending SIP BYE...")
             await asyncio.sleep(grace)
+
+            try:
+                await _finalize_and_save_call("agent_hangup")
+            except Exception as save_err:
+                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
 
             logger.info("📞 [CALL TERMINATION] Terminating SIP call and deleting room now.")
             try:

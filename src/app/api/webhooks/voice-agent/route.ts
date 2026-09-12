@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
 
     // Normalize variables from Vapi/Retell format OR direct Simulator format
     let phone = '';
+    let customerName = 'Valued Customer';
     let callSid = `call_sid_${Math.random().toString(36).substr(2, 9)}`;
     let durationSeconds = 0;
     let recordingUrl = '';
@@ -22,12 +23,27 @@ export async function POST(req: NextRequest) {
     let aiSummary = '';
     let sentiment: 'positive' | 'neutral' | 'negative' = 'neutral';
     let isMeetingScheduled = false;
-    let meetingTimeStr = '';
+    let outcome = 'Inquiry Completed';
+    let detectedQuestions: string[] = [];
 
-    // 1. Detect Vapi.ai Structure
-    if (body.message?.type === 'end-of-call-report' || body.message?.call) {
+    // 1. Detect Native LiveKit Gayatri Voice Agent Format
+    if (body.customerPhone || body.customerName || body.transcript || body.room_name) {
+      phone = body.customerPhone || body.phone || '+918693081506';
+      customerName = body.customerName || 'Valued Customer';
+      callSid = body.callSid || body.room_name || `call-${Date.now()}`;
+      durationSeconds = body.durationSeconds || body.duration_seconds || 0;
+      transcript = body.transcript || '';
+      aiSummary = body.aiSummary || body.ai_summary || `Voice call with ${customerName}.`;
+      sentiment = body.sentiment || 'neutral';
+      outcome = body.outcome || 'Inquiry Completed';
+      detectedQuestions = body.detectedQuestions || body.detected_questions || [];
+      isMeetingScheduled = outcome.toLowerCase().includes('site visit') || body.status === 'meeting_scheduled';
+    }
+    // 2. Detect Vapi.ai Structure
+    else if (body.message?.type === 'end-of-call-report' || body.message?.call) {
       const callData = body.message.call;
       phone = callData.customer?.number || '';
+      customerName = callData.customer?.name || customerName;
       callSid = callData.id || callSid;
       durationSeconds = Math.round(callData.duration || 0);
       recordingUrl = callData.recordingUrl || '';
@@ -38,19 +54,21 @@ export async function POST(req: NextRequest) {
       const sentimentVal = (analysis.sentiment || '').toLowerCase();
       if (sentimentVal.includes('positive') || sentimentVal.includes('interested')) {
         sentiment = 'positive';
+        outcome = 'Interested';
       } else if (sentimentVal.includes('negative') || sentimentVal.includes('not interested')) {
         sentiment = 'negative';
+        outcome = 'Not Interested';
       }
       
-      // Look for structured calendar data from agent analysis
       const structuredData = analysis.structuredData || {};
       isMeetingScheduled = !!structuredData.meetingScheduled || !!structuredData.bookMeeting;
-      meetingTimeStr = structuredData.meetingTime || structuredData.scheduledTime || '';
+      if (isMeetingScheduled) outcome = 'Site Visit Scheduled';
     } 
-    // 2. Detect Retell AI Structure
+    // 3. Detect Retell AI Structure
     else if (body.call_type === 'outbound_phone' || body.call_detail) {
       const detail = body.call_detail || body;
       phone = detail.customer_phone_number || '';
+      customerName = detail.customer_name || customerName;
       callSid = detail.call_id || callSid;
       durationSeconds = Math.round(detail.duration_ms / 1000 || 0);
       recordingUrl = detail.recording_url || '';
@@ -61,64 +79,78 @@ export async function POST(req: NextRequest) {
       const sentimentVal = (analysis.user_sentiment || '').toLowerCase();
       if (sentimentVal.includes('positive')) {
         sentiment = 'positive';
+        outcome = 'Interested';
       } else if (sentimentVal.includes('negative')) {
         sentiment = 'negative';
+        outcome = 'Not Interested';
       }
       
       isMeetingScheduled = !!analysis.book_meeting || !!analysis.meeting_scheduled;
-      meetingTimeStr = analysis.meeting_timestamp || '';
+      if (isMeetingScheduled) outcome = 'Site Visit Scheduled';
     } 
-    // 3. Fallback: Direct Sandbox Simulator Format
+    // 4. Fallback: Direct Sandbox / Generic Format
     else {
-      phone = body.phone || '';
+      phone = body.phone || '+918693081506';
+      customerName = body.name || customerName;
       callSid = body.callSid || callSid;
       durationSeconds = body.durationSeconds || 60;
-      recordingUrl = body.recordingUrl || 'https://api.vapi.ai/recordings/mock.mp3';
-      transcript = body.transcript || 'Mock transcript';
-      aiSummary = body.aiSummary || 'Mock call summary';
+      recordingUrl = body.recordingUrl || '';
+      transcript = body.transcript || 'Mock conversation transcript';
+      aiSummary = body.aiSummary || 'Outbound call completed.';
       sentiment = body.sentiment || 'neutral';
-      isMeetingScheduled = body.status === 'meeting_scheduled' || !!body.meetingTime;
-      meetingTimeStr = body.meetingTime || '';
+      outcome = body.outcome || 'Inquiry Completed';
+      isMeetingScheduled = body.status === 'meeting_scheduled' || outcome.includes('Site Visit');
     }
 
     if (!phone) {
-      return NextResponse.json({ success: false, error: 'Customer phone number not found in webhook payload.' }, { status: 400 });
+      phone = '+918693081506';
     }
 
-    // Lookup Lead in Local DB
+    // Lookup or Create Lead in DB
     const db = getDb();
+    if (!db.leads) db.leads = [];
+    if (!db.callLogs) db.callLogs = [];
+    if (!db.meetings) db.meetings = [];
+
     const cleanTargetPhone = cleanPhone(phone);
+    let leadIndex = db.leads.findIndex(l => cleanPhone(l.phone) === cleanTargetPhone);
     
-    const leadIndex = db.leads.findIndex(l => cleanPhone(l.phone) === cleanTargetPhone);
-    
-    if (leadIndex === -1) {
-      console.warn(`[Webhook Warning]: No lead found matching phone: ${phone}`);
-      return NextResponse.json({ success: false, error: `Lead not found for phone: ${phone}` }, { status: 404 });
-    }
-
-    const lead = db.leads[leadIndex];
     let finalLeadStatus: Lead['status'] = 'queued';
-
-    // Determine status logic based on webhook analytics
-    if (isMeetingScheduled || sentiment === 'positive') {
-      finalLeadStatus = isMeetingScheduled ? 'meeting_scheduled' : 'interested';
-    } else if (sentiment === 'negative') {
+    if (isMeetingScheduled || outcome.toLowerCase().includes('site visit') || sentiment === 'positive') {
+      finalLeadStatus = isMeetingScheduled || outcome.toLowerCase().includes('site visit') ? 'meeting_scheduled' : 'interested';
+    } else if (sentiment === 'negative' || outcome.toLowerCase().includes('not interested')) {
       finalLeadStatus = 'not_interested';
     } else {
       finalLeadStatus = 'callback_required';
     }
 
-    // Update Lead records
-    db.leads[leadIndex] = {
-      ...lead,
-      status: finalLeadStatus,
-      lastCallAt: new Date().toISOString(),
-      notes: `${lead.notes || ''}\n\n[AI Outbound Call Outcome - ${new Date().toLocaleDateString()}]: ${aiSummary}`
-    };
+    let lead: Lead;
+    if (leadIndex === -1) {
+      console.log(`[Webhook]: Auto-creating new lead for phone: ${phone} (${customerName})`);
+      lead = {
+        id: `lead-${cleanTargetPhone || Date.now()}`,
+        name: customerName,
+        phone: phone,
+        status: finalLeadStatus,
+        createdAt: new Date().toISOString(),
+        lastCallAt: new Date().toISOString(),
+        notes: `Registered via Gayatri Voice Call: ${aiSummary}`
+      };
+      db.leads.unshift(lead);
+    } else {
+      lead = db.leads[leadIndex];
+      db.leads[leadIndex] = {
+        ...lead,
+        name: customerName !== 'Valued Customer' ? customerName : lead.name,
+        status: finalLeadStatus,
+        lastCallAt: new Date().toISOString(),
+        notes: `${lead.notes || ''}\n\n[Gayatri Voice Call - ${new Date().toLocaleDateString()}]: ${aiSummary}`
+      };
+    }
 
     // Log the Call Details
     const newCallLog: CallLog = {
-      id: `call-${Math.random().toString(36).substr(2, 9)}`,
+      id: `call-${Date.now()}`,
       leadId: lead.id,
       callSid,
       durationSeconds,
@@ -126,47 +158,35 @@ export async function POST(req: NextRequest) {
       transcript,
       aiSummary,
       sentiment,
-      calledAt: new Date().toISOString()
+      calledAt: body.called_at || new Date().toISOString(),
+      outcome,
+      customerName,
+      customerPhone: phone,
+      detectedQuestions
     };
-    db.callLogs.push(newCallLog);
 
-    // If meeting confirmed, trigger calendar invite creation
-    let googleMeetLink = '';
-    let generatedMeeting: Meeting | null = null;
-    
-    if (finalLeadStatus === 'meeting_scheduled' || isMeetingScheduled) {
-      // Simulate Google Meet integration link builder
-      const meetId = Math.random().toString(36).substr(2, 3) + '-' + Math.random().toString(36).substr(2, 4) + '-' + Math.random().toString(36).substr(2, 3);
-      googleMeetLink = `https://meet.google.com/${meetId}`;
-      
-      const scheduledTime = meetingTimeStr ? new Date(meetingTimeStr).toISOString() : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(); // 3 days layout fallback
-
-      generatedMeeting = {
-        id: `meet-${Math.random().toString(36).substr(2, 9)}`,
-        leadId: lead.id,
-        googleMeetLink,
-        scheduledTime,
-        status: 'confirmed',
-        createdAt: new Date().toISOString()
+    // Update existing log if matching callSid, or prepend
+    const existingLogIdx = db.callLogs.findIndex(l => l.callSid === callSid);
+    if (existingLogIdx >= 0) {
+      db.callLogs[existingLogIdx] = {
+        ...db.callLogs[existingLogIdx],
+        ...newCallLog
       };
-      
-      db.meetings.push(generatedMeeting);
-      console.log(`[CALENDAR WEBHOOK SUCCESS]: Created Google Meet session: ${googleMeetLink} for ${lead.name} (${lead.email || 'No email'})`);
+    } else {
+      db.callLogs.unshift(newCallLog);
     }
 
     // Save DB
     saveDb(db);
     revalidatePath('/');
-    revalidatePath('/dashboard/cold-calling');
-    revalidatePath('/support/tickets');
 
     return NextResponse.json({
       success: true,
-      message: 'Webhook processed, call logs filed, and lead updated.',
-      leadStatus: finalLeadStatus,
+      message: 'Call log and intelligence successfully filed!',
       callLogId: newCallLog.id,
-      meetingScheduled: !!generatedMeeting,
-      googleMeetLink
+      outcome,
+      customerName,
+      leadStatus: finalLeadStatus
     });
 
   } catch (e: any) {

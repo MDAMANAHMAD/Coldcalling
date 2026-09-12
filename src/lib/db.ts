@@ -231,30 +231,80 @@ const INITIAL_DATA: AppDatabase = {
   ]
 };
 
+declare global {
+  var __APP_DB_CACHE__: AppDatabase | undefined;
+}
+
+const TMP_DB_FILE = path.join('/tmp', 'db.json');
+
+function resolveDbPath(): string {
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    if (!fs.existsSync(TMP_DB_FILE)) {
+      try {
+        if (fs.existsSync(DB_FILE)) {
+          fs.copyFileSync(DB_FILE, TMP_DB_FILE);
+        }
+      } catch (err) {
+        console.warn('[DB]: Could not seed /tmp/db.json from project file:', err);
+      }
+    }
+    return TMP_DB_FILE;
+  }
+  return DB_FILE;
+}
+
 export function getDb(): AppDatabase {
-  if (!fs.existsSync(DB_FILE)) {
+  if (global.__APP_DB_CACHE__) {
+    return global.__APP_DB_CACHE__;
+  }
+
+  const activePath = resolveDbPath();
+
+  if (!fs.existsSync(activePath)) {
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const seedRaw = fs.readFileSync(DB_FILE, 'utf8');
+        const seed = JSON.parse(seedRaw);
+        if (!seed.callLogs) seed.callLogs = [];
+        if (!seed.meetings) seed.meetings = [];
+        if (!seed.leads) seed.leads = [];
+        global.__APP_DB_CACHE__ = seed;
+        return seed;
+      } catch {}
+    }
     saveDb(INITIAL_DATA);
+    global.__APP_DB_CACHE__ = INITIAL_DATA;
     return INITIAL_DATA;
   }
+
   try {
-    const raw = fs.readFileSync(DB_FILE, 'utf8');
+    const raw = fs.readFileSync(activePath, 'utf8');
     const parsed = JSON.parse(raw);
-    
-    // Ensure new arrays exist in read data
     if (!parsed.callLogs) parsed.callLogs = [];
     if (!parsed.meetings) parsed.meetings = [];
+    if (!parsed.leads) parsed.leads = [];
+    global.__APP_DB_CACHE__ = parsed;
     return parsed;
   } catch (e) {
-    console.error("Error reading database file, resetting to initial data", e);
-    saveDb(INITIAL_DATA);
+    console.error("[DB Error]: Reading database file failed, falling back to initial data:", e);
+    global.__APP_DB_CACHE__ = INITIAL_DATA;
     return INITIAL_DATA;
   }
 }
 
 export function saveDb(data: AppDatabase): void {
+  // Always update in-memory cache first
+  global.__APP_DB_CACHE__ = data;
+
+  const activePath = resolveDbPath();
   try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    fs.writeFileSync(activePath, JSON.stringify(data, null, 2), 'utf8');
   } catch (e) {
-    console.error("Error writing database file", e);
+    console.warn(`[DB]: Failed writing to ${activePath}, attempting /tmp fallback:`, e);
+    try {
+      fs.writeFileSync(TMP_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e2) {
+      console.warn("[DB]: Could not write to /tmp either, preserved in memory:", e2);
+    }
   }
 }
