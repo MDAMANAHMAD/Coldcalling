@@ -91,6 +91,12 @@ def format_line(raw_line: str) -> str:
         timing = f" {DIM}(STT took {time_match.group(1)}){RESET}" if time_match else ""
         return f"\n {BOLD}{YELLOW}👤 Caller:{RESET} \"{speech_text}\"{timing}"
 
+    # 4.1 Agent Speech Captured (Gayatri Dynamic Replies)
+    if "[DIALOGUE CAPTURED: GAYATRI]" in line:
+        text_match = re.search(r"GAYATRI\]\s*['\"](.*?)['\"]", line)
+        speech_text = text_match.group(1) if text_match else line
+        return f" {BOLD}{MAGENTA}🎙️ Gayatri:{RESET} \"{speech_text}\""
+
     # 5. Fast Turn-Taking / User Stopped Speaking
     if "[VAD] User stopped speaking!" in line:
         return f" {DIM}⏱️  [VAD] Caller stopped speaking -> Waiting for transcript & LLM...{RESET}"

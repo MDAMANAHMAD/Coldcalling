@@ -1612,28 +1612,37 @@ async def entrypoint(ctx: JobContext):
             # 1. Backfill any dialogue items from session._chat_ctx or session.history
             try:
                 chat_items = []
-                if hasattr(session, "_chat_ctx") and session._chat_ctx and hasattr(session._chat_ctx, "messages"):
-                    chat_items = session._chat_ctx.messages
-                elif hasattr(session, "history") and session.history:
-                    chat_items = getattr(session.history, "messages", [])
+                ctx_obj = getattr(session, "_chat_ctx", None) or getattr(session, "history", None)
+                if ctx_obj:
+                    if hasattr(ctx_obj, "items") and isinstance(ctx_obj.items, list):
+                        chat_items = ctx_obj.items
+                    elif hasattr(ctx_obj, "messages"):
+                        chat_items = ctx_obj.messages() if callable(ctx_obj.messages) else ctx_obj.messages
 
-                existing_texts = {t["text"].strip().lower() for t in call_dialogue}
+                def _norm(s: str) -> str:
+                    return re.sub(r'[^\w\s]', '', s).strip().lower()
+
+                existing_texts = {_norm(t.get("text", "")) for t in call_dialogue}
                 for msg in chat_items:
-                    m_role = getattr(msg, "role", "")
+                    m_role = str(getattr(msg, "role", "")).lower()
                     if m_role in ["system", "tool"]:
                         continue
-                    m_content = getattr(msg, "content", "")
-                    if isinstance(m_content, list):
-                        m_content = " ".join(str(c) for c in m_content)
-                    raw_m = str(m_content).strip()
-                    if raw_m and raw_m.lower() not in existing_texts:
+                    raw_m = getattr(msg, "text_content", "") or ""
+                    if not raw_m:
+                        m_content = getattr(msg, "content", "")
+                        if isinstance(m_content, list):
+                            raw_m = " ".join(str(c) for c in m_content if c)
+                        else:
+                            raw_m = str(m_content or "")
+                    raw_m = raw_m.strip()
+                    if raw_m and _norm(raw_m) not in existing_texts:
                         role_key = "agent" if m_role in ["assistant", "agent"] else "customer"
                         call_dialogue.append({
                             "role": role_key,
                             "text": raw_m,
                             "time": round(time.time() - t_call_start, 1)
                         })
-                        existing_texts.add(raw_m.lower())
+                        existing_texts.add(_norm(raw_m))
             except Exception as backfill_err:
                 logger.debug(f"Chat context backfill notice: {backfill_err}")
 
@@ -2010,20 +2019,22 @@ async def entrypoint(ctx: JobContext):
     @session.on("conversation_item_added")
     def on_item_added(item):
         try:
-            role = getattr(item, "role", None)
-            content = getattr(item, "content", "")
-            if isinstance(content, list):
-                content = " ".join(str(c) for c in content)
-            raw_text = str(content).strip()
+            msg = getattr(item, "item", item)
+            role = getattr(msg, "role", None) or getattr(item, "role", None)
+            role_str = str(role).lower() if role is not None else ""
 
-            if role in ["user", "customer"]:
-                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text or call_dialogue[-1].get("role") != "customer"):
-                    elapsed_sec = round(time.time() - t_call_start, 1)
-                    call_dialogue.append({"role": "customer", "text": raw_text, "time": elapsed_sec})
-                    logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] '{raw_text}' at {elapsed_sec}s")
+            raw_text = getattr(msg, "text_content", "") or ""
+            if not raw_text:
+                content = getattr(msg, "content", "")
+                if isinstance(content, list):
+                    raw_text = " ".join(str(c) for c in content if c)
+                else:
+                    raw_text = str(content or "")
+            raw_text = raw_text.strip()
 
-            elif role in ["assistant", "agent"]:
-                if raw_text and (not call_dialogue or call_dialogue[-1].get("text") != raw_text or call_dialogue[-1].get("role") != "agent"):
+            if role_str in ["assistant", "agent"]:
+                last_turn = call_dialogue[-1] if call_dialogue else None
+                if raw_text and (not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text):
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
                     logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] '{raw_text}' at {elapsed_sec}s")
@@ -2036,6 +2047,13 @@ async def entrypoint(ctx: JobContext):
                 if any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
                     trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
+
+            elif role_str in ["user", "customer"]:
+                last_turn = call_dialogue[-1] if call_dialogue else None
+                if raw_text and (not last_turn or last_turn.get("role") != "customer" or last_turn.get("text", "").strip() != raw_text):
+                    elapsed_sec = round(time.time() - t_call_start, 1)
+                    call_dialogue.append({"role": "customer", "text": raw_text, "time": elapsed_sec})
+                    logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] '{raw_text}' at {elapsed_sec}s")
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
@@ -2155,7 +2173,8 @@ async def entrypoint(ctx: JobContext):
     try:
         greeting_speech = session.say(greeting_text, allow_interruptions=False)
         elapsed_sec = round(time.time() - t_call_start, 1)
-        call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": elapsed_sec})
+        if not call_dialogue or call_dialogue[-1].get("text", "").strip() != greeting_text.strip():
+            call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": elapsed_sec})
         
         # Block until Gayatri has COMPLETELY finished speaking the entire intro part!
         if greeting_speech:
