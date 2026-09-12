@@ -10,6 +10,18 @@ const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
 const VERIFIED_SECRET = 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
 const VERIFIED_TRUNK = 'ST_TEGVYguUkfe9';
 
+function getCleanLiveKitUrl(): string {
+  const raw = (process.env.LIVEKIT_URL || VERIFIED_HOST)
+    .replace(/['"]/g, '')
+    .trim();
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    return `https://${parsed.host}`;
+  } catch {
+    return VERIFIED_HOST;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -20,12 +32,10 @@ export async function POST(req: NextRequest) {
     const cleanId = safePhone.replace('+', '');
     const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
-    const host = process.env.LIVEKIT_URL 
-      ? `https://${process.env.LIVEKIT_URL.replace(/^[a-zA-Z]+:\/\//, '').replace(/\/+$/, '').trim()}`
-      : VERIFIED_HOST;
-    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).trim();
-    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).trim();
+    const host = getCleanLiveKitUrl();
+    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['"]/g, '').trim();
+    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['"]/g, '').trim();
+    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['"]/g, '').trim();
 
     console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host}`);
 
@@ -39,7 +49,7 @@ export async function POST(req: NextRequest) {
     });
 
     const participant = await sipClient.createSipParticipant(
-      trunkId.trim(),
+      trunkId,
       safePhone,
       uniqueRoom,
       {
@@ -47,7 +57,7 @@ export async function POST(req: NextRequest) {
         participantName: customerName,
         participantMetadata: metadata,
         playRingtone: true,
-        waitUntilAnswered: false, // Non-blocking dispatch: connects in ~100ms without twirp timeout
+        waitUntilAnswered: false, // Non-blocking dispatch
       }
     );
 
@@ -57,6 +67,7 @@ export async function POST(req: NextRequest) {
     try {
       const db = getDb();
       const callLogId = `call-${Date.now()}`;
+      if (!db.callLogs) db.callLogs = [];
       db.callLogs.unshift({
         id: callLogId,
         leadId: `lead-${cleanId}`,
@@ -74,6 +85,7 @@ export async function POST(req: NextRequest) {
       });
 
       // Also ensure lead exists in db
+      if (!db.leads) db.leads = [];
       const existingLead = db.leads.find(l => l.phone.replace(/\D/g, '') === safePhone.replace(/\D/g, ''));
       if (existingLead) {
         existingLead.status = 'calling';
