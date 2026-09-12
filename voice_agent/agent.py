@@ -1372,6 +1372,9 @@ async def entrypoint(ctx: JobContext):
     # Create active call lock file to signal background processes to hold off heavy compilation
     try:
         os.makedirs("bookings", exist_ok=True)
+        os.makedirs("bookings/recordings", exist_ok=True)
+        os.makedirs("bookings/transcripts", exist_ok=True)
+        os.makedirs("public/recordings", exist_ok=True)
         with open("bookings/active_call.lock", "w") as f:
             f.write(str(os.getpid()))
         logger.info("🔒 Active call lock created.")
@@ -1744,18 +1747,28 @@ async def entrypoint(ctx: JobContext):
                 found_src = None
                 if hasattr(session, "_recorder_io") and session._recorder_io:
                     try:
-                        rec_out = session._recorder_io.output_path()
+                        rec_out = getattr(session._recorder_io, "output_path", None)
+                        if callable(rec_out):
+                            rec_out = rec_out()
                         if rec_out and Path(rec_out).exists() and Path(rec_out).stat().st_size > 0:
                             found_src = Path(rec_out)
-                    except Exception:
-                        pass
+                            logger.info(f"🎙️ [AUDIO RECORDING] Found RecorderIO output at: {found_src} ({found_src.stat().st_size} bytes)")
+                    except Exception as e:
+                        logger.warning(f"Could not read RecorderIO output_path: {e}")
 
                 if not found_src:
                     src_session_dir = getattr(ctx, "session_directory", None)
-                    if src_session_dir:
+                    if src_session_dir and Path(src_session_dir).exists():
                         candidate = Path(src_session_dir) / "audio.ogg"
                         if candidate.exists() and candidate.stat().st_size > 0:
                             found_src = candidate
+                            logger.info(f"🎙️ [AUDIO RECORDING] Found audio.ogg in session_directory at: {found_src} ({found_src.stat().st_size} bytes)")
+                        else:
+                            for f in Path(src_session_dir).glob("*.ogg"):
+                                if f.stat().st_size > 0:
+                                    found_src = f
+                                    logger.info(f"🎙️ [AUDIO RECORDING] Found audio file via glob: {found_src}")
+                                    break
 
                 if found_src and found_src.stat().st_size > 0:
                     os.makedirs("bookings/recordings", exist_ok=True)
