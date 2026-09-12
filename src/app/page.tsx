@@ -68,19 +68,30 @@ export default function ColdCallingHomePage() {
         console.warn('Could not read local call logs:', err);
       }
 
-      // 3. Merge server and local logs without duplication
+      // 3. Merge server and local logs without duplication (keyed by callSid when available)
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
       
-      // Add server logs first
+      // Add server logs first (authoritative real calls from VPS / Webhook)
       for (const item of serverLogs) {
-        map.set(item.id, item);
+        const key = item.callSid || item.id;
+        map.set(key, item);
       }
 
-      // Merge local logs
+      // Merge local logs only if not already saved/finalized on the server
+      const remainingLocal: typeof localLogs = [];
       for (const item of localLogs) {
-        if (!map.has(item.id)) {
-          map.set(item.id, item);
+        const key = item.callSid || item.id;
+        if (!map.has(key)) {
+          map.set(key, item);
+          remainingLocal.push(item);
         }
+      }
+
+      // Clean up completed calls from localStorage
+      try {
+        localStorage.setItem('gayatri_live_call_logs', JSON.stringify(remainingLocal));
+      } catch (err) {
+        console.warn('Could not sync localStorage:', err);
       }
 
       const merged = Array.from(map.values()).sort(
@@ -161,7 +172,7 @@ export default function ColdCallingHomePage() {
           message: `Calling ${callerName} (${safeTargetPhone})... Gayatri is connected and ringing the phone now!`
         });
 
-        // Instant Live Call Log Entry stored immediately in local browser storage
+        // Instant Live Call Log Entry stored temporarily in browser storage while call is in progress
         const newLiveLog: CallLog & { leadName: string; leadPhone?: string } = {
           id: `call-${Date.now()}`,
           leadId: `lead-${callerName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
@@ -170,14 +181,14 @@ export default function ColdCallingHomePage() {
           customerName: callerName,
           customerPhone: safeTargetPhone,
           callSid: data.roomName || `call-${Date.now()}`,
-          durationSeconds: 135,
+          durationSeconds: 0,
           recordingUrl: '',
-          transcript: `[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main ${callerName} se baat kar sakti hoon?\n[4.2s] ${callerName}: Haan boliye, main ${callerName} bol raha hoon. Kya project hai?\n[8.0s] Gayatri: Namaskar ${callerName} ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[18.5s] ${callerName}: Achha, 2 BHK ka carpet area kitna hai aur budget kya hai?\n[23.1s] Gayatri: Two BHK ka carpet area saat sau saath square feet hai, aur pricing baawan lakh se shuru hoti hai. Sabhi modern amenities included hain.\n[32.4s] ${callerName}: Theek hai, main Sunday ko dekhne aa sakta hoon.\n[37.0s] Gayatri: Bahut badhiya ${callerName} ji! Maine aapka Sunday ka site visit confirm kar diya hai. Saari details main aapko WhatsApp par bhej rahi hoon. Aapka din shubh ho, bye!`,
-          aiSummary: `Outbound AI call placed to ${callerName}. Client confirmed interest in Dombivli East 2 BHK (760 sq ft carpet, ₹52 Lakh) and scheduled site visit for Sunday. Details sent via WhatsApp.`,
-          sentiment: 'positive',
-          outcome: 'Site Visit Scheduled',
+          transcript: `[Call In Progress]\nGayatri is currently speaking with ${callerName} (${safeTargetPhone}).\nThe complete turn-by-turn conversation dialogue will be saved and displayed here automatically once the call completes.`,
+          aiSummary: `Outbound AI call initiated to ${callerName}. Phone ringing and connected.`,
+          sentiment: 'neutral',
+          outcome: 'Ringing / Calling',
           calledAt: new Date().toISOString(),
-          detectedQuestions: ['Pricing & Budget (2 BHK)', 'Carpet Area (760 sq ft)', 'Site Visit Planning (Sunday)']
+          detectedQuestions: ['Outbound Initiation']
         };
 
         try {
@@ -190,12 +201,10 @@ export default function ColdCallingHomePage() {
         }
 
         // Prepend immediately to state
-        setCallLogs(prev => [newLiveLog, ...prev.filter(p => p.id !== newLiveLog.id)]);
+        setCallLogs(prev => [newLiveLog, ...prev.filter(p => (p.callSid ? p.callSid !== newLiveLog.callSid : p.id !== newLiveLog.id))]);
         setStats(prev => ({
           ...prev,
-          totalCalls: prev.totalCalls + 1,
-          siteVisits: prev.siteVisits + 1,
-          interested: prev.interested + 1
+          totalCalls: prev.totalCalls + 1
         }));
       } else {
         setDialResult({
@@ -299,28 +308,76 @@ export default function ColdCallingHomePage() {
     return true;
   });
 
-  // Format Turn-by-Turn transcript
-  const parseTranscript = (rawTranscript: string) => {
+  // Format Turn-by-Turn transcript with timestamp & speaker detection
+  interface ParsedTurn {
+    speaker: 'agent' | 'customer' | 'system';
+    timestamp?: string;
+    speakerName: string;
+    text: string;
+  }
+
+  const parseTranscript = (rawTranscript: string, fallbackName: string = 'Customer'): ParsedTurn[] => {
     if (!rawTranscript) return [];
 
-    const lines = rawTranscript.split('\n').filter(l => l.trim().length > 0);
-    const parsed: { speaker: 'agent' | 'customer' | 'system'; text: string }[] = [];
+    const lines = rawTranscript.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const parsed: ParsedTurn[] = [];
 
     for (const line of lines) {
+      // 1. Check for timestamp bracket: [0.5s] or [12s] or [1.2m]
+      const tsMatch = line.match(/^\[([\d.]+(?:s|m)?)\]\s*(.+)$/i);
+      let timestamp: string | undefined = undefined;
+      let content = line;
+
+      if (tsMatch) {
+        timestamp = tsMatch[1];
+        content = tsMatch[2].trim();
+      }
+
+      // 2. Check for Speaker: Message format
+      const colonIdx = content.indexOf(':');
+      if (colonIdx !== -1) {
+        const rawSpeaker = content.slice(0, colonIdx).trim();
+        const messageText = content.slice(colonIdx + 1).trim();
+        const lowerSpeaker = rawSpeaker.toLowerCase();
+
+        if (
+          lowerSpeaker.includes('gayatri') ||
+          lowerSpeaker.includes('agent') ||
+          lowerSpeaker.includes('priya') ||
+          lowerSpeaker.includes('ai')
+        ) {
+          parsed.push({
+            speaker: 'agent',
+            timestamp,
+            speakerName: 'Gayatri (AI Property Advisor)',
+            text: messageText
+          });
+          continue;
+        } else {
+          const cleanName = rawSpeaker.replace(/\s*ji$/i, '').trim();
+          parsed.push({
+            speaker: 'customer',
+            timestamp,
+            speakerName: cleanName || fallbackName,
+            text: messageText
+          });
+          continue;
+        }
+      }
+
+      // 3. System messages e.g. [Call In Progress]
       if (line.startsWith('[') && line.endsWith(']')) {
-        parsed.push({ speaker: 'system', text: line });
-      } else if (line.toLowerCase().startsWith('agent:') || line.toLowerCase().startsWith('agent (gayatri):')) {
         parsed.push({
-          speaker: 'agent',
-          text: line.replace(/^agent(\s*\(gayatri\))?:\s*/i, '').trim()
-        });
-      } else if (line.toLowerCase().startsWith('customer:') || line.toLowerCase().startsWith('customer (')) {
-        parsed.push({
-          speaker: 'customer',
-          text: line.replace(/^customer(\s*\(.*?\))?:\s*/i, '').trim()
+          speaker: 'system',
+          speakerName: 'System',
+          text: line.slice(1, -1).trim()
         });
       } else {
-        parsed.push({ speaker: 'system', text: line });
+        parsed.push({
+          speaker: 'system',
+          speakerName: 'System',
+          text: line
+        });
       }
     }
 
@@ -681,11 +738,11 @@ export default function ColdCallingHomePage() {
 
               {/* Modal Body: Turn-by-Turn Dialogue */}
               <div className="p-6 overflow-y-auto space-y-4 flex-1">
-                {parseTranscript(selectedCall.transcript).map((turn, idx) => {
+                {parseTranscript(selectedCall.transcript, selectedCall.leadName).map((turn, idx) => {
                   if (turn.speaker === 'system') {
                     return (
-                      <div key={idx} className="text-center my-2">
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3 py-1 rounded-full font-medium italic">
+                      <div key={idx} className="text-center my-3">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 px-3.5 py-1.5 rounded-full font-medium shadow-sm inline-block">
                           {turn.text}
                         </span>
                       </div>
@@ -699,17 +756,22 @@ export default function ColdCallingHomePage() {
                       key={idx}
                       className={`flex flex-col ${isAgent ? 'items-start' : 'items-end'}`}
                     >
-                      <div className="flex items-center space-x-1.5 mb-1 px-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          {isAgent ? 'Gayatri (AI Property Advisor)' : selectedCall.leadName}
+                      <div className={`flex items-center space-x-1.5 mb-1 px-1 ${isAgent ? 'flex-row' : 'flex-row-reverse space-x-reverse'}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isAgent ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                          {turn.speakerName}
                         </span>
+                        {turn.timestamp && (
+                          <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                            {turn.timestamp}
+                          </span>
+                        )}
                       </div>
 
                       <div
-                        className={`max-w-[85%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed ${
+                        className={`max-w-[85%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
                           isAgent
-                            ? 'bg-blue-50 dark:bg-blue-950/60 text-slate-800 dark:text-slate-100 border border-blue-100 dark:border-blue-900/50 rounded-tl-sm'
-                            : 'bg-emerald-600 text-white rounded-tr-sm shadow-sm'
+                            ? 'bg-blue-50 dark:bg-blue-950/60 text-slate-900 dark:text-slate-100 border border-blue-200 dark:border-blue-900/60 rounded-tl-sm'
+                            : 'bg-emerald-600 text-white rounded-tr-sm'
                         }`}
                       >
                         {turn.text}

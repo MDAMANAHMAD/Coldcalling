@@ -68,42 +68,12 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
               recordingUrl: '',
               transcript: rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : ''),
               aiSummary: `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
-              sentiment: rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : 'neutral'),
+              sentiment: rec.sentiment || (rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : (rec.outcome?.includes('Interested') ? 'positive' : 'neutral'))),
               calledAt: rec.timestamp || new Date().toISOString(),
               outcome: rec.outcome || 'Inquiry Completed',
               customerName: rec.customer_name || 'Client',
               customerPhone: rec.customer_phone || '+918693081506',
               detectedQuestions: rec.detected_questions || []
-            });
-          }
-        } catch {
-          // ignore malformed line
-        }
-      }
-    }
-
-    const visitsPath = path.join(process.cwd(), 'bookings', 'property_visits.jsonl');
-    if (fs.existsSync(visitsPath)) {
-      const content = fs.readFileSync(visitsPath, 'utf-8');
-      const lines = content.split('\n').filter(l => l.trim().length > 0);
-      for (const line of lines) {
-        try {
-          const rec = JSON.parse(line);
-          const visitId = `visit-${rec.timestamp || Math.random()}`;
-          if (!dbLogs.some(log => log.callSid === visitId || log.calledAt === rec.timestamp)) {
-            dbLogs.push({
-              id: visitId,
-              leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
-              callSid: visitId,
-              durationSeconds: 120,
-              transcript: `Agent (Gayatri): Hello, Sai Complex Dombivli East ke regarding call kiya hai... flat dekhne ke liye site visit karna chahenge?\nCustomer (${rec.customer_name}): Haan, ${rec.preferred_day || 'Weekend'} ko ${rec.flat_type || '2BHK'} dekhna hai.\nAgent (Gayatri): Bahut badhiya! Maine aapka ${rec.preferred_day || 'Weekend'} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Aapka din shubh ho, bye!`,
-              aiSummary: `Site visit confirmed for ${rec.preferred_day || 'Weekend'} (${rec.flat_type || '2 BHK'}). Details sent via WhatsApp.`,
-              sentiment: 'positive',
-              calledAt: rec.timestamp || new Date().toISOString(),
-              outcome: 'Site Visit Scheduled',
-              customerName: rec.customer_name || 'Client',
-              customerPhone: '+918693081506',
-              detectedQuestions: ['Site Visit Confirmation', rec.flat_type || '2BHK']
             });
           }
         } catch {

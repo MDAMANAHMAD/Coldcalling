@@ -1115,6 +1115,185 @@ def log_system_diagnostics():
 
 
 # ==============================================================================
+# 3.5 POST-CALL INTELLIGENCE CLASSIFIER (Zero Live Latency Penalty)
+# ==============================================================================
+def classify_call_intelligence(formatted_transcript: str, dialogue: list, customer_name: str) -> dict:
+    """
+    Enterprise Post-Call Intelligence Classifier.
+    Accurately classifies real-estate telephone calls into:
+    - Site Visit Scheduled
+    - Interested
+    - Not Interested
+    - Location Mismatch (Kalyan)
+    - Short / Call Dropped
+    - Inquiry Completed
+    
+    Supports Hindi, Devanagari Hindi, Marathi, and Hinglish.
+    Uses Gemini (gemini-3.5-flash-lite) with Groq fallback and multilingual regex fallback.
+    Runs asynchronously in ~1 second AFTER the call ends, adding 0ms to live call latency.
+    """
+    # 1. Try Gemini 3.5 Flash-Lite
+    google_key = os.getenv("GOOGLE_API_KEY")
+    if google_key and dialogue:
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=google_key)
+            prompt = f"""You are an enterprise Real Estate Call Intelligence analyzer.
+Analyze this recorded telephone conversation between Gayatri (AI Property Advisor) and customer {customer_name}:
+
+--- TRANSCRIPT ---
+{formatted_transcript}
+--- END TRANSCRIPT ---
+
+Task:
+1. Determine the Call Outcome category strictly as one of:
+   - "Site Visit Scheduled" (Customer agreed to/confirmed a day or time to visit Sai Complex Dombivli East)
+   - "Interested" (Customer showed genuine interest in 1/2 BHK flats, pricing, amenities, floor plans, asked for WhatsApp brochure, or plans to discuss with family)
+   - "Not Interested" (Customer said no, not interested, refused visit, told not to call, wrong number, or showed clear disinterest in Hindi/Marathi/English)
+   - "Location Mismatch (Kalyan)" (Customer strictly wanted another city/location e.g. Kalyan)
+   - "Short / Call Dropped" (Call dropped, silence, or no meaningful exchange)
+   - "Inquiry Completed" (Customer asked general questions without expressing clear interest or disinterest)
+2. Determine sentiment: "positive", "neutral", or "negative".
+3. Write a 1-sentence executive AI summary in English.
+4. List key topics/questions asked by customer.
+
+Respond ONLY with valid JSON:
+{{
+  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "sentiment": "positive" | "neutral" | "negative",
+  "aiSummary": "...",
+  "detectedQuestions": ["..."]
+}}"""
+            resp = client.models.generate_content(
+                model="gemini-3.5-flash-lite",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.1
+                )
+            )
+            data = json.loads(resp.text)
+            if data.get("outcome") in [
+                "Site Visit Scheduled", "Interested", "Not Interested", 
+                "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
+            ]:
+                logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini)] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
+                return data
+        except Exception as gemini_err:
+            logger.warning(f"Gemini post-call classification fallback triggered: {gemini_err}")
+
+    # 2. Try Groq Llama 3.1
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key and dialogue:
+        try:
+            import urllib.request
+            groq_prompt = f"""Analyze this recorded phone call between Gayatri (AI Property Advisor) and {customer_name}:
+{formatted_transcript}
+
+Classify into valid JSON:
+{{
+  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "sentiment": "positive" | "neutral" | "negative",
+  "aiSummary": "1 sentence executive summary in English",
+  "detectedQuestions": ["topic1", "topic2"]
+}}
+Return ONLY raw JSON."""
+            req = urllib.request.Request(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {groq_key}",
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps({
+                    "model": "llama-3.1-8b-instant",
+                    "messages": [{"role": "user", "content": groq_prompt}],
+                    "temperature": 0.1,
+                    "response_format": {"type": "json_object"}
+                }).encode("utf-8")
+            )
+            with urllib.request.urlopen(req, timeout=4) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                content = res_data["choices"][0]["message"]["content"]
+                data = json.loads(content)
+                if data.get("outcome"):
+                    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Groq)] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
+                    return data
+        except Exception as groq_err:
+            logger.warning(f"Groq post-call classification fallback triggered: {groq_err}")
+
+    # 3. Multilingual Regex Fallback (Hindi, Devanagari, Marathi, English)
+    customer_texts = [t["text"].lower() for t in dialogue if t["role"] == "customer"]
+    all_cust = " ".join(customer_texts)
+    all_agent = " ".join(t["text"].lower() for t in dialogue if t["role"] == "agent")
+
+    detected_questions = []
+    if any(w in all_cust for w in ["kalyan", "kaliyan", "कल्याण"]):
+        detected_questions.append("Kalyan Location Inquiry")
+    if any(w in all_cust for w in ["2 bhk", "two bhk", "price", "pricing", "kitna", "budget", "lakh", "cost", "दख", "भाव", "दर", "किंमत"]):
+        detected_questions.append("Pricing & Budget (2 BHK / 1 BHK)")
+    if any(w in all_cust for w in ["vashi", "station", "nilje", "distance", "door", "connectivity", "metro", "thane", "स्टेशन"]):
+        detected_questions.append("Station & Metro Connectivity")
+    if any(w in all_cust for w in ["possession", "ready", "rera", "builder", "kab tak", "कधी"]):
+        detected_questions.append("Possession Date & RERA")
+    if any(w in all_cust for w in ["gym", "amenities", "water", "parking", "lift", "कया कया"]):
+        detected_questions.append("Amenities & Facilities")
+    if any(w in all_cust for w in ["visit", "dekhne", "aana", "saturday", "sunday", "weekend", "kal", "बघायला", "येणार"]):
+        detected_questions.append("Site Visit Planning")
+
+    # Outcome matching
+    if any("site visit confirm" in all_agent or "schedule_site_visit" in all_agent or "visit confirm" in all_agent):
+        outcome = "Site Visit Scheduled"
+        sentiment = "positive"
+    elif any("kalyan mein humara project available nahi hai" in all_agent or "kalyan" in all_cust):
+        outcome = "Location Mismatch (Kalyan)"
+        sentiment = "neutral"
+    else:
+        # Check Not Interested patterns (including Devanagari Hindi and Marathi)
+        not_int_patterns = [
+            r"not\s*interested", r"no\s*interest", r"nahi\s*chahiye", r"dont\s*call", r"wrong\s*number",
+            r"interest\s*nah[i|ee]", r"nahi\s*karna", r"mat\s*karo", r"mat\s*lagao", r"phone\s*mat",
+            r"नही\s*करना", r"नहीं\s*करना", r"नको", r"गरज\s*नाही", r"रुचि\s*नही", r"रुची\s*नाही",
+            r"interest\s*नही", r"interest\s*नहीं", r"site\s*(?:visit|sai)?\s*नही", r"site\s*(?:visit|sai)?\s*नहीं",
+            r"मझ\s*interest\s*नही", r"मुझे\s*interest\s*नहीं", r"plan\s*cancel"
+        ]
+        is_not_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in not_int_patterns)
+        if is_not_interested:
+            outcome = "Not Interested"
+            sentiment = "negative"
+        else:
+            # Check Interested patterns
+            int_patterns = [
+                r"interested", r"interest\s*hai", r"details\s*bhej", r"brochure", r"whatsapp",
+                r"rate\s*bhej", r"kharidna", r"planning", r"acha\s*hai", r"रुचि\s*है", r"आवडल",
+                r"बघायच", r"फोटो\s*पाठवा", r"details\s*पाठवा"
+            ]
+            is_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in int_patterns)
+            if is_interested:
+                outcome = "Interested"
+                sentiment = "positive"
+            elif len(dialogue) <= 2:
+                outcome = "Short / Call Dropped"
+                sentiment = "neutral"
+            elif detected_questions:
+                outcome = "Inquiry Completed"
+                sentiment = "neutral"
+            else:
+                outcome = "Inquiry Completed"
+                sentiment = "neutral"
+
+    q_str = f" Questions: {', '.join(detected_questions)}." if detected_questions else ""
+    summary = f"Call with {customer_name}. Outcome: {outcome}.{q_str}"
+    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Fallback)] Outcome: '{outcome}' | Sentiment: '{sentiment}'")
+    return {
+        "outcome": outcome,
+        "sentiment": sentiment,
+        "aiSummary": summary,
+        "detectedQuestions": detected_questions
+    }
+
+
+# ==============================================================================
 # 4. AGENT ENTRYPOINT (Instant Telephony Streaming Audio)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
@@ -1414,34 +1593,12 @@ async def entrypoint(ctx: JobContext):
                 formatted_lines.append(f"[{turn['time']}s] {role_label}: {turn['text']}")
             formatted_transcript = "\n".join(formatted_lines) if formatted_lines else "No conversation recorded."
 
-            all_customer_text = " ".join(t["text"].lower() for t in call_dialogue if t["role"] == "customer")
-            all_dialogue_text = " ".join(t["text"].lower() for t in call_dialogue)
-
-            detected_questions = []
-            if any(w in all_customer_text for w in ["kalyan", "kaliyan"]):
-                detected_questions.append("Kalyan Location Inquiry")
-            if any(w in all_customer_text for w in ["2 bhk", "two bhk", "price", "pricing", "kitna", "budget", "lakh", "cost"]):
-                detected_questions.append("Pricing & Budget (2 BHK / 1 BHK)")
-            if any(w in all_customer_text for w in ["vashi", "station", "nilje", "distance", "door", "connectivity", "metro", "thane"]):
-                detected_questions.append("Station & Metro Connectivity")
-            if any(w in all_customer_text for w in ["possession", "ready", "rera", "builder", "kab tak"]):
-                detected_questions.append("Possession Date & RERA")
-            if any(w in all_customer_text for w in ["gym", "amenities", "water", "parking", "lift"]):
-                detected_questions.append("Amenities & Facilities")
-            if any(w in all_customer_text for w in ["visit", "dekhne", "aana", "saturday", "sunday", "weekend", "kal"]):
-                detected_questions.append("Site Visit Planning")
-
-            # Classify Call Outcome
-            if any("site visit confirm" in t["text"].lower() or "schedule_site_visit" in t["text"].lower() for t in call_dialogue if t["role"] == "agent"):
-                call_outcome = "Site Visit Scheduled"
-            elif any("kalyan mein humara project available nahi hai" in t["text"].lower() or "kalyan" in all_customer_text for t in call_dialogue):
-                call_outcome = "Location Mismatch (Kalyan)"
-            elif any(w in all_customer_text for w in ["nahi chahiye", "not interested", "dont call", "wrong number"]):
-                call_outcome = "Not Interested"
-            elif detected_questions:
-                call_outcome = "Inquiry Completed"
-            else:
-                call_outcome = "Short / Call Dropped"
+            # Run Post-Call Intelligence Classifier (Gemini / Groq / Multilingual Regex)
+            intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
+            call_outcome = intel.get("outcome", "Inquiry Completed")
+            sentiment = intel.get("sentiment", "neutral")
+            ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")
+            detected_questions = intel.get("detectedQuestions", [])
 
             transcript_record = {
                 "call_id": ctx.room.name,
@@ -1451,6 +1608,8 @@ async def entrypoint(ctx: JobContext):
                 "duration_seconds": round(duration_seconds, 1),
                 "duration_minutes": round(duration_minutes, 2),
                 "outcome": call_outcome,
+                "sentiment": sentiment,
+                "ai_summary": ai_summary,
                 "detected_questions": detected_questions,
                 "turns_count": len(call_dialogue),
                 "dialogue": call_dialogue,
@@ -1465,7 +1624,7 @@ async def entrypoint(ctx: JobContext):
             with open(f"bookings/transcripts/{ctx.room.name}.json", "w", encoding="utf-8") as f:
                 json.dump(transcript_record, f, ensure_ascii=False, indent=2)
 
-            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Outcome: {call_outcome})")
+            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Outcome: {call_outcome}, Sentiment: {sentiment})")
 
             # 1. Sync with local db.json for the Cold Calling Dashboard
             try:
@@ -1477,26 +1636,33 @@ async def entrypoint(ctx: JobContext):
                     if "callLogs" not in db_data:
                         db_data["callLogs"] = []
 
-                    if not any(log.get("callSid") == ctx.room.name for log in db_data["callLogs"]):
-                        new_log = {
-                            "id": f"call-{int(time.time()*1000)}",
-                            "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
-                            "callSid": ctx.room.name,
-                            "durationSeconds": round(duration_seconds),
-                            "recordingUrl": "",
-                            "transcript": formatted_transcript,
-                            "aiSummary": f"Call with {customer_name}. Outcome: {call_outcome}. Questions: {', '.join(detected_questions) if detected_questions else 'General'}.",
-                            "sentiment": "positive" if "Site Visit" in call_outcome else ("negative" if "Not Interested" in call_outcome else "neutral"),
-                            "calledAt": datetime.utcnow().isoformat(),
-                            "outcome": call_outcome,
-                            "detectedQuestions": detected_questions,
-                            "customerPhone": customer_phone,
-                            "customerName": customer_name
-                        }
+                    new_log = {
+                        "id": f"call-{int(time.time()*1000)}",
+                        "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
+                        "callSid": ctx.room.name,
+                        "durationSeconds": round(duration_seconds),
+                        "recordingUrl": "",
+                        "transcript": formatted_transcript,
+                        "aiSummary": ai_summary,
+                        "sentiment": sentiment,
+                        "calledAt": datetime.utcnow().isoformat(),
+                        "outcome": call_outcome,
+                        "detectedQuestions": detected_questions,
+                        "customerPhone": customer_phone,
+                        "customerName": customer_name
+                    }
+
+                    # If an existing log with matching callSid exists (e.g. from web dialer), update it!
+                    existing_idx = next((i for i, log in enumerate(db_data["callLogs"]) if log.get("callSid") == ctx.room.name), None)
+                    if existing_idx is not None:
+                        new_log["id"] = db_data["callLogs"][existing_idx].get("id", new_log["id"])
+                        db_data["callLogs"][existing_idx].update(new_log)
+                    else:
                         db_data["callLogs"].insert(0, new_log)
-                        with open(db_path, "w", encoding="utf-8") as f:
-                            json.dump(db_data, f, ensure_ascii=False, indent=2)
-                        logger.info("📑 Synced live call transcript and intelligence to db.json for Web Dashboard!")
+
+                    with open(db_path, "w", encoding="utf-8") as f:
+                        json.dump(db_data, f, ensure_ascii=False, indent=2)
+                    logger.info("📑 Synced live call transcript and intelligence to db.json for Web Dashboard!")
             except Exception as db_err:
                 logger.warning(f"Could not update db.json: {db_err}")
 
@@ -1510,33 +1676,44 @@ async def entrypoint(ctx: JobContext):
                     "phone": customer_phone,
                     "durationSeconds": round(duration_seconds),
                     "transcript": formatted_transcript,
-                    "aiSummary": f"Call with {customer_name}. Outcome: {call_outcome}. Questions: {', '.join(detected_questions) if detected_questions else 'General'}.",
+                    "aiSummary": ai_summary,
                     "outcome": call_outcome,
-                    "sentiment": "positive" if "Site Visit" in call_outcome else ("negative" if "Not Interested" in call_outcome else "neutral"),
+                    "sentiment": sentiment,
                     "detectedQuestions": detected_questions,
                     "called_at": datetime.utcnow().isoformat()
                 }
                 logger.info(f"🌐 [WEBHOOK SYNC] Delivering call intelligence to {dashboard_url}/api/webhooks/voice-agent ...")
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
+                webhook_resp = await loop.run_in_executor(
                     None,
-                    lambda: requests.post(f"{dashboard_url}/api/webhooks/voice-agent", json=webhook_payload, timeout=6)
+                    lambda: requests.post(f"{dashboard_url}/api/webhooks/voice-agent", json=webhook_payload, timeout=8)
                 )
-                logger.info("🌐 [WEBHOOK SYNC] Successfully synced call transcript and outcome to Web Dashboard!")
+                logger.info(f"🌐 [WEBHOOK SYNC] Delivered! Status: {webhook_resp.status_code} - {webhook_resp.text}")
             except Exception as sync_err:
                 logger.warning(f"Could not deliver webhook to {dashboard_url}: {sync_err}")
 
         except Exception as e:
             logger.error(f"Failed to record call billing or transcript: {e}", exc_info=True)
 
+    async def _on_shutdown():
+        await _finalize_and_save_call("job_shutdown")
+    ctx.add_shutdown_callback(_on_shutdown)
+
+    async def _handle_caller_hungup(p_ident: str):
+        logger.info(f"📞 Caller {p_ident} hung up phone! Finalizing transcript and intelligence...")
+        await _finalize_and_save_call("caller_hungup")
+        logger.info("📞 Call transcript and intelligence finalized. Now safely disconnecting room.")
+        try:
+            await ctx.room.disconnect()
+        except Exception as e:
+            logger.debug(f"Disconnect error: {e}")
+
     @ctx.room.on("participant_disconnected")
     def _on_participant_disconnected(participant):
         try:
             p_ident = getattr(participant, "identity", "")
             if p_ident.startswith("sip-") or not p_ident.startswith("agent-"):
-                logger.info(f"📞 Caller {p_ident} hung up phone! Finalizing transcript and intelligence immediately.")
-                asyncio.create_task(_finalize_and_save_call("caller_hungup"))
-                asyncio.create_task(ctx.room.disconnect())
+                asyncio.create_task(_handle_caller_hungup(p_ident))
         except Exception as e:
             logger.warning(f"Error in participant_disconnected handler: {e}")
 

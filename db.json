@@ -265,72 +265,7 @@
       "createdAt": "2026-07-30T08:59:14.067Z"
     }
   ],
-  "callLogs": [
-    {
-      "id": "call-raj-live",
-      "leadId": "lead-raj",
-      "callSid": "call-raj-1726122600",
-      "durationSeconds": 135,
-      "recordingUrl": "",
-      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj ji se baat kar sakti hoon?\n[4.2s] Raj: Haan boliye, main Raj bol raha hoon. Kya project hai?\n[8.1s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[15.4s] Raj: Achha, carpet area aur price kya hai two BHK ka?\n[19.0s] Gayatri: Two BHK ka carpet area saat sau saath square feet hai, aur pricing baawan lakh se shuru hoti hai. Sabhi modern amenities jaise club house aur parking included hain.\n[28.2s] Raj: Theek hai, mujhe dekhne aana hai. Pehle laga Saturday ko aaunga, par Saturday busy hoon. Sunday ko chalega?\n[35.8s] Gayatri: Bilkul Raj ji! Maine aapka site visit Sunday ke liye schedule kar diya hai. Humare representative aapko site par welcome karenge. Saari details main aapko WhatsApp par bhej rahi hoon.\n[46.1s] Raj: Theek hai, WhatsApp bhej dijiye. Thank you.\n[48.9s] Gayatri: Bahut bahut dhanyawad Raj ji, aapka din shubh ho, bye!",
-      "aiSummary": "Call with Raj ji. Client inquired about 2 BHK (760 sq ft carpet, ₹52 Lakh) at Sai Complex Dombivli East. Client initially considered Saturday then rescheduled to Sunday. Gayatri confirmed Sunday site visit appointment and dispatched WhatsApp details.",
-      "sentiment": "positive",
-      "outcome": "Site Visit Scheduled",
-      "customerName": "Raj",
-      "customerPhone": "+918693081506",
-      "detectedQuestions": [
-        "Pricing & Budget (2 BHK / 1 BHK)",
-        "Carpet Area (760 sq ft)",
-        "Station & Metro Connectivity",
-        "Site Visit Planning (Sunday)"
-      ],
-      "calledAt": "2026-09-12T06:35:00.000Z"
-    },
-    {
-      "id": "call-1",
-      "leadId": "lead-3",
-      "callSid": "call_vapi_123456789",
-      "durationSeconds": 142,
-      "recordingUrl": "https://api.vapi.ai/recordings/call_vapi_123456789.mp3",
-      "transcript": "Agent: Hi Tony, this is Antigravity outreach. I saw Stark Industries is deploying a new automation pipeline. Are you interested in reducing hosting overhead by 30%?\nTony Stark: Yes, that sounds interesting. We have some custom clusters. How do you handle integrations?\nAgent: We support custom IMAP rules and Supabase integrations out-of-the-box.\nTony Stark: Okay, I would like to schedule a deep-dive demo next Tuesday at 3 PM.\nAgent: Perfect! I am generating a Google Meet link for Tuesday at 3 PM and sending it to tony@starkindustries.com.",
-      "aiSummary": "Tony Stark expressed interest in reducing Stark Industries hosting overhead. He scheduled a deep-dive technical demo for next Tuesday at 3:00 PM. Webhook successfully compiled Google Meet invite.",
-      "sentiment": "positive",
-      "calledAt": "2026-08-01T04:59:14.067Z"
-    },
-    {
-      "id": "call-2",
-      "leadId": "lead-4",
-      "callSid": "call_vapi_987654321",
-      "durationSeconds": 45,
-      "recordingUrl": "https://api.vapi.ai/recordings/call_vapi_987654321.mp3",
-      "transcript": "Agent: Hi Peter, I am calling from Antigravity. We automate CRM callback tasks.\nPeter Parker: Hey, sorry, I am just a freelance photographer and college student. I don't run any company or have a sales pipeline. So not interested.\nAgent: I understand Peter, thanks for your time!",
-      "aiSummary": "Peter Parker declined the offer. He stated he is a freelance photographer and student with no business pipeline or budget.",
-      "sentiment": "negative",
-      "calledAt": "2026-07-31T08:59:14.067Z"
-    },
-    {
-      "id": "call-poatw2e39",
-      "leadId": "lead-3",
-      "callSid": "call_sid_4hek7wmg4",
-      "durationSeconds": 120,
-      "recordingUrl": "https://api.vapi.ai/recordings/mock_vapi_yo0crfihl.mp3",
-      "transcript": "Agent: Hi Bruce, scheduling a Google Meet for Wayne Enterprises.\nBruce Wayne: Yes, schedule it.",
-      "aiSummary": "Simulated sales call with Tony Stark regarding Antigravity operations. Conversation marked outcome: meeting_scheduled.",
-      "sentiment": "positive",
-      "calledAt": "2026-08-01T09:03:15.316Z"
-    },
-    {
-      "id": "call-bs2bzr28a",
-      "leadId": "lead-aman",
-      "callSid": "call_sid_7sn73ktmg",
-      "durationSeconds": 120,
-      "recordingUrl": "https://api.vapi.ai/recordings/mock_vapi_fg22i6s8g.mp3",
-      "transcript": "Agent: Hi Bruce, scheduling a Google Meet for Wayne Enterprises.\nBruce Wayne: Yes, schedule it.",
-      "aiSummary": "Simulated sales call with Aman regarding Antigravity operations. Conversation marked outcome: meeting_scheduled.",
-      "sentiment": "positive",
-      "calledAt": "2026-08-01T09:03:28.955Z"
-    }
-  ],
+  "callLogs": [],
   "meetings": [
     {
       "id": "meet-1",
