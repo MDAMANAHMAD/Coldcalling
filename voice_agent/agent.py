@@ -21,6 +21,7 @@ import logging
 import time
 import asyncio
 import shutil
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -649,21 +650,50 @@ class PriyaRealEstateAgent(Agent):
             logger.error(f"❌ Error sending WhatsApp: {e}")
             return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
 
+    async def llm_node(self, chat_ctx, tools, model_settings: ModelSettings):
+        collected = []
+        try:
+            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
+                if isinstance(chunk, str):
+                    collected.append(chunk)
+                elif hasattr(chunk, "choices") and chunk.choices:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, "content") and delta.content:
+                        collected.append(delta.content)
+                yield chunk
+        finally:
+            full_text = "".join(collected).strip()
+            if full_text and self._on_speech_captured:
+                try:
+                    self._on_speech_captured(full_text)
+                except Exception as e:
+                    logger.warning(f"Error in on_speech_captured from llm_node: {e}")
+
     async def tts_node(self, text, model_settings: ModelSettings):
         collected_chunks = []
-        async def _intercept():
-            async for chunk in text:
-                collected_chunks.append(chunk)
-                yield chunk
+        try:
+            async def _intercept():
+                try:
+                    async for chunk in text:
+                        collected_chunks.append(chunk)
+                        yield chunk
+                finally:
+                    full_text = "".join(collected_chunks).strip()
+                    if full_text and self._on_speech_captured:
+                        try:
+                            self._on_speech_captured(full_text)
+                        except Exception as e:
+                            logger.warning(f"Error in on_speech_captured: {e}")
+
+            async for frame in Agent.default.tts_node(self, _intercept(), model_settings):
+                yield frame
+        finally:
             full_text = "".join(collected_chunks).strip()
             if full_text and self._on_speech_captured:
                 try:
                     self._on_speech_captured(full_text)
                 except Exception as e:
-                    logger.warning(f"Error in on_speech_captured: {e}")
-
-        async for frame in Agent.default.tts_node(self, _intercept(), model_settings):
-            yield frame
+                    pass
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
@@ -1632,8 +1662,11 @@ async def entrypoint(ctx: JobContext):
             try:
                 chat_items = []
                 contexts_to_check = []
-                if agent and hasattr(agent, "chat_ctx") and agent.chat_ctx:
-                    contexts_to_check.append(agent.chat_ctx)
+                if agent:
+                    if hasattr(agent, "chat_ctx") and agent.chat_ctx:
+                        contexts_to_check.append(agent.chat_ctx)
+                    if hasattr(agent, "_chat_ctx") and agent._chat_ctx:
+                        contexts_to_check.append(agent._chat_ctx)
                 if hasattr(session, "_chat_ctx") and session._chat_ctx:
                     contexts_to_check.append(session._chat_ctx)
                 if hasattr(session, "history") and session.history:
@@ -1703,28 +1736,71 @@ async def entrypoint(ctx: JobContext):
                 if hasattr(session, "_recorder_io") and session._recorder_io:
                     logger.info("🎙️ [AUDIO RECORDING] Flushing RecorderIO stream to disk...")
                     try:
-                        await session._recorder_io.aclose()
+                        await asyncio.wait_for(session._recorder_io.aclose(), timeout=5.0)
                     except Exception as close_rec_err:
                         logger.debug(f"RecorderIO aclose note: {close_rec_err}")
 
-                # 2. Check source recording file in job_ctx.session_directory
-                src_session_dir = getattr(ctx, "session_directory", None)
-                if src_session_dir:
-                    src_file = Path(src_session_dir) / "audio.ogg"
-                    if src_file.exists() and src_file.stat().st_size > 0:
-                        os.makedirs("bookings/recordings", exist_ok=True)
-                        os.makedirs("public/recordings", exist_ok=True)
-                        dest_bookings = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
-                        dest_public = Path("public/recordings") / f"{ctx.room.name}.ogg"
-                        
-                        shutil.copy2(src_file, dest_bookings)
-                        try:
-                            shutil.copy2(src_file, dest_public)
-                        except Exception:
-                            pass
-                        
+                # 2. Check source recording file from RecorderIO output_path or ctx.session_directory
+                found_src = None
+                if hasattr(session, "_recorder_io") and session._recorder_io:
+                    try:
+                        rec_out = session._recorder_io.output_path()
+                        if rec_out and Path(rec_out).exists() and Path(rec_out).stat().st_size > 0:
+                            found_src = Path(rec_out)
+                    except Exception:
+                        pass
+
+                if not found_src:
+                    src_session_dir = getattr(ctx, "session_directory", None)
+                    if src_session_dir:
+                        candidate = Path(src_session_dir) / "audio.ogg"
+                        if candidate.exists() and candidate.stat().st_size > 0:
+                            found_src = candidate
+
+                if found_src and found_src.stat().st_size > 0:
+                    os.makedirs("bookings/recordings", exist_ok=True)
+                    os.makedirs("public/recordings", exist_ok=True)
+                    dest_bookings_ogg = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
+                    dest_public_ogg = Path("public/recordings") / f"{ctx.room.name}.ogg"
+                    dest_bookings_mp3 = Path("bookings/recordings") / f"{ctx.room.name}.mp3"
+                    dest_public_mp3 = Path("public/recordings") / f"{ctx.room.name}.mp3"
+
+                    # Always save original OGG copy
+                    shutil.copy2(found_src, dest_bookings_ogg)
+                    try:
+                        shutil.copy2(found_src, dest_public_ogg)
+                    except Exception:
+                        pass
+
+                    # Convert to MP3 using ffmpeg
+                    mp3_success = False
+                    try:
+                        logger.info(f"🎙️ [AUDIO RECORDING] Converting {found_src.name} to MP3 ({dest_bookings_mp3})...")
+                        ffmpeg_cmd = [
+                            "ffmpeg", "-y",
+                            "-i", str(found_src),
+                            "-codec:a", "libmp3lame",
+                            "-b:a", "128k",
+                            str(dest_bookings_mp3)
+                        ]
+                        res = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+                        if res.returncode == 0 and dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size > 0:
+                            mp3_success = True
+                            try:
+                                shutil.copy2(dest_bookings_mp3, dest_public_mp3)
+                            except Exception:
+                                pass
+                            logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call MP3 recording saved to {dest_bookings_mp3} ({dest_bookings_mp3.stat().st_size} bytes)")
+                        else:
+                            logger.warning(f"ffmpeg conversion note (code {res.returncode}): {res.stderr.decode('utf-8', errors='ignore')[-200:]}")
+                    except Exception as ff_err:
+                        logger.warning(f"ffmpeg conversion error: {ff_err}")
+
+                    if mp3_success:
+                        recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                    else:
                         recording_url = f"/api/recordings/{ctx.room.name}.ogg"
-                        logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call recording saved to {dest_bookings} ({src_file.stat().st_size} bytes)")
+                        logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call OGG recording saved to {dest_bookings_ogg} ({found_src.stat().st_size} bytes)")
             except Exception as rec_err:
                 logger.warning(f"Warning persisting call recording: {rec_err}")
 
