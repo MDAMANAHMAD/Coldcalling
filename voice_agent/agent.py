@@ -1132,14 +1132,15 @@ def classify_call_intelligence(formatted_transcript: str, dialogue: list, custom
     Uses Gemini (gemini-3.5-flash-lite) with Groq fallback and multilingual regex fallback.
     Runs asynchronously in ~1 second AFTER the call ends, adding 0ms to live call latency.
     """
-    # 1. Try Gemini 3.5 Flash-Lite
+    # 1. Try Gemini 3.6 Flash / Flash-Lite
     google_key = os.getenv("GOOGLE_API_KEY")
     if google_key and dialogue:
-        try:
-            from google import genai
-            from google.genai import types
-            client = genai.Client(api_key=google_key)
-            prompt = f"""You are an enterprise Real Estate Call Intelligence analyzer.
+        for m_name in ["gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]:
+            try:
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=google_key)
+                prompt = f"""You are an enterprise Real Estate Call Intelligence analyzer.
 Analyze this recorded telephone conversation between Gayatri (AI Property Advisor) and customer {customer_name}:
 
 --- TRANSCRIPT ---
@@ -1165,23 +1166,23 @@ Respond ONLY with valid JSON:
   "aiSummary": "...",
   "detectedQuestions": ["..."]
 }}"""
-            resp = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    temperature=0.1
+                resp = client.models.generate_content(
+                    model=m_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.1
+                    )
                 )
-            )
-            data = json.loads(resp.text)
-            if data.get("outcome") in [
-                "Site Visit Scheduled", "Interested", "Not Interested", 
-                "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
-            ]:
-                logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini)] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
-                return data
-        except Exception as gemini_err:
-            logger.warning(f"Gemini post-call classification fallback triggered: {gemini_err}")
+                data = json.loads(resp.text)
+                if data.get("outcome") in [
+                    "Site Visit Scheduled", "Interested", "Not Interested", 
+                    "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
+                ]:
+                    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini {m_name})] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
+                    return data
+            except Exception as gemini_err:
+                logger.warning(f"Gemini {m_name} post-call classification fallback triggered: {gemini_err}")
 
     # 2. Try Groq Llama 3.1
     groq_key = os.getenv("GROQ_API_KEY")
@@ -1242,10 +1243,13 @@ Return ONLY raw JSON."""
         detected_questions.append("Site Visit Planning")
 
     # Outcome matching
-    if any("site visit confirm" in all_agent or "schedule_site_visit" in all_agent or "visit confirm" in all_agent):
+    has_site_visit = any(phrase in all_agent for phrase in ["site visit confirm", "schedule_site_visit", "visit confirm", "site visit"])
+    has_location_mismatch = "kalyan mein humara project available nahi hai" in all_agent or "kalyan" in all_cust
+
+    if has_site_visit:
         outcome = "Site Visit Scheduled"
         sentiment = "positive"
-    elif any("kalyan mein humara project available nahi hai" in all_agent or "kalyan" in all_cust):
+    elif has_location_mismatch:
         outcome = "Location Mismatch (Kalyan)"
         sentiment = "neutral"
     else:
@@ -1597,7 +1601,17 @@ async def entrypoint(ctx: JobContext):
             formatted_transcript = "\n".join(formatted_lines) if formatted_lines else "No conversation recorded."
 
             # Run Post-Call Intelligence Classifier (Gemini / Groq / Multilingual Regex)
-            intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
+            try:
+                intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
+            except Exception as classify_err:
+                logger.error(f"Error in classify_call_intelligence: {classify_err}", exc_info=True)
+                has_visit = "site visit" in formatted_transcript.lower() or "visit confirm" in formatted_transcript.lower()
+                intel = {
+                    "outcome": "Site Visit Scheduled" if has_visit else "Inquiry Completed",
+                    "sentiment": "positive" if has_visit else "neutral",
+                    "aiSummary": f"Call with {customer_name}. Outcome: {'Site Visit Scheduled' if has_visit else 'Inquiry Completed'}.",
+                    "detectedQuestions": ["Site Visit Inquiry"] if has_visit else []
+                }
             call_outcome = intel.get("outcome", "Inquiry Completed")
             sentiment = intel.get("sentiment", "neutral")
             ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")

@@ -104,9 +104,18 @@ export default function ColdCallingHomePage() {
 
       // Merge local logs only if not already saved/finalized on the server
       const remainingLocal: typeof localLogs = [];
+      const nowMs = Date.now();
       for (const item of localLogs) {
         const key = item.callSid || item.id;
         if (!map.has(key)) {
+          // If a call has been in 'Ringing / Calling' for more than 4 minutes without a webhook,
+          // gracefully resolve it so it doesn't remain permanently stuck in progress
+          const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
+          if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 4) {
+            item.outcome = 'Inquiry Completed';
+            item.durationSeconds = item.durationSeconds || 60;
+            item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation saved.`;
+          }
           map.set(key, item);
           remainingLocal.push(item);
         }

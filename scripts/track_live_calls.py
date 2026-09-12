@@ -135,7 +135,6 @@ def format_line(raw_line: str) -> str:
         return f"   {BOLD}• {line.split('enterprise_voice_agent:')[-1].strip()}{RESET}"
 
     # 10. Call Termination & Disconnect
-    # 10. Silence Watchdog Events
     if "[SILENCE WATCHDOG]" in line and "Prompting 'Hello'" in line:
         return f"\n {BOLD}{YELLOW}⏳ [SILENCE DETECTED (>10s)]{RESET} Gayatri: \"Hello? Kya aap sun rahe hain?\""
 
@@ -147,6 +146,35 @@ def format_line(raw_line: str) -> str:
 
     if "Terminating SIP call and deleting room" in line:
         return f" {MAGENTA}✅ Carrier line released (SIP BYE sent).{RESET}"
+
+    # 10.1 Post-Call Intelligence & Transcript Saving
+    if "[SAVING CALL RECORD]" in line:
+        acct_match = re.search(r"Account:\s*([^\s|]+)", line)
+        acct = f" ({acct_match.group(1)})" if acct_match else ""
+        return f"\n {BOLD}{BLUE}💾 [SAVING CALL RECORD]{RESET} Finalizing transcript & saving under account{BOLD}{acct}{RESET}..."
+
+    if "[POST-CALL INTELLIGENCE" in line:
+        outcome_match = re.search(r"Outcome:\s*['\"]([^'\"]+)['\"]", line)
+        sent_match = re.search(r"Sentiment:\s*['\"]([^'\"]+)['\"]", line)
+        outcome_str = outcome_match.group(1) if outcome_match else "Completed"
+        sent_str = f" | Sentiment: {sent_match.group(1)}" if sent_match else ""
+        color = GREEN if "visit" in outcome_str.lower() or "interest" in outcome_str.lower() and "not" not in outcome_str.lower() else (RED if "not" in outcome_str.lower() else CYAN)
+        return f" {BOLD}{color}🧠 [AI CATEGORIZATION]{RESET} {BOLD}{color}{outcome_str}{RESET}{sent_str}"
+
+    if "[TRANSCRIPT RECORDED]" in line:
+        return f" {GREEN}📝 [TRANSCRIPT SAVED]{RESET} Full dialogue saved to bookings/transcripts/ and call_transcripts.jsonl"
+
+    if "[WEBHOOK SYNC] Delivering" in line:
+        return f" {CYAN}🌐 [WEBHOOK SYNC]{RESET} Transmitting call data to Web Dashboard..."
+
+    if "[WEBHOOK SYNC] Delivered!" in line:
+        return f" {BOLD}{GREEN}✅ [WEBHOOK DELIVERED]{RESET} Web Dashboard updated in real-time! (Status: 200 OK)"
+
+    if "Could not deliver webhook" in line:
+        return f" {BOLD}{RED}⚠️ [WEBHOOK ERROR]{RESET} {line.split('webhook to')[-1].strip()}"
+
+    if "Failed to record call billing or transcript" in line:
+        return f" {BOLD}{RED}❌ [SAVE ERROR]{RESET} {line.split('transcript:')[-1].strip()}"
 
     if "Active call lock released" in line:
         return f" {CYAN}🔒 Call completed. Agent ready for next call.{RESET}\n" \
