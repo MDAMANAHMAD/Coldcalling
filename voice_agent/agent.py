@@ -59,6 +59,7 @@ from livekit.agents import (
 )
 from livekit.plugins import deepgram, openai, elevenlabs, cartesia
 from livekit import rtc
+from livekit.agents.voice import ModelSettings
 import re
 
 # Monkey patch Cartesia TTS to transparently normalize numbers (e.g. 760 -> seven hundred sixty)
@@ -444,10 +445,11 @@ def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
 
 
 class PriyaRealEstateAgent(Agent):
-    def __init__(self, customer_name: str = "Aman ji", customer_phone: str = "", hangup_fnc=None):
+    def __init__(self, customer_name: str = "Aman ji", customer_phone: str = "", hangup_fnc=None, on_speech_captured=None):
         self.customer_name = customer_name
         self.customer_phone = customer_phone
         self._hangup_fnc = hangup_fnc
+        self._on_speech_captured = on_speech_captured
         
         now = datetime.now()
         day_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -646,6 +648,22 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"❌ Error sending WhatsApp: {e}")
             return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
+
+    async def tts_node(self, text, model_settings: ModelSettings):
+        collected_chunks = []
+        async def _intercept():
+            async for chunk in text:
+                collected_chunks.append(chunk)
+                yield chunk
+            full_text = "".join(collected_chunks).strip()
+            if full_text and self._on_speech_captured:
+                try:
+                    self._on_speech_captured(full_text)
+                except Exception as e:
+                    logger.warning(f"Error in on_speech_captured: {e}")
+
+        async for frame in Agent.default.tts_node(self, _intercept(), model_settings):
+            yield frame
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
@@ -1512,6 +1530,7 @@ async def entrypoint(ctx: JobContext):
 
     t_call_start = time.time()
     call_dialogue = []  # List of {"role": "agent"|"customer", "text": str, "time": float}
+    agent: Optional[PriyaRealEstateAgent] = None
     input_tokens = 0
     output_tokens = 0
     characters_spoken = 0
@@ -1542,7 +1561,7 @@ async def entrypoint(ctx: JobContext):
     call_finalized = False
 
     async def _finalize_and_save_call(trigger_reason: str):
-        nonlocal call_finalized, customer_name, customer_phone, user_account_email
+        nonlocal call_finalized, customer_name, customer_phone, user_account_email, agent
         if call_finalized:
             return
         call_finalized = True
@@ -1609,15 +1628,24 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f} (₹{per_minute_cost:.2f}/min)")
 
             # --- FULL TRANSCRIPT CAPTURE & INTELLIGENCE EXTRACTION ---
-            # 1. Backfill any dialogue items from session._chat_ctx or session.history
+            # 1. Backfill any dialogue items from agent.chat_ctx, session._chat_ctx, or session.history
             try:
                 chat_items = []
-                ctx_obj = getattr(session, "_chat_ctx", None) or getattr(session, "history", None)
-                if ctx_obj:
+                contexts_to_check = []
+                if agent and hasattr(agent, "chat_ctx") and agent.chat_ctx:
+                    contexts_to_check.append(agent.chat_ctx)
+                if hasattr(session, "_chat_ctx") and session._chat_ctx:
+                    contexts_to_check.append(session._chat_ctx)
+                if hasattr(session, "history") and session.history:
+                    contexts_to_check.append(session.history)
+
+                for ctx_obj in contexts_to_check:
                     if hasattr(ctx_obj, "items") and isinstance(ctx_obj.items, list):
-                        chat_items = ctx_obj.items
+                        chat_items.extend(ctx_obj.items)
                     elif hasattr(ctx_obj, "messages"):
-                        chat_items = ctx_obj.messages() if callable(ctx_obj.messages) else ctx_obj.messages
+                        msgs = ctx_obj.messages() if callable(ctx_obj.messages) else ctx_obj.messages
+                        if isinstance(msgs, list):
+                            chat_items.extend(msgs)
 
                 def _norm(s: str) -> str:
                     return re.sub(r'[^\w\s]', '', s).strip().lower()
@@ -2137,10 +2165,30 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
             break
 
+    def _record_agent_speech(spoken_text: str):
+        raw_text = spoken_text.strip()
+        if not raw_text:
+            return
+        elapsed_sec = round(time.time() - t_call_start, 1)
+        last_turn = call_dialogue[-1] if call_dialogue else None
+        if not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text:
+            call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
+            logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] '{raw_text}' at {elapsed_sec}s")
+
+        text = raw_text.lower()
+        ending_phrases = [
+            "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
+            "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या"
+        ]
+        if any(phrase in text for phrase in ending_phrases):
+            logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
+            trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
+
     agent = PriyaRealEstateAgent(
         customer_name=customer_name,
         customer_phone=customer_phone,
-        hangup_fnc=trigger_hangup
+        hangup_fnc=trigger_hangup,
+        on_speech_captured=_record_agent_speech
     )
 
     # Start session with dual-channel stereo recording (Caller on input, Gayatri AI on output)
