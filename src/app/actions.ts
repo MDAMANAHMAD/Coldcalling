@@ -63,6 +63,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
             dbLogs.push({
               id: callId,
               leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
+              userEmail: rec.user_email || 'test@gmail.com',
               callSid: callId,
               durationSeconds: Math.round(rec.duration_seconds || 0),
               recordingUrl: '',
@@ -89,6 +90,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     const lead = (db.leads || []).find(l => l.id === log.leadId);
     return {
       ...log,
+      userEmail: log.userEmail || 'test@gmail.com',
       leadName: log.customerName || (lead ? lead.name : 'Valued Customer'),
       leadPhone: log.customerPhone || lead?.phone || '',
     };

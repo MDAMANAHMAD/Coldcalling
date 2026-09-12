@@ -8,9 +8,9 @@ import { motion } from 'framer-motion';
 export default function LoginPage() {
   const router = useRouter();
   const [isRegister, setIsRegister] = useState(false);
-  const [name, setName] = useState('Tony Stark');
-  const [email, setEmail] = useState('tony@starkindustries.com');
-  const [password, setPassword] = useState('password123');
+  const [name, setName] = useState('Test User');
+  const [email, setEmail] = useState('test@gmail.com');
+  const [password, setPassword] = useState('test123');
   const [role, setRole] = useState('Property Advisor');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,16 +26,17 @@ export default function LoginPage() {
 
     setLoading(true);
     setTimeout(() => {
+      const cleanEmail = email.trim().toLowerCase();
       const userProfile = {
-        name: isRegister ? name : (name || 'Property Advisor'),
-        email,
+        name: isRegister ? name : (name && name !== 'Tony Stark' ? name : 'Test User'),
+        email: cleanEmail,
         role: role || 'Property Advisor',
         loggedInAt: new Date().toISOString()
       };
       localStorage.setItem('gayatri_user', JSON.stringify(userProfile));
       setLoading(false);
       router.push('/');
-    }, 600);
+    }, 400);
   };
 
   return (
@@ -180,7 +181,7 @@ export default function LoginPage() {
           {/* Quick Demo Help */}
           <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 text-center">
             <p className="text-[11px] text-slate-400 font-medium">
-              Demo Access: Click Sign In to explore the live Gayatri AI Cold Calling feed.
+              Account: <span className="font-bold text-slate-600 dark:text-slate-300">test@gmail.com</span> • Password: <span className="font-bold text-slate-600 dark:text-slate-300">test123</span>
             </p>
           </div>
         </div>

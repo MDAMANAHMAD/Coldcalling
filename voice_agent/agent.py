@@ -1328,12 +1328,15 @@ async def entrypoint(ctx: JobContext):
 
     customer_name = "Aman ji"
     customer_phone = "+918693081506"
+    user_account_email = "test@gmail.com"
     if ctx.room.metadata:
         try:
             meta = json.loads(ctx.room.metadata)
             raw_name = meta.get("customer_name", "Aman")
             if meta.get("phone"):
                 customer_phone = meta.get("phone")
+            if meta.get("user_email"):
+                user_account_email = meta.get("user_email").strip().lower()
             customer_name = f"{raw_name} ji" if not raw_name.endswith("ji") else raw_name
         except Exception as err:
             logger.warning(f"Metadata error: {err}")
@@ -1520,11 +1523,11 @@ async def entrypoint(ctx: JobContext):
     call_finalized = False
 
     async def _finalize_and_save_call(trigger_reason: str):
-        nonlocal call_finalized, customer_name, customer_phone
+        nonlocal call_finalized, customer_name, customer_phone, user_account_email
         if call_finalized:
             return
         call_finalized = True
-        logger.info(f"💾 [SAVING CALL RECORD] Triggered by: {trigger_reason}")
+        logger.info(f"💾 [SAVING CALL RECORD] Triggered by: {trigger_reason} | Account: {user_account_email}")
 
         try:
             if watchdog_task and not watchdog_task.done():
@@ -1602,6 +1605,7 @@ async def entrypoint(ctx: JobContext):
 
             transcript_record = {
                 "call_id": ctx.room.name,
+                "user_email": user_account_email,
                 "timestamp": datetime.utcnow().isoformat(),
                 "customer_name": customer_name,
                 "customer_phone": customer_phone,
@@ -1624,7 +1628,7 @@ async def entrypoint(ctx: JobContext):
             with open(f"bookings/transcripts/{ctx.room.name}.json", "w", encoding="utf-8") as f:
                 json.dump(transcript_record, f, ensure_ascii=False, indent=2)
 
-            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Outcome: {call_outcome}, Sentiment: {sentiment})")
+            logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Account: {user_account_email}, Outcome: {call_outcome}, Sentiment: {sentiment})")
 
             # 1. Sync with local db.json for the Cold Calling Dashboard
             try:
@@ -1640,6 +1644,7 @@ async def entrypoint(ctx: JobContext):
                         "id": f"call-{int(time.time()*1000)}",
                         "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
                         "callSid": ctx.room.name,
+                        "userEmail": user_account_email,
                         "durationSeconds": round(duration_seconds),
                         "recordingUrl": "",
                         "transcript": formatted_transcript,
@@ -1674,6 +1679,8 @@ async def entrypoint(ctx: JobContext):
                     "customerName": customer_name,
                     "customerPhone": customer_phone,
                     "phone": customer_phone,
+                    "userEmail": user_account_email,
+                    "user_email": user_account_email,
                     "durationSeconds": round(duration_seconds),
                     "transcript": formatted_transcript,
                     "aiSummary": ai_summary,
@@ -1993,6 +2000,14 @@ async def entrypoint(ctx: JobContext):
 
     # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
+        if hasattr(p, "metadata") and p.metadata:
+            try:
+                meta_p = json.loads(p.metadata)
+                if meta_p.get("user_email"):
+                    user_account_email = meta_p.get("user_email").strip().lower()
+                    logger.info(f"📧 Bound call to user account from participant metadata: {user_account_email}")
+            except Exception:
+                pass
         if p.identity.startswith("sip-"):
             clean_digits = "".join(c for c in p.identity.replace("sip-", "") if c.isdigit() or c == "+")
             if clean_digits:

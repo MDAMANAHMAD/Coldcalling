@@ -1,4 +1,14 @@
 {
+  "users": [
+    {
+      "id": "user-test",
+      "name": "Test User",
+      "email": "test@gmail.com",
+      "password": "test123",
+      "role": "Property Advisor",
+      "createdAt": "2026-09-12T00:00:00.000Z"
+    }
+  ],
   "leads": [
     {
       "id": "lead-1",

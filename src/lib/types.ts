@@ -106,6 +106,16 @@ export interface CallLog {
   detectedQuestions?: string[];
   customerPhone?: string;
   customerName?: string;
+  userEmail?: string;
+}
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: string;
+  createdAt: string;
 }
 
 export interface Meeting {
@@ -118,6 +128,7 @@ export interface Meeting {
 }
 
 export interface AppDatabase {
+  users?: UserAccount[];
   leads: Lead[];
   campaigns: Campaign[];
   emails: ClassifiedEmail[];

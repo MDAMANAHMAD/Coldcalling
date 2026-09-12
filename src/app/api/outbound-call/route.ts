@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const phoneNumber = body.phoneNumber || '+918693081506';
     const customerName = body.customerName || 'Aman';
+    const userEmail = (body.userEmail || 'test@gmail.com').trim().toLowerCase();
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['"]/g, '').trim();
     const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['"]/g, '').trim();
 
-    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host}`);
+    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host} for user: ${userEmail}`);
 
     const sipClient = new SipClient(host, apiKey, apiSecret);
 
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
       customer_name: customerName,
       phone: safePhone,
       phone_number: safePhone,
+      user_email: userEmail,
       initiated_from: 'web_dashboard'
     });
 
@@ -72,6 +74,7 @@ export async function POST(req: NextRequest) {
         id: callLogId,
         leadId: `lead-${cleanId}`,
         callSid: uniqueRoom,
+        userEmail: userEmail,
         durationSeconds: 0,
         recordingUrl: '',
         transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,

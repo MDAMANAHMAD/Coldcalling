@@ -49,6 +49,31 @@ export default function ColdCallingHomePage() {
   // Selected Call Log for Modal Transcript
   const [selectedCall, setSelectedCall] = useState<(CallLog & { leadName: string; leadPhone?: string }) | null>(null);
 
+  // Active User Account
+  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>({
+    name: 'Test User',
+    email: 'test@gmail.com'
+  });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gayatri_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.email) {
+          if (parsed.email === 'tony@starkindustries.com') {
+            parsed.name = 'Test User';
+            parsed.email = 'test@gmail.com';
+            localStorage.setItem('gayatri_user', JSON.stringify(parsed));
+          }
+          setCurrentUser(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed reading user from localStorage', e);
+    }
+  }, []);
+
   const loadData = async () => {
     try {
       // 1. Fetch server logs from database
@@ -161,7 +186,8 @@ export default function ColdCallingHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phoneNumber: safeTargetPhone,
-          customerName: callerName
+          customerName: callerName,
+          userEmail: currentUser?.email || 'test@gmail.com'
         })
       });
 
@@ -180,11 +206,12 @@ export default function ColdCallingHomePage() {
           leadPhone: safeTargetPhone,
           customerName: callerName,
           customerPhone: safeTargetPhone,
+          userEmail: currentUser?.email || 'test@gmail.com',
           callSid: data.roomName || `call-${Date.now()}`,
           durationSeconds: 0,
           recordingUrl: '',
           transcript: `[Call In Progress]\nGayatri is currently speaking with ${callerName} (${safeTargetPhone}).\nThe complete turn-by-turn conversation dialogue will be saved and displayed here automatically once the call completes.`,
-          aiSummary: `Outbound AI call initiated to ${callerName}. Phone ringing and connected.`,
+          aiSummary: `Outbound AI call initiated to ${callerName}. Phone ringing and connected. Account: ${currentUser?.email || 'test@gmail.com'}.`,
           sentiment: 'neutral',
           outcome: 'Ringing / Calling',
           calledAt: new Date().toISOString(),
@@ -396,15 +423,21 @@ export default function ColdCallingHomePage() {
 
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div className="max-w-xl space-y-2">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+              </div>
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
+                <User className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Account: <strong className="text-white">{currentUser?.email || 'test@gmail.com'}</strong></span>
+              </div>
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight">
               1-Click Outbound Voice AI Call
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-              Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically.
+              Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
             </p>
           </div>
 
@@ -639,6 +672,11 @@ export default function ColdCallingHomePage() {
                           {call.customerPhone || call.leadPhone || '+918693081506'}
                         </span>
                         
+                        {/* Account Badge */}
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-medium border border-slate-200/60 dark:border-slate-700/60">
+                          {call.userEmail || currentUser?.email || 'test@gmail.com'}
+                        </span>
+
                         {/* Outcome Tag */}
                         <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${tag.bg}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
@@ -718,7 +756,7 @@ export default function ColdCallingHomePage() {
                     })()}
                   </div>
                   <p className="text-xs text-slate-400 font-medium">
-                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: {selectedCall.durationSeconds > 0 ? `${selectedCall.durationSeconds}s` : 'Active'}
+                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: {selectedCall.durationSeconds > 0 ? `${selectedCall.durationSeconds}s` : 'Active'} • Account: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</span>
                   </p>
                 </div>
 
@@ -782,7 +820,11 @@ export default function ColdCallingHomePage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex justify-end">
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between">
+                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center space-x-1.5 font-medium">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <span>Stored in account: <strong className="text-slate-800 dark:text-slate-200">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</strong></span>
+                </span>
                 <button
                   onClick={() => setSelectedCall(null)}
                   className="px-5 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all"

@@ -5,6 +5,16 @@ import { AppDatabase, Lead, Campaign, ClassifiedEmail, EmailFilterRule, Ticket, 
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
 const INITIAL_DATA: AppDatabase = {
+  users: [
+    {
+      id: 'user-test',
+      name: 'Test User',
+      email: 'test@gmail.com',
+      password: 'test123',
+      role: 'Property Advisor',
+      createdAt: '2026-09-12T00:00:00.000Z'
+    }
+  ],
   leads: [
     {
       id: 'lead-1',
@@ -268,6 +278,7 @@ export function getDb(): AppDatabase {
         if (!seed.callLogs) seed.callLogs = [];
         if (!seed.meetings) seed.meetings = [];
         if (!seed.leads) seed.leads = [];
+        if (!seed.users) seed.users = [];
         global.__APP_DB_CACHE__ = seed;
         return seed;
       } catch {}
@@ -283,6 +294,7 @@ export function getDb(): AppDatabase {
     if (!parsed.callLogs) parsed.callLogs = [];
     if (!parsed.meetings) parsed.meetings = [];
     if (!parsed.leads) parsed.leads = [];
+    if (!parsed.users) parsed.users = [];
     global.__APP_DB_CACHE__ = parsed;
     return parsed;
   } catch (e) {

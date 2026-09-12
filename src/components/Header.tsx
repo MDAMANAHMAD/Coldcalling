@@ -25,12 +25,18 @@ export default function Header() {
     try {
       const savedUser = localStorage.getItem('gayatri_user');
       if (savedUser) {
-        setUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        if (parsed.email === 'tony@starkindustries.com') {
+          parsed.name = 'Test User';
+          parsed.email = 'test@gmail.com';
+          localStorage.setItem('gayatri_user', JSON.stringify(parsed));
+        }
+        setUser(parsed);
       } else {
-        setUser({ name: 'Tony Stark', email: 'tony@stark.com', role: 'Property Advisor' });
+        setUser({ name: 'Test User', email: 'test@gmail.com', role: 'Property Advisor' });
       }
     } catch {
-      setUser({ name: 'Property Advisor', email: 'advisor@saicomplex.com', role: 'Advisor' });
+      setUser({ name: 'Test User', email: 'test@gmail.com', role: 'Property Advisor' });
     }
   }, []);
 

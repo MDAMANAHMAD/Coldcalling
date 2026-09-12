@@ -148,11 +148,14 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    const userEmail = (body.userEmail || body.user_email || 'test@gmail.com').trim().toLowerCase();
+
     // Log the Call Details
     const newCallLog: CallLog = {
       id: `call-${Date.now()}`,
       leadId: lead.id,
       callSid,
+      userEmail,
       durationSeconds,
       recordingUrl,
       transcript,
