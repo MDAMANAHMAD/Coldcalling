@@ -197,3 +197,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: e.message || 'Server error' }, { status: 500 });
   }
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const db = getDb();
+    const logs = (db.callLogs || []).map(log => {
+      const lead = (db.leads || []).find(l => l.id === log.leadId);
+      return {
+        ...log,
+        userEmail: log.userEmail || 'test@gmail.com',
+        leadName: log.customerName || (lead ? lead.name : 'Valued Customer'),
+        leadPhone: log.customerPhone || lead?.phone || '',
+      };
+    });
+    return NextResponse.json({
+      success: true,
+      callLogs: logs,
+      leads: db.leads || []
+    });
+  } catch (e: any) {
+    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+  }
+}

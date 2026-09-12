@@ -275,7 +275,28 @@
       "createdAt": "2026-07-30T08:59:14.067Z"
     }
   ],
-  "callLogs": [],
+  "callLogs": [
+    {
+      "id": "call-raj-1789201908982",
+      "leadId": "lead-raj",
+      "callSid": "call-raj-1789201908982",
+      "userEmail": "test@gmail.com",
+      "durationSeconds": 68,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj se baat kar sakti hoon?\n[4.2s] Raj: Haan boliye.\n[8.0s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[15.1s] Raj: Sai terrace .\n[19.2s] Gayatri: Sai Complex mein terrace flats aur master bedroom configurations available hain. Kya aap site visit ke liye aana chahenge?\n[26.0s] Raj: site visit .\n[30.1s] Gayatri: Bahut badhiya Raj ji! Flat type kaunsa prefer karenge?\n[34.8s] Raj: 2 BHK .\n[38.5s] Gayatri: Maine aapka 2 BHK flat ke liye Sunday ka site visit confirm kar diya hai. Saari details main aapko WhatsApp par bhej rahi hoon. Aapka din shubh ho, bye!\n[44.2s] Raj: BHK, thank one bye.",
+      "aiSummary": "Raj inquired about Sai Complex terrace flats and confirmed 2 BHK preferences. Scheduled site visit for Sunday. Details sent via WhatsApp.",
+      "sentiment": "positive",
+      "calledAt": "2026-09-12T08:33:38.545Z",
+      "outcome": "Site Visit Scheduled",
+      "customerName": "Raj",
+      "customerPhone": "+918693081506",
+      "detectedQuestions": [
+        "Sai Complex Terrace Flats",
+        "2 BHK Flat Pricing & Availability",
+        "Site Visit Booking (Sunday)"
+      ]
+    }
+  ],
   "meetings": [
     {
       "id": "meet-1",

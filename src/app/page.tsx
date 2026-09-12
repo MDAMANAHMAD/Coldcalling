@@ -76,11 +76,30 @@ export default function ColdCallingHomePage() {
 
   const loadData = async () => {
     try {
-      // 1. Fetch server logs from database
-      const [serverLogs, statsData] = await Promise.all([
+      // 1. Fetch server logs from database (Server Action + direct API endpoint)
+      let [serverLogs, statsData] = await Promise.all([
         getCallLogsWithLeads(),
         getColdCallingStats()
       ]);
+
+      try {
+        const apiRes = await fetch('/api/webhooks/voice-agent');
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData.callLogs && Array.isArray(apiData.callLogs)) {
+            const existingKeys = new Set(serverLogs.map(l => l.callSid || l.id));
+            for (const log of apiData.callLogs) {
+              const k = log.callSid || log.id;
+              if (!existingKeys.has(k)) {
+                serverLogs.push(log);
+                existingKeys.add(k);
+              }
+            }
+          }
+        }
+      } catch (apiErr) {
+        console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
+      }
 
       // 2. Read any locally saved logs from browser storage
       let localLogs: (CallLog & { leadName: string; leadPhone?: string })[] = [];
