@@ -995,23 +995,22 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (Instant endpointing + domain keyword boosting)
+    # 2. Pre-warm Deepgram Nova-2 STT (Fast 100ms streaming endpointing without utterance_end delay)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2",
-        endpointing_ms=25,
-        utterance_end_ms=500,
+        endpointing_ms=100,
         smart_format=True,
         keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (16kHz native rate, fast 0.25s silence cutoff)
+    # 3. Pre-warm Silero VAD (16kHz native rate, stable 0.30s natural breath window)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
+        min_silence_duration=0.30,
         min_speech_duration=0.06,
         sample_rate=16000
     )
@@ -1171,8 +1170,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2",
-            endpointing_ms=25,
-            utterance_end_ms=500,
+            endpointing_ms=100,
             smart_format=True,
             keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
@@ -1268,7 +1266,7 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
         vad = silero.VAD.load(
-            min_silence_duration=0.25,
+            min_silence_duration=0.30,
             min_speech_duration=0.06,
             sample_rate=16000
         )
@@ -1295,12 +1293,10 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.28,
+                "min_delay": 0.18,
             },
             "preemptive_generation": {
-                "enabled": True,
-                "preemptive_tts": False,
-                "max_speech_duration": 10.0,
+                "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
             },
             "interruption": {
                 "enabled": True,
@@ -1572,7 +1568,8 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
-                t_user_stop = time.perf_counter()
+                if intro_finished:
+                    t_user_stop = time.perf_counter()
                 t_last_activity = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
         except Exception as err:
