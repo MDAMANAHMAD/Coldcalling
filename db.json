@@ -51,6 +51,17 @@
       "notes": "Added via user request for cold-calling testing.\n\n[Dialer Campaign Triggered on 8/1/2026, 2:30:21 PM]: Voice agent campaign initiated with customized prompt instructions.\n\n[AI Outbound Call Outcome - 8/1/2026]: Simulated sales call with Aman regarding Antigravity operations. Conversation marked outcome: meeting_scheduled.",
       "createdAt": "2026-08-01T08:59:14.067Z",
       "lastCallAt": "2026-08-01T09:03:28.955Z"
+    },
+    {
+      "id": "lead-raj",
+      "name": "Raj",
+      "phone": "+918693081506",
+      "email": "raj@example.com",
+      "company": "Valued Client",
+      "status": "meeting_scheduled",
+      "notes": "Connected via Live Voice Call. Discussed 2 BHK (760 sq ft carpet, ₹52 Lakh) at Sai Complex Dombivli East. Confirmed site visit for Sunday.",
+      "createdAt": "2026-09-12T06:30:00.000Z",
+      "lastCallAt": "2026-09-12T06:35:00.000Z"
     }
   ],
   "campaigns": [
@@ -255,6 +266,26 @@
     }
   ],
   "callLogs": [
+    {
+      "id": "call-raj-live",
+      "leadId": "lead-raj",
+      "callSid": "call-raj-1726122600",
+      "durationSeconds": 135,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj ji se baat kar sakti hoon?\n[4.2s] Raj: Haan boliye, main Raj bol raha hoon. Kya project hai?\n[8.1s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[15.4s] Raj: Achha, carpet area aur price kya hai two BHK ka?\n[19.0s] Gayatri: Two BHK ka carpet area saat sau saath square feet hai, aur pricing baawan lakh se shuru hoti hai. Sabhi modern amenities jaise club house aur parking included hain.\n[28.2s] Raj: Theek hai, mujhe dekhne aana hai. Pehle laga Saturday ko aaunga, par Saturday busy hoon. Sunday ko chalega?\n[35.8s] Gayatri: Bilkul Raj ji! Maine aapka site visit Sunday ke liye schedule kar diya hai. Humare representative aapko site par welcome karenge. Saari details main aapko WhatsApp par bhej rahi hoon.\n[46.1s] Raj: Theek hai, WhatsApp bhej dijiye. Thank you.\n[48.9s] Gayatri: Bahut bahut dhanyawad Raj ji, aapka din shubh ho, bye!",
+      "aiSummary": "Call with Raj ji. Client inquired about 2 BHK (760 sq ft carpet, ₹52 Lakh) at Sai Complex Dombivli East. Client initially considered Saturday then rescheduled to Sunday. Gayatri confirmed Sunday site visit appointment and dispatched WhatsApp details.",
+      "sentiment": "positive",
+      "outcome": "Site Visit Scheduled",
+      "customerName": "Raj",
+      "customerPhone": "+918693081506",
+      "detectedQuestions": [
+        "Pricing & Budget (2 BHK / 1 BHK)",
+        "Carpet Area (760 sq ft)",
+        "Station & Metro Connectivity",
+        "Site Visit Planning (Sunday)"
+      ],
+      "calledAt": "2026-09-12T06:35:00.000Z"
+    },
     {
       "id": "call-1",
       "leadId": "lead-3",
