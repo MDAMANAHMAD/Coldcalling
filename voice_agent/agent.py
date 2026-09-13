@@ -65,7 +65,7 @@ from livekit.agents.voice import ModelSettings
 import re
 
 # Monkey patch Cartesia TTS to transparently normalize numbers (e.g. 760 -> seven hundred sixty)
-# preventing neural TTS from pronouncing digits as '76 zero'
+# and technical terms (e.g. BHK -> B.H.K.) preventing neural TTS from swallowing syllables or pronouncing digits as '76 zero'
 def normalize_phonetics(text: str) -> str:
     if not text:
         return text
@@ -82,8 +82,9 @@ def normalize_phonetics(text: str) -> str:
             (r'\b72\b', 'बहात्तर'),
             (r'\b50\b', 'पन्नास'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वेअर फूट'),
-            (r'\b1\s*BHK\b', 'एक बीएचके'),
-            (r'\b2\s*BHK\b', 'दोन बीएचके'),
+            (r'\b1\s*BHK\b', 'एक बी.एच.के.'),
+            (r'\b2\s*BHK\b', 'दोन बी.एच.के.'),
+            (r'\bBHK\b', 'बी.एच.के.'),
             (r'\b15\s*(-|te)\s*20\b', 'पंधरा ते वीस'),
             (r'\b15\b', 'पंधरा'),
             (r'\b20\b', 'वीस'),
@@ -103,10 +104,12 @@ def normalize_phonetics(text: str) -> str:
             (r'\b72\b', 'seventy two'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
-            (r'\b1\s*BHK\b', 'one BHK'),
-            (r'\b2\s*BHK\b', 'two BHK'),
+            (r'\b1\s*BHK\b', 'one B.H.K.'),
+            (r'\b2\s*BHK\b', 'two B.H.K.'),
+            (r'\bBHK\b', 'B.H.K.'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
+            (r'\b3\s*(pm|baje)\b', 'three pm'),
         ]
     for pattern, rep in replacements:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
@@ -121,19 +124,36 @@ def _phonetic_push_text(self, token: str) -> None:
     if not hasattr(self, '_phonetic_buf'):
         self._phonetic_buf = ''
     self._phonetic_buf += token
-    if any(c in self._phonetic_buf for c in ' \t\n.,!?;:'):
-        parts = re.split(r'(\s+|[.,!?;:])', self._phonetic_buf)
-        to_push = ''.join(parts[:-1])
-        self._phonetic_buf = parts[-1]
-        if to_push:
-            to_push = normalize_phonetics(to_push)
-            _orig_cartesia_push_text(self, to_push)
+
+    # Buffer until clause punctuation or at least 5 words to let Cartesia synthesize full phrases
+    # without cutting off word endings or stuttering between single words
+    has_punct = any(c in self._phonetic_buf for c in '.,!?;:\n')
+    word_count = len(self._phonetic_buf.split())
+
+    if has_punct or word_count >= 5:
+        if has_punct:
+            parts = re.split(r'([.,!?;:\n]+)', self._phonetic_buf)
+            to_push = ''.join(parts[:-1])
+            self._phonetic_buf = parts[-1]
+        else:
+            last_space = self._phonetic_buf.rfind(' ')
+            if last_space != -1:
+                to_push = self._phonetic_buf[:last_space]
+                self._phonetic_buf = self._phonetic_buf[last_space + 1:]
+            else:
+                to_push = self._phonetic_buf
+                self._phonetic_buf = ''
+
+        if to_push.strip():
+            normalized = normalize_phonetics(to_push)
+            _orig_cartesia_push_text(self, normalized)
 
 def _phonetic_flush(self) -> None:
     if hasattr(self, '_phonetic_buf') and self._phonetic_buf:
-        leftover = normalize_phonetics(self._phonetic_buf)
+        leftover = self._phonetic_buf
         self._phonetic_buf = ''
-        _orig_cartesia_push_text(self, leftover)
+        if leftover.strip():
+            _orig_cartesia_push_text(self, normalize_phonetics(leftover))
     _orig_cartesia_flush(self)
 
 cartesia.tts.SynthesizeStream.push_text = _phonetic_push_text
@@ -188,6 +208,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - You do NOT sound like an advertisement. You do NOT sound like an AI. You do NOT read rigid scripts.
 - You do NOT try to sell the entire property over the phone.
 - You behave like an experienced human property advisor who understands people, asks good questions, answers intelligently, handles objections calmly, and knows when to stop talking.
+- NATURAL HUMAN BEHAVIOR & CADENCE:
+  - Speak with warm conversational acknowledgments ("Haan ji", "Ji bilkul", "Samajh gayi", "Theek hai", "Achha" in Hindi; "हो नक्कीच", "समजले मला", "छान" in Marathi) before providing answers.
+  - Never repeat the exact same acknowledgment or question back-to-back.
+  - ARTICULATION & PRONUNCIATION: Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
 - STRICT CONVERSATION BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 20-25 words). Keep answers direct, punchy, and concise so speech generates and starts immediately without long monologues. Maintain appropriate pauses so the user has space to think or correct you.
 
 2. OPENING CONVERSATION FLOW (MANDATORY STEP-BY-STEP SEQUENCE)
@@ -317,7 +341,25 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - DNC ("Don't call me", "Remove my number"): "Ji bilkul... samajh gayi... aapko disturb nahi karungi... aapka din shubh ho... bye!" Call `update_lead_status(status="not_interested")`.
 - NEVER trigger `update_lead_status` on conversational pauses or filler words like "na" or "achha na".
 
-10. SCHEDULING MODE & CALL ENDING
+10. OFF-TOPIC & UNRELATED CONVERSATION HANDLING (MANDATORY 3-STRIKE PROTOCOL)
+- WHAT IS OFF-TOPIC:
+  When the caller persistently discusses subjects unrelated to Sai Complex property, asks personal questions to Gayatri ("Aap kahan rehti ho?", "Aap single ho kya?", "Aapki shaadi hui hai kya?", "Aapka boyfriend hai?", "Aap sundar lagti ho"), flirts, cracks jokes, uses abusive or vulgar language, discusses politics/weather/cricket/movies, or persistently trolls.
+- STRICT 3-STRIKE PROGRESSION:
+  - **STRIKE 1 (First Off-Topic Occurrence)**:
+    - Politely acknowledge and gently steer the caller back to Sai Complex Dombivli East:
+    - Hindi: "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya hum flats ya property details ke baare mein baat kar sakte hain?"
+    - Marathi: "मी साई कॉम्प्लेक्स डोंबिवली पूर्वबद्दल बोलत आहे... आपण प्रोजेक्ट किंवा फ्लॅट्सच्या पर्यायांबद्दल बोलूया का?"
+  - **STRIKE 2 (Second Off-Topic Occurrence — MANDATORY SOFT WARNING)**:
+    - If the caller goes off-topic a 2nd time, you MUST call `handle_off_topic(action="warn")` and deliver a polite but firm **SOFT WARNING**:
+    - Hindi: "Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?"
+    - Marathi: "सर, कृपया मी विनंती करते की आपण फक्त साई कॉम्प्लेक्स प्रोजेक्टबद्दलच बोलूया, अन्यथा मला कॉल कट करावा लागेल. आपण फ्लॅट्सबद्दल बोलू इच्छिता का?"
+  - **STRIKE 3 (Third Off-Topic Occurrence — IMMEDIATE CALL TERMINATION)**:
+    - If the caller goes off-topic AGAIN after receiving the soft warning, do NOT engage further. Conclude immediately and call `handle_off_topic(action="terminate")`:
+    - Hindi: "Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye!"
+    - Marathi: "असे वाटते की आपण सध्या प्रॉपर्टीमध्ये स्वारस्य ठेवत नाही आहात. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार!"
+  - STRICT RULE: Do NOT debate, argue, or get trapped into repetitive loops with off-topic callers. Always execute Strike 1 -> Strike 2 (Soft Warning) -> Strike 3 (Termination).
+
+11. SCHEDULING MODE & CALL ENDING
 - STAY ON CALL UNTIL EXPLICIT CONFIRMATION IS REACHED:
   - DO NOT call `schedule_site_visit` and DO NOT hang up while the customer is still deciding, unsure, asking questions, or changing their day.
   - If customer changes day (e.g. from Saturday to Sunday, or from Sunday to Saturday), warmly acknowledge and update: "Bilkul, koi issue nahi! Saturday ke badle Sunday kar dete hain. Sunday ko kaunsa time comfortable rahega?"
@@ -340,7 +382,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - Call `update_lead_status(status="not_interested")` or `end_call()`.
   - Say: "Aapka din shubh ho... bye!"
 
-11. 100% PURE MARATHI MODE (MANDATORY WHEN CALLER SPEAKS OR ASKS FOR MARATHI)
+12. 100% PURE MARATHI MODE (MANDATORY WHEN CALLER SPEAKS OR ASKS FOR MARATHI)
 - TRIGGER: If the caller speaks in Marathi (e.g. "Dombivli station kiti laam ahe?", "Kasa ahat?", "Kiti padel?") OR asks to speak in Marathi (e.g. "kya aap marathi bolti ho?", "marathi mein bolo", "marathi aati hai kya?", "marathi madhe bola", "मराठीत सांगा", "मराठीत बोला"):
 - STRICT MANDATE: You MUST immediately respond 100% COMPLETELY in PURE, fluent, authentic Marathi (शुद्ध मराठी).
 - ABSOLUTE ZERO HINDI TOLERANCE: Do NOT use even a single Hindi word or Hindi phrase in between under any circumstances.
@@ -452,6 +494,7 @@ class PriyaRealEstateAgent(Agent):
         self.customer_phone = customer_phone
         self._hangup_fnc = hangup_fnc
         self._on_speech_captured = on_speech_captured
+        self.off_topic_count = 0
         
         now = datetime.now()
         day_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -567,6 +610,42 @@ class PriyaRealEstateAgent(Agent):
             "if in Marathi, say: 'तुमचा दिवस चांगला जावो, नमस्कार!'; "
             "if in Hindi, say: 'Aapka din shubh ho, bye!'."
         )
+
+    @function_tool(description="Manage callers who repeatedly drift off-topic, ask personal questions to Gayatri, flirt, make jokes, or discuss unrelated matters. Call action='warn' on the second off-topic turn to issue a polite soft warning. Call action='terminate' on the third off-topic turn to politely terminate the call.")
+    async def handle_off_topic(
+        self,
+        action: str  # "warn" or "terminate"
+    ) -> str:
+        self.off_topic_count = getattr(self, "off_topic_count", 0) + 1
+        logger.warning(f"⚠️ [OFF-TOPIC PROTOCOL] Strike {self.off_topic_count} | Action: {action}")
+
+        record = {
+            "customer_name": getattr(self, "customer_name", "Client"),
+            "status": "off_topic_warned" if action == "warn" and self.off_topic_count < 3 else "off_topic_terminated",
+            "notes": f"Off-topic turn count: {self.off_topic_count}. Action: {action}",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        try:
+            os.makedirs("bookings", exist_ok=True)
+            with open("bookings/property_visits.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(record) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to record off-topic status: {e}")
+
+        if action == "terminate" or self.off_topic_count >= 3:
+            if self._hangup_fnc:
+                self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+            return (
+                "Off-topic limit reached. Conclude immediately and say goodbye in the customer's active language: "
+                "if in Marathi, say: 'असे वाटते की आपण सध्या प्रॉपर्टीमध्ये स्वारस्य ठेवत नाही आहात. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार!'; "
+                "if in Hindi, say: 'Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye!'."
+            )
+        else:
+            return (
+                "Soft warning issued. Deliver the polite soft warning in the customer's active language: "
+                "if in Marathi, say: 'सर, कृपया मी विनंती करते की आपण फक्त साई कॉम्प्लेक्स प्रोजेक्टबद्दलच बोलूया, अन्यथा मला कॉल कट करावा लागेल. आपण फ्लॅट्सबद्दल बोलू इच्छिता का?'; "
+                "if in Hindi, say: 'Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?'."
+            )
 
     @function_tool(description="Send Sai Complex brochure or pricing to client on WhatsApp.")
     async def send_whatsapp_brochure(
@@ -1069,9 +1148,9 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.5"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "positivity:high").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.1"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
@@ -1079,8 +1158,8 @@ def prewarm_fnc(proc: JobProcess):
             language="hi",
             sample_rate=24000,
             model="sonic-3.5",
-            speed=cartesia_speed if cartesia_speed != 1.0 else None,
-            emotion=[cartesia_emotion] if cartesia_emotion else None,
+            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
             volume=cartesia_volume,
             word_timestamps=False
         )
@@ -1199,7 +1278,7 @@ Analyze this recorded telephone conversation between Gayatri (AI Property Adviso
 --- END TRANSCRIPT ---
 
 STRICT CLASSIFICATION RULES:
-1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, or refuses site visit/details.
+1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, refuses site visit/details, or persistently goes off-topic/trolls leading to call termination.
 2. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East. (Note: Gayatri asking does NOT mean scheduled unless the customer agreed!)
 3. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
 4. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
@@ -1240,7 +1319,7 @@ Respond ONLY with valid JSON:
 {formatted_transcript}
 
 Rules:
-- "Not Interested" if caller refuses, says nahi chahiye, wrong number, or no interest.
+- "Not Interested" if caller refuses, says nahi chahiye, wrong number, no interest, or persistently drifts off-topic/trolls.
 - "Site Visit Scheduled" ONLY if caller agreed to visit (e.g. Sunday/weekend).
 - "Interested" if caller asked for price/brochure/flats.
 - "Inquiry Completed" for general inquiries.
@@ -1306,6 +1385,14 @@ Return ONLY raw JSON."""
         r"मझ\s*interest\s*नही", r"मुझे\s*interest\s*नहीं", r"plan\s*cancel", r"cut\s*the\s*call"
     ]
     is_not_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in not_int_patterns)
+    is_off_topic_call = (
+        "warna mujhe call disconnect karna padega" in all_agent
+        or "lagta hai aap abhi property mein interested nahi hain" in all_agent
+        or "कॉल कट करावा लागेल" in all_agent
+        or "स्वारस्य ठेवत नाही आहात" in all_agent
+    )
+    if is_off_topic_call:
+        detected_questions.append("Off-Topic Discussion")
 
     # 2. LOCATION MISMATCH
     has_location_mismatch = "kalyan mein humara project available nahi hai" in all_agent or ("kalyan" in all_cust and "dombivli" not in all_cust)
@@ -1325,7 +1412,11 @@ Return ONLY raw JSON."""
     ]
     is_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in int_patterns)
 
-    if is_not_interested:
+    if is_off_topic_call:
+        outcome = "Not Interested"
+        sentiment = "negative"
+        ai_summary = f"{customer_name} went off-topic repeatedly during the call; call concluded after soft warning."
+    elif is_not_interested:
         outcome = "Not Interested"
         sentiment = "negative"
         ai_summary = f"{customer_name} declined the offer and stated not interested."
@@ -1475,9 +1566,9 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.5"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "positivity:high").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.1"))
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
@@ -1490,8 +1581,8 @@ async def entrypoint(ctx: JobContext):
                 language="hi",
                 sample_rate=24000,
                 model="sonic-3.5",
-                speed=cartesia_speed if cartesia_speed != 1.0 else None,
-                emotion=[cartesia_emotion] if cartesia_emotion else None,
+                speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+                emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
                 volume=cartesia_volume,
                 word_timestamps=False
             )
@@ -1530,8 +1621,8 @@ async def entrypoint(ctx: JobContext):
         tts.update_options(
             voice=kusha_voice_id,
             language="hi",
-            speed=cartesia_speed if cartesia_speed != 1.0 else 1.0,
-            emotion=[cartesia_emotion] if cartesia_emotion else None,
+            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
             volume=cartesia_volume
         )
         logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}, speed={cartesia_speed}, volume={cartesia_volume}).")
@@ -2027,6 +2118,41 @@ async def entrypoint(ctx: JobContext):
             # Append customer turn to transcript history
             elapsed_sec = round(time.time() - t_call_start, 1)
             call_dialogue.append({"role": "customer", "text": ev.transcript.strip(), "time": elapsed_sec})
+            
+            # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
+            off_topic_patterns = [
+                r"\b(shaadi|shadi|lagne|lagna)\b",
+                r"\b(single|girlfriend|boyfriend|gf|bf)\b",
+                r"\b(pyaar|pyar|love\s*(you|u)|love\s*me)\b",
+                r"\b(sundar|beautiful|sexy|hot\s*ho|smart\s*ho)\b",
+                r"\b(kahan\s*rehti|kidhar\s*rehti|kuthe\s*rahtes|kuthe\s*rahta)\b",
+                r"\b(umar\s*kitni|age\s*kya|tumchi\s*vay)\b",
+                r"\b(photo\s*bhejo|photo\s*pathva|insta|instagram)\b",
+                r"\b(chai\s*peeyoge|coffee\s*peeyoge|date\s*pe|dinner)\b",
+                r"\b(cricket|ipl|score|mausam|havaaman|politics|modi|rahul|election)\b",
+                r"\b(joke\s*suno|joke\s*sunao|chutkula|shayari|gana\s*gao)\b",
+            ]
+            is_off_topic = any(re.search(pat, text, re.IGNORECASE) for pat in off_topic_patterns)
+            if is_off_topic and agent:
+                agent.off_topic_count = getattr(agent, "off_topic_count", 0) + 1
+                cnt = agent.off_topic_count
+                logger.warning(f"⚠️ [OFF-TOPIC DETECTED BY HEURISTIC] Strike {cnt} for text: '{ev.transcript}'")
+                try:
+                    hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                    if hist and hasattr(hist, "add_message"):
+                        if cnt == 2:
+                            hist.add_message(
+                                role="system",
+                                content="[OFF-TOPIC STRIKE 2 ALERT] Caller is off-topic for the 2nd time. You MUST call handle_off_topic(action='warn') and deliver the soft warning to stay on property topics or disconnect."
+                            )
+                        elif cnt >= 3:
+                            hist.add_message(
+                                role="system",
+                                content="[OFF-TOPIC STRIKE 3 ALERT] Caller is off-topic again after soft warning. You MUST call handle_off_topic(action='terminate') and conclude the call immediately with the required farewell."
+                            )
+                except Exception as steer_err:
+                    logger.debug(f"Could not inject off-topic steering: {steer_err}")
+
             new_lang = resolve_language(ev.transcript, None)
             
             if new_lang != current_lang:
@@ -2039,8 +2165,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="mr",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 1.0,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Pure Marathi with Kusha Cloned Voice ({kusha_voice_id}, volume={cartesia_volume}, speed={cartesia_speed})")
@@ -2054,8 +2180,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="en",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 1.0,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
@@ -2063,8 +2189,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="hi",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 1.0,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
+                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
