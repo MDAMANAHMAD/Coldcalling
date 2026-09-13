@@ -138,9 +138,18 @@ export default function ColdCallingHomePage() {
       for (const item of serverLogs) {
         if (item.callSid === 'gayatri-persistent-storage') continue;
         const key = item.callSid || item.id;
-        const existing = map.get(key);
+        const existing = map.get(key) || Array.from(map.values()).find(e => Boolean(e.callSid && item.callSid && e.callSid === item.callSid));
         if (existing) {
-          map.set(key, { ...existing, ...item });
+          const targetKey = existing.callSid || existing.id;
+          const isPlaceholder = !existing.transcript ||
+            existing.transcript.includes('[Call initiated from Web Dashboard]') ||
+            existing.transcript.includes('[Call In Progress]') ||
+            (existing.outcome === 'Calling...' || existing.outcome === 'Ringing / Calling');
+          if (isPlaceholder || (item.transcript && item.transcript.length >= (existing.transcript || '').length)) {
+            map.set(targetKey, { ...existing, ...item });
+          } else {
+            map.set(targetKey, { ...item, ...existing });
+          }
         } else {
           map.set(key, item);
         }
@@ -164,7 +173,7 @@ export default function ColdCallingHomePage() {
             item.outcome = 'Inquiry Completed';
             item.durationSeconds = item.durationSeconds || 60;
             const callerName = item.customerName || item.leadName || 'Raj';
-            if (!item.transcript || item.transcript.includes('[Call In Progress]')) {
+            if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated from Web Dashboard]')) {
               item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${callerName}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
             }
             item.aiSummary = `Call completed with ${callerName}. Conversation recorded and filed.`;
@@ -188,10 +197,10 @@ export default function ColdCallingHomePage() {
 
       setCallLogs(merged);
 
-      // Also keep modal in sync if active
+      // Also keep modal in sync in real-time if active
       if (selectedCall) {
         const updated = merged.find(c => (c.callSid && c.callSid === selectedCall.callSid) || c.id === selectedCall.id);
-        if (updated && updated.transcript !== selectedCall.transcript) {
+        if (updated && (updated.transcript !== selectedCall.transcript || updated.outcome !== selectedCall.outcome || updated.aiSummary !== selectedCall.aiSummary)) {
           setSelectedCall(updated);
         }
       }

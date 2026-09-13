@@ -107,11 +107,11 @@ def normalize_phonetics(text: str) -> str:
             (r'\bthirty\s*six\b', 'chhattis'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
-            (r'\b2\s*BHK\b', 'two B.H.K.'),
-            (r'\btwo\s*BHK\b', 'two B.H.K.'),
-            (r'\b1\s*BHK\b', 'one B.H.K.'),
-            (r'\bone\s*BHK\b', 'one B.H.K.'),
-            (r'\bBHK\b', 'B.H.K.'),
+            (r'\b2\s*BHK\b', 'two BHK'),
+            (r'\btwo\s*BHK\b', 'two BHK'),
+            (r'\b1\s*BHK\b', 'one BHK'),
+            (r'\bone\s*BHK\b', 'one BHK'),
+            (r'\bBHK\b', 'BHK'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
             (r'\b3\s*(pm|baje)\b', 'three pm'),
@@ -219,6 +219,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - STRICTLY NO EXCLAMATION MARKS: NEVER use exclamation marks (!) anywhere in your responses. Use standard single periods (.) only.
 - CALM ACKNOWLEDGMENTS: Rotate calm, conversational acknowledgments naturally ("Theek hai", "Samajh gayi", "Ji" in Hindi; "समजले मला", "हो नक्कीच", "छान" in Marathi). NEVER start every turn with "Ji bilkul" or "Haan ji". Replace enthusiastic phrases like "Bahut badhiya!" with calm words like "Theek hai".
 - PRONUNCIATION OF BHK (MANDATORY): Always pronounce configurations as "one BHK" and "two BHK". STRICTLY NEVER say "do BHK".
+- NEVER END A SENTENCE ON AN ACRONYM (MANDATORY):
+  - NEVER end a sentence or question with a bare acronym like "ya two BHK?". Always append a natural noun or verb phrase like "ya two BHK flat dekh rahe hain?" or "ya two BHK prefer karenge?". This ensures the voice engine never clips or leaves "BHK" unspoken.
 - ARTICULATION & GRAMMATICALLY COMPLETE SENTENCES (MANDATORY):
   - Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
   - MANDATORY GRAMMATICAL ENDINGS: EVERY sentence MUST have a complete grammatical Hindi/Marathi verb ending (e.g., "milta hai", "hote hain", "chahenge?", "sangto", "aahe").
@@ -238,11 +240,11 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
     - If customer asks who is calling or says hello:
       "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
     - If customer already confirmed their name (e.g. 'Haan main [Customer Name] bol raha hoon'):
-      "Ji [Customer Name] ji, Sai Complex Dombivli East ke regarding call kiya hai. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+      "Ji [Customer Name] ji, Sai Complex Dombivli East ke regarding call kiya hai. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK flat dekh rahe hain?"
     - If customer speaks Marathi:
       "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून... मी [Customer Name] यांच्याशी बोलू शकते का?"
 - **Turn 2 (Direct Value Pitch if identity confirmed in Turn 1)**:
-  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK flat dekh rahe hain?"
 - **When customer specifies configuration ('1 BHK' / '2 BHK') — STRICTLY NON-REPETITIVE PHRASING:**
   - DO NOT repeat "Humare paas ... start hote hain". Use completely fresh, informative phrasing:
   - For 2 BHK:
@@ -308,7 +310,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 8. 100% PURE MARATHI MODE
 - Trigger: If caller speaks or asks for Marathi ("kya aap marathi bolti ho?", "marathi madhe bola", "मराठीत बोला"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके?"
+- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
 - 2 BHK: "छान पर्याय आहे. दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Dombivli Station: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे."
@@ -2041,8 +2043,8 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
-                if intro_finished:
-                    t_user_stop = time.perf_counter()
+                t_user_stop = time.perf_counter()
+                intro_finished = True
                 t_last_activity = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
         except Exception as err:
@@ -2440,59 +2442,70 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 1.1s for WebRTC audio negotiation and SIP RTP streams to fully settle naturally
-    logger.info("⏳ Allowing 1.1s for audio bridge and SIP RTP connection to settle naturally...")
-    await asyncio.sleep(1.1)
-
-    # Set Cartesia TTS to extra soft, calm, gentle speed for the initial call connect greeting
-    is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
-    if is_cartesia and hasattr(session.tts, "update_options"):
-        session.tts.update_options(
-            voice=kusha_voice_id,
-            language="hi",
-            speed=0.88,
-            volume=0.92
-        )
+    # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle naturally
+    logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle naturally...")
+    await asyncio.sleep(0.8)
 
     # Human Call Pickup Flow:
-    # Start ~1.0-1.1s after pickup, saying a soft, calm, slow "Hello."
-    # Repeats every 2 seconds if no response.
-    hello_prompts = [
-        "Hello.",
-        "Hello ji.",
-        "Hello, aawaaz aa rahi hai?",
-        "Hello, sun pa rahe hain?",
-    ]
-
-    for idx, prompt_str in enumerate(hello_prompts):
+    # 1. Listen FIRST for up to 1.2s! If caller says "Hello?" upon pickup, immediately respond without colliding!
+    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 1.2s before prompting...")
+    t_listen_start = time.time()
+    while time.time() - t_listen_start < 1.2:
         if caller_has_spoken or _hangup_scheduled:
+            logger.info("🎙️ [HUMAN PICKUP FLOW] Caller spoke first! Skipping initial prompt and entering conversation immediately.")
+            intro_finished = True
             break
+        await asyncio.sleep(0.08)
 
-        logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed=0.88)...")
-        try:
-            h_speech = session.say(prompt_str, allow_interruptions=True)
-            elapsed_sec = round(time.time() - t_call_start, 1)
-            call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
-            if h_speech:
-                await h_speech.wait_for_playout()
-        except Exception as e:
-            logger.warning(f"Error speaking hello greeting: {e}")
+    # 2. If caller remains silent after 1.2s, prompt gently: "Hello." every 2 seconds until response received
+    if not caller_has_spoken and not _hangup_scheduled:
+        is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
+        if is_cartesia and hasattr(session.tts, "update_options"):
+            session.tts.update_options(
+                voice=kusha_voice_id,
+                language="hi",
+                speed=0.88,
+                volume=0.92
+            )
 
-        # Wait 2.0s for caller response
-        t_wait_hello = time.time()
-        while time.time() - t_wait_hello < 2.0:
+        hello_prompts = [
+            "Hello.",
+            "Hello ji.",
+            "Hello, aawaaz aa rahi hai?",
+            "Hello, sun pa rahe hain?",
+        ]
+
+        for idx, prompt_str in enumerate(hello_prompts):
             if caller_has_spoken or _hangup_scheduled:
+                intro_finished = True
                 break
-            await asyncio.sleep(0.1)
 
-    # Restore standard conversational speed for regular turns
-    if is_cartesia and hasattr(session.tts, "update_options"):
-        session.tts.update_options(
-            voice=kusha_voice_id,
-            language="hi",
-            speed=cartesia_speed,
-            volume=cartesia_volume
-        )
+            logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed=0.88)...")
+            try:
+                h_speech = session.say(prompt_str, allow_interruptions=True)
+                elapsed_sec = round(time.time() - t_call_start, 1)
+                call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
+                if h_speech:
+                    await h_speech.wait_for_playout()
+            except Exception as e:
+                logger.warning(f"Error speaking hello greeting: {e}")
+
+            # Wait 2.0s for caller response
+            t_wait_hello = time.time()
+            while time.time() - t_wait_hello < 2.0:
+                if caller_has_spoken or _hangup_scheduled:
+                    intro_finished = True
+                    break
+                await asyncio.sleep(0.08)
+
+        # Restore standard conversational speed for regular turns
+        if is_cartesia and hasattr(session.tts, "update_options"):
+            session.tts.update_options(
+                voice=kusha_voice_id,
+                language="hi",
+                speed=cartesia_speed,
+                volume=cartesia_volume
+            )
 
     if not caller_has_spoken and not _hangup_scheduled:
         logger.info("⏳ Caller silent after 4 'Hello' attempts (~10-12s). Terminating call.")

@@ -288,6 +288,25 @@
   ],
   "callLogs": [
     {
+      "id": "call-1789311501869",
+      "leadId": "lead-918693081506",
+      "callSid": "call-raj-1789311501507",
+      "userEmail": "test@gmail.com",
+      "durationSeconds": 114,
+      "transcript": "[0.0s] Gayatri: Hello.\n[2.0s] Raj: Hello?\n[4.7s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main aap se baat kar sakti hoon?\n[10.0s] Raj: Hello?\n[12.5s] Gayatri: Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK?\n[24.0s] Raj: Main 2 BHK dekh raha hoon.\n[26.5s] Gayatri: Theek hai. Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?\n[40.0s] Raj: Theek hai.\n[42.2s] Gayatri: Theek hai. Saturday convenient rahega ya Sunday, aur subah ya dopahar kis time comfortable rahega?\n[51.0s] Raj: Saturday.\n[53.0s] Gayatri: Saturday subah ya dopahar kis time comfortable rahega?\n[60.0s] Raj: Subah subah.\n[62.5s] Gayatri: Got it, maine aapka site visit Saturday subah gyarah baje note kar liya hai. Kya yeh time theek hai?\n[75.0s] Raj: Gyarah baje.\n[78.0s] Gayatri: Maine aapka Saturday subah gyarah baje ka site visit confirm kar diya hai. Saari details aur location WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye.",
+      "aiSummary": "Raj scheduled a site visit for 2 BHK on Saturday at 11:00 AM (Site Visit Scheduled).",
+      "outcome": "Site Visit Scheduled",
+      "sentiment": "positive",
+      "customerName": "Raj",
+      "customerPhone": "+918693081506",
+      "leadName": "Raj",
+      "calledAt": "2026-09-13T14:58:21.869Z",
+      "detectedQuestions": [
+        "2 BHK Pricing",
+        "Site Visit Scheduling"
+      ]
+    },
+    {
       "id": "call-1789307800033",
       "leadId": "lead-raj",
       "callSid": "call-raj-1789307800033",
