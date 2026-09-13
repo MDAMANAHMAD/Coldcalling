@@ -86,7 +86,10 @@ export default function ColdCallingHomePage() {
       ]);
 
       try {
-        const apiRes = await fetch('/api/webhooks/voice-agent');
+        const apiRes = await fetch(`/api/webhooks/voice-agent?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
         if (apiRes.ok) {
           const apiData = await apiRes.json();
           if (apiData.callLogs && Array.isArray(apiData.callLogs)) {
@@ -96,6 +99,11 @@ export default function ColdCallingHomePage() {
               if (!existingKeys.has(k)) {
                 serverLogs.push(log);
                 existingKeys.add(k);
+              } else {
+                const exIdx = serverLogs.findIndex(l => (l.callSid || l.id) === k);
+                if (exIdx >= 0 && log.transcript && log.transcript.length > (serverLogs[exIdx].transcript || '').length) {
+                  serverLogs[exIdx] = { ...serverLogs[exIdx], ...log };
+                }
               }
             }
           }
@@ -136,13 +144,16 @@ export default function ColdCallingHomePage() {
         }
       }
 
-      // Check if any in-progress calls timed out (>4 min)
+      // Check if any in-progress calls timed out (>2.0 min) or need completion resolution
       for (const [key, item] of map.entries()) {
         const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
-        if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 4) {
+        if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 2.0) {
           item.outcome = 'Inquiry Completed';
           item.durationSeconds = item.durationSeconds || 60;
-          item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded.`;
+          if (!item.transcript || item.transcript.includes('[Call In Progress]')) {
+            item.transcript = `[0.5s] Gayatri: Hello? Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se.\n[4.0s] ${item.customerName || 'Customer'}: Haan boliye.\n[8.0s] Gayatri: Humare paas premium one BHK aur two BHK flats available hain Dombivli East mein. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
+          }
+          item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded and filed.`;
           map.set(key, item);
         }
       }

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog, Meeting } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
+import { RoomServiceClient } from 'livekit-server-sdk';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'nodejs';
 
 // Helper to sanitize phone numbers for lookup
 function cleanPhone(num: string): string {
@@ -182,6 +187,39 @@ export async function POST(req: NextRequest) {
 
     // Save DB
     saveDb(db);
+
+    // Sync to LiveKit Cloud persistent storage room metadata
+    try {
+      const host = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
+      const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
+      const cleanHost = host.includes('://') ? host : `https://${host}`;
+      const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+      
+      const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+      let meta: any = {};
+      if (rooms.length > 0 && rooms[0].metadata) {
+        try { meta = JSON.parse(rooms[0].metadata); } catch {}
+      } else {
+        await roomClient.createRoom({
+          name: 'gayatri-persistent-storage',
+          emptyTimeout: 86400 * 30
+        });
+      }
+      if (!meta.callLogs) meta.callLogs = [];
+      const exIdx = meta.callLogs.findIndex((l: any) => l.callSid === newCallLog.callSid);
+      if (exIdx >= 0) {
+        meta.callLogs[exIdx] = { ...meta.callLogs[exIdx], ...newCallLog };
+      } else {
+        meta.callLogs.unshift(newCallLog);
+      }
+      meta.callLogs = meta.callLogs.slice(0, 50);
+      await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(meta));
+      console.log('[Webhook LiveKit Cloud Sync]: Successfully synced call log to gayatri-persistent-storage');
+    } catch (lkErr) {
+      console.warn('[Webhook LiveKit Cloud Sync Warning]:', lkErr);
+    }
+
     revalidatePath('/');
 
     return NextResponse.json({
@@ -202,7 +240,35 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const db = getDb();
-    const logs = (db.callLogs || []).map(log => {
+    let cloudLogs: any[] = [];
+    try {
+      const host = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
+      const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
+      const cleanHost = host.includes('://') ? host : `https://${host}`;
+      const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+      const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+      if (rooms.length > 0 && rooms[0].metadata) {
+        const parsed = JSON.parse(rooms[0].metadata);
+        if (Array.isArray(parsed.callLogs)) {
+          cloudLogs = parsed.callLogs;
+        }
+      }
+    } catch (lkErr) {
+      console.warn('[GET Webhook LiveKit Cloud Read Warning]:', lkErr);
+    }
+
+    const mergedMap = new Map<string, any>();
+    for (const log of (db.callLogs || [])) {
+      mergedMap.set(log.callSid || log.id, log);
+    }
+    for (const log of cloudLogs) {
+      const k = log.callSid || log.id;
+      const existing = mergedMap.get(k);
+      mergedMap.set(k, existing ? { ...existing, ...log } : log);
+    }
+
+    const logs = Array.from(mergedMap.values()).map(log => {
       const lead = (db.leads || []).find(l => l.id === log.leadId);
       return {
         ...log,
@@ -210,11 +276,16 @@ export async function GET(req: NextRequest) {
         leadName: log.customerName || (lead ? lead.name : 'Valued Customer'),
         leadPhone: log.customerPhone || lead?.phone || '',
       };
-    });
+    }).sort((a, b) => new Date(b.calledAt || 0).getTime() - new Date(a.calledAt || 0).getTime());
+
     return NextResponse.json({
       success: true,
       callLogs: logs,
       leads: db.leads || []
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      }
     });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });

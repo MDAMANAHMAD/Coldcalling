@@ -3,7 +3,7 @@
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import { SipClient } from 'livekit-server-sdk';
+import { SipClient, RoomServiceClient } from 'livekit-server-sdk';
 import fs from 'fs';
 import path from 'path';
 
@@ -84,6 +84,32 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     }
   } catch (err) {
     console.warn('Error augmenting call logs from disk:', err);
+  }
+
+  // Also query LiveKit Cloud room metadata gayatri-persistent-storage
+  try {
+    const host = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+    const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
+    const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
+    const cleanHost = host.includes('://') ? host : `https://${host}`;
+    const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+    if (rooms.length > 0 && rooms[0].metadata) {
+      const parsed = JSON.parse(rooms[0].metadata);
+      if (Array.isArray(parsed.callLogs)) {
+        for (const cloudLog of parsed.callLogs) {
+          const key = cloudLog.callSid || cloudLog.id;
+          const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
+          if (exIdx >= 0) {
+            dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
+          } else {
+            dbLogs.push(cloudLog);
+          }
+        }
+      }
+    }
+  } catch (lkErr) {
+    console.warn('Error reading from LiveKit Cloud persistent metadata:', lkErr);
   }
 
   return dbLogs.map(log => {
