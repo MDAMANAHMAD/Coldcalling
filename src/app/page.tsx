@@ -151,23 +151,25 @@ export default function ColdCallingHomePage() {
         const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
         const isCallingState = item.outcome === 'Ringing / Calling' || item.outcome === 'Calling...';
         if (isCallingState && callAgeMinutes > 1.0) {
-          // Check if there is a completed server log for this caller/phone
+          // Check if there is a completed server log for this specific callSid
           const completedMatch = serverLogs.find(s => 
             s.callSid !== 'gayatri-persistent-storage' &&
             s.outcome !== 'Ringing / Calling' &&
             s.outcome !== 'Calling...' &&
-            (s.customerPhone?.replace(/\D/g, '') === (item.customerPhone || item.leadPhone || '').replace(/\D/g, '') ||
-             s.callSid === item.callSid)
+            Boolean(s.callSid && item.callSid && s.callSid === item.callSid)
           );
           if (completedMatch) {
             map.set(key, { ...item, ...completedMatch });
           } else {
             item.outcome = 'Inquiry Completed';
             item.durationSeconds = item.durationSeconds || 60;
+            const callerName = item.customerName || item.leadName || 'Raj';
             if (!item.transcript || item.transcript.includes('[Call In Progress]')) {
-              item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${item.customerName || 'Customer'}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
+              item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${callerName}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
             }
-            item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded and filed.`;
+            item.aiSummary = `Call completed with ${callerName}. Conversation recorded and filed.`;
+            item.customerName = callerName;
+            item.leadName = callerName;
             map.set(key, item);
           }
         }
@@ -471,7 +473,7 @@ export default function ColdCallingHomePage() {
 
   // Filtered call logs
   const filteredCalls = callLogs.filter(call => {
-    const nameMatch = (call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const nameMatch = (call.customerName || call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
     const phoneMatch = (call.customerPhone || call.leadPhone || '').toLowerCase().includes(searchQuery.toLowerCase());
     const queryMatches = nameMatch || phoneMatch;
 
@@ -837,7 +839,7 @@ export default function ColdCallingHomePage() {
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                          {call.leadName}
+                          {call.customerName || call.leadName || 'Valued Customer'}
                         </h4>
                         <span className="text-xs text-slate-400 font-medium">
                           {call.customerPhone || call.leadPhone || '+918693081506'}
@@ -922,7 +924,7 @@ export default function ColdCallingHomePage() {
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
                     <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
-                      Conversation with {selectedCall.leadName}
+                      Conversation with {selectedCall.customerName || selectedCall.leadName || 'Customer'}
                     </h3>
                     {(() => {
                       const tag = getOutcomeTag(selectedCall);
@@ -988,7 +990,7 @@ export default function ColdCallingHomePage() {
 
               {/* Modal Body: Turn-by-Turn Dialogue */}
               <div className="p-6 overflow-y-auto space-y-4 flex-1">
-                {parseTranscript(selectedCall.transcript, selectedCall.leadName).map((turn, idx) => {
+                {parseTranscript(selectedCall.transcript, selectedCall.customerName || selectedCall.leadName || 'Customer').map((turn, idx) => {
                   if (turn.speaker === 'system') {
                     return (
                       <div key={idx} className="text-center my-3">

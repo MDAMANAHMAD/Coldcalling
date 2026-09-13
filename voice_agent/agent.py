@@ -145,10 +145,13 @@ def _phonetic_push_text(self, token: str) -> None:
 
 def _phonetic_flush(self) -> None:
     if hasattr(self, '_phonetic_buf') and self._phonetic_buf:
-        leftover = self._phonetic_buf
+        leftover = self._phonetic_buf.strip()
         self._phonetic_buf = ''
         if leftover:
-            _orig_cartesia_push_text(self, normalize_phonetics(leftover))
+            norm = normalize_phonetics(leftover).strip()
+            if norm and not norm.endswith(('.', '?', '!', '।')):
+                norm += '.'
+            _orig_cartesia_push_text(self, norm)
     _orig_cartesia_flush(self)
 
 _orig_cartesia_end_input = getattr(cartesia.tts.SynthesizeStream, "end_input", None)
@@ -216,11 +219,15 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - STRICTLY NO EXCLAMATION MARKS: NEVER use exclamation marks (!) anywhere in your responses. Use standard single periods (.) only.
 - CALM ACKNOWLEDGMENTS: Rotate calm, conversational acknowledgments naturally ("Theek hai", "Samajh gayi", "Ji" in Hindi; "समजले मला", "हो नक्कीच", "छान" in Marathi). NEVER start every turn with "Ji bilkul" or "Haan ji". Replace enthusiastic phrases like "Bahut badhiya!" with calm words like "Theek hai".
 - PRONUNCIATION OF BHK (MANDATORY): Always pronounce configurations as "one BHK" and "two BHK". STRICTLY NEVER say "do BHK".
-- ARTICULATION: Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
+- ARTICULATION & GRAMMATICALLY COMPLETE SENTENCES (MANDATORY):
+  - Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
+  - MANDATORY GRAMMATICAL ENDINGS: EVERY sentence MUST have a complete grammatical Hindi/Marathi verb ending (e.g., "milta hai", "hote hain", "chahenge?", "sangto", "aahe").
+  - STRICTLY FORBIDDEN: NEVER end a sentence mid-thought or leave a dangling English fragment like "with spacious layout and modern amenities". Always conclude statements with a natural follow-up question or clear next step.
 - STRICT BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 15-20 words). Keep answers direct and concise so speech generates and starts immediately.
 - IRRELEVANT QUESTIONS STRICTLY FORBIDDEN: Strictly NEVER ask personal or irrelevant questions like "kya aap family ke saath shift karne ka plan kar rahe hain" or ask about personal living situations. Focus purely on flat configuration (1 BHK or 2 BHK), budget, and site visits.
-- STRICT ANTI-REPETITION CONSTRAINTS:
-  - NEVER repeat the exact same sentence or phrasing across the conversation.
+- HUMAN-LIKE CONVERSATIONAL VARIETY (NEVER SOUND ROBOTIC):
+  - Speak like an attentive, natural human property consultant, NOT a rigid script reader.
+  - NEVER repeat the exact same sentence or phrasing across turns. Adapt and vary your words naturally based on what the caller said.
   - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" after every answer. Stop speaking and allow the customer to think and reply.
 
 2. OPENING CONVERSATION FLOW
@@ -236,8 +243,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **Turn 2 (Direct Value Pitch if identity confirmed in Turn 1)**:
   - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium one BHK aur two BHK flats chhattis lakh rupaye se start ho rahe hain. Aap apne liye one BHK dekh rahe hain ya two BHK?"
 - **When customer specifies configuration ('1 BHK' / '2 BHK')**:
-  - For 1 BHK: "Humare paas one BHK chhattis lakh rupaye se start hote hain with premium layout. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
-  - For 2 BHK: "Humare paas two BHK bahattar lakh rupaye se start hote hain with spacious layout and modern amenities."
+  - For 1 BHK: "Humare paas one BHK chhattis lakh rupaye se start hote hain, jisme premium layout milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
+  - For 2 BHK: "Humare paas two BHK bahattar lakh rupaye se start hote hain, jisme spacious layout aur modern amenities milti hain. Kya aap actual flat dekhne ke liye site visit karna chahenge?"
 - **Location Shift Handling (When customer mentions Kalyan, Thane, etc.)**:
   - If customer says looking in Kalyan: "Sir humara property Kalyan mein available nahi hai. Humara project Sai Complex Dombivli East mein hai jo Kalyan se sirf fifteen minutes drive par hai. Agar aap Dombivli East consider karna chahein toh kya main details share kar sakti hoon?"
   - If customer strictly refuses Dombivli: "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye."
@@ -1828,6 +1835,8 @@ async def entrypoint(ctx: JobContext):
 
             logger.info(f"📝 [TRANSCRIPT RECORDED] Saved full transcript to bookings/transcripts/{ctx.room.name}.json (Account: {user_account_email}, Outcome: {call_outcome}, Sentiment: {sentiment}, Recording: {recording_url})")
 
+            clean_display_name = customer_name.replace(" ji", "").replace(" Ji", "").strip() or "Customer"
+
             # 1. Sync with local db.json for the Cold Calling Dashboard
             try:
                 db_path = "db.json"
@@ -1840,7 +1849,7 @@ async def entrypoint(ctx: JobContext):
 
                     new_log = {
                         "id": f"call-{int(time.time()*1000)}",
-                        "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
+                        "leadId": f"lead-{clean_display_name.lower().replace(' ', '')}",
                         "callSid": ctx.room.name,
                         "userEmail": user_account_email,
                         "durationSeconds": round(duration_seconds),
@@ -1852,7 +1861,8 @@ async def entrypoint(ctx: JobContext):
                         "outcome": call_outcome,
                         "detectedQuestions": detected_questions,
                         "customerPhone": customer_phone,
-                        "customerName": customer_name
+                        "customerName": clean_display_name,
+                        "leadName": clean_display_name
                     }
 
                     # If an existing log with matching callSid exists (e.g. from web dialer), update it!
@@ -1874,7 +1884,8 @@ async def entrypoint(ctx: JobContext):
             try:
                 webhook_payload = {
                     "callSid": ctx.room.name,
-                    "customerName": customer_name,
+                    "customerName": clean_display_name,
+                    "leadName": clean_display_name,
                     "customerPhone": customer_phone,
                     "phone": customer_phone,
                     "userEmail": user_account_email,
@@ -1930,7 +1941,7 @@ async def entrypoint(ctx: JobContext):
                 cloud_logs = [l for l in existing_meta.get("callLogs", []) if l.get("callSid") != cloud_storage_room]
                 cloud_entry = {
                     "id": f"call-{int(time.time()*1000)}",
-                    "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
+                    "leadId": f"lead-{clean_display_name.lower().replace(' ', '')}",
                     "callSid": ctx.room.name,
                     "userEmail": user_account_email,
                     "durationSeconds": round(duration_seconds),
@@ -1942,7 +1953,8 @@ async def entrypoint(ctx: JobContext):
                     "outcome": call_outcome,
                     "detectedQuestions": detected_questions,
                     "customerPhone": customer_phone,
-                    "customerName": customer_name
+                    "customerName": clean_display_name,
+                    "leadName": clean_display_name
                 }
                 cloud_idx = next((i for i, log in enumerate(cloud_logs) if log.get("callSid") == ctx.room.name), None)
                 if cloud_idx is not None:
@@ -2346,20 +2358,39 @@ async def entrypoint(ctx: JobContext):
                 if meta_p.get("user_email"):
                     user_account_email = meta_p.get("user_email").strip().lower()
                     logger.info(f"📧 Bound call to user account from participant metadata: {user_account_email}")
+                if meta_p.get("customer_name"):
+                    raw_meta_name = str(meta_p.get("customer_name")).strip()
+                    if raw_meta_name and not raw_meta_name.isdigit():
+                        customer_name = raw_meta_name.capitalize()
+                        logger.info(f"👤 Resolved exact customer name from participant metadata: {customer_name}")
             except Exception:
                 pass
         if p.identity.startswith("sip-"):
             clean_digits = "".join(c for c in p.identity.replace("sip-", "") if c.isdigit() or c == "+")
             if clean_digits:
                 customer_phone = clean_digits if clean_digits.startswith("+") else ("+91" + clean_digits if len(clean_digits) == 10 else "+" + clean_digits)
-        raw_name = p.name or p.identity
-        if raw_name:
-            if raw_name.startswith("sip-"):
-                raw_name = raw_name.replace("sip-", "")
-            raw_name = raw_name.strip().capitalize()
-            customer_name = f"{raw_name} ji" if not raw_name.endswith("ji") else raw_name
-            logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
-            break
+        if not customer_name:
+            raw_name = p.name or p.identity
+            if raw_name:
+                if raw_name.startswith("sip-"):
+                    raw_name = raw_name.replace("sip-", "")
+                if not raw_name.isdigit():
+                    customer_name = raw_name.strip().capitalize()
+                    logger.info(f"👤 Resolved customer name dynamically from room participants: {customer_name}")
+                    break
+
+    # Fallback to room name if customer name was not found (e.g. call-raj-1789307800033 -> "Raj")
+    if not customer_name or customer_name.replace("+", "").isdigit():
+        try:
+            parts = ctx.room.name.split("-")
+            if len(parts) >= 3 and parts[0] in ["call", "sip"] and not parts[1].isdigit():
+                customer_name = parts[1].capitalize()
+                logger.info(f"👤 Resolved customer name from room name: {customer_name}")
+        except Exception:
+            pass
+
+    if not customer_name:
+        customer_name = "Raj"
 
     def _record_agent_speech(spoken_text: str):
         raw_text = spoken_text.strip()
@@ -2380,8 +2411,9 @@ async def entrypoint(ctx: JobContext):
             logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
             trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
 
+    spoken_customer_name = f"{customer_name} ji" if not customer_name.endswith("ji") else customer_name
     agent = PriyaRealEstateAgent(
-        customer_name=customer_name,
+        customer_name=spoken_customer_name,
         customer_phone=customer_phone,
         hangup_fnc=trigger_hangup,
         on_speech_captured=_record_agent_speech
@@ -2405,12 +2437,22 @@ async def entrypoint(ctx: JobContext):
     logger.info("⏳ Allowing 1.1s for audio bridge and SIP RTP connection to settle naturally...")
     await asyncio.sleep(1.1)
 
-    # Human Call Pickup Flow (User Request):
-    # Start ~1.0-1.1s after pickup, saying a calm, natural "Hello?"
+    # Set Cartesia TTS to extra soft, calm, gentle speed for the initial call connect greeting
+    is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
+    if is_cartesia and hasattr(session.tts, "update_options"):
+        session.tts.update_options(
+            voice=kusha_voice_id,
+            language="hi",
+            speed=0.88,
+            volume=0.92
+        )
+
+    # Human Call Pickup Flow:
+    # Start ~1.0-1.1s after pickup, saying a soft, calm, slow "Hello."
     # Repeats every 2 seconds if no response.
     hello_prompts = [
         "Hello.",
-        "Hello.",
+        "Hello ji.",
         "Hello, aawaaz aa rahi hai?",
         "Hello, sun pa rahe hain?",
     ]
@@ -2419,7 +2461,7 @@ async def entrypoint(ctx: JobContext):
         if caller_has_spoken or _hangup_scheduled:
             break
 
-        logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}'...")
+        logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed=0.88)...")
         try:
             h_speech = session.say(prompt_str, allow_interruptions=True)
             elapsed_sec = round(time.time() - t_call_start, 1)
@@ -2435,6 +2477,15 @@ async def entrypoint(ctx: JobContext):
             if caller_has_spoken or _hangup_scheduled:
                 break
             await asyncio.sleep(0.1)
+
+    # Restore standard conversational speed for regular turns
+    if is_cartesia and hasattr(session.tts, "update_options"):
+        session.tts.update_options(
+            voice=kusha_voice_id,
+            language="hi",
+            speed=cartesia_speed,
+            volume=cartesia_volume
+        )
 
     if not caller_has_spoken and not _hangup_scheduled:
         logger.info("⏳ Caller silent after 4 'Hello' attempts (~10-12s). Terminating call.")

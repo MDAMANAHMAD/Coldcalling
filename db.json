@@ -69,9 +69,20 @@
       "email": "raj@example.com",
       "company": "Valued Client",
       "status": "meeting_scheduled",
-      "notes": "Connected via Live Voice Call. Discussed 2 BHK (760 sq ft carpet, ₹52 Lakh) at Sai Complex Dombivli East. Confirmed site visit for Sunday.",
+      "notes": "Connected via Live Voice Call. Discussed 2 BHK at Sai Complex Dombivli East. Inquired about project amenities. Confirmed site visit for Sunday afternoon.",
       "createdAt": "2026-09-12T06:30:00.000Z",
-      "lastCallAt": "2026-09-12T06:35:00.000Z"
+      "lastCallAt": "2026-09-13T13:58:00.000Z"
+    },
+    {
+      "id": "lead-rajkumar",
+      "name": "Raj Kumar",
+      "phone": "+917892852845",
+      "email": "rajkumar@example.com",
+      "company": "Valued Client",
+      "status": "interested",
+      "notes": "Connected via Live Voice Call. Interested in 1 BHK under-construction flat. Requested brochure on WhatsApp.",
+      "createdAt": "2026-09-13T13:20:00.000Z",
+      "lastCallAt": "2026-09-13T13:25:00.000Z"
     }
   ],
   "campaigns": [
@@ -276,6 +287,48 @@
     }
   ],
   "callLogs": [
+    {
+      "id": "call-1789307800033",
+      "leadId": "lead-raj",
+      "callSid": "call-raj-1789307800033",
+      "userEmail": "test@gmail.com",
+      "customerName": "Raj",
+      "leadName": "Raj",
+      "customerPhone": "+918693081506",
+      "durationSeconds": 130,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello.\n[2.8s] Raj: Hello?\n[4.1s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main Raj se baat kar sakti hoon?\n[9.2s] Raj: Haan boliye.\n[11.5s] Gayatri: Ji Raj ji. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats chhattis lakh rupaye se start hote hain. Aap apne liye one BHK dekh rahe hain ya two BHK?\n[23.0s] Raj: 2 BHK.\n[25.8s] Gayatri: Humare paas two BHK bahattar lakh rupaye se start hote hain, jisme spacious layout aur modern amenities milti hain. Kya aap actual flat dekhne ke liye site visit karna chahenge?\n[36.2s] Raj: Amenities kya hain project mein?\n[39.0s] Gayatri: Humare project mein gym, children play area, jogging track, aur 24-hour water supply jaise premium amenities hain. Agar aap ek baar actual visit karenge toh aapko aur clear idea ho jayega. Kya aap is weekend site visit karna chahenge?\n[52.5s] Raj: Theek hai, Sunday dopahar theek rahega.\n[55.8s] Gayatri: Got it, maine aapka site visit Sunday dopahar note kar liya hai. Kya yeh time theek hai?\n[62.1s] Raj: Haan confirm kar dijiye.\n[65.0s] Gayatri: Maine aapka Sunday ko dopahar ka site visit confirm kar diya hai. Saari details aur location WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye.",
+      "aiSummary": "Raj confirmed interest in 2 BHK at Sai Complex Dombivli East. Inquired about project amenities (gym, play area, water supply). Successfully scheduled site visit for Sunday afternoon (dopahar). Confirmation details sent via WhatsApp.",
+      "sentiment": "positive",
+      "calledAt": "2026-09-13T13:56:40.000Z",
+      "outcome": "Site Visit Scheduled",
+      "detectedQuestions": [
+        "2 BHK Configuration & Pricing (₹72 Lakh)",
+        "Project Amenities (Gym, Children Play Area, Water Supply)",
+        "Site Visit Booking (Sunday Dopahar)"
+      ]
+    },
+    {
+      "id": "call-1789305786908",
+      "leadId": "lead-rajkumar",
+      "callSid": "call-raj-1789305786908",
+      "userEmail": "test@gmail.com",
+      "customerName": "Raj Kumar",
+      "leadName": "Raj Kumar",
+      "customerPhone": "+917892852845",
+      "durationSeconds": 105,
+      "recordingUrl": "",
+      "transcript": "[0.5s] Gayatri: Hello.\n[2.5s] Raj Kumar: Hello kaun?\n[4.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main Raj Kumar se baat kar sakti hoon?\n[9.0s] Raj Kumar: Haan main Raj Kumar bol raha hoon.\n[11.5s] Gayatri: Ji Raj Kumar ji. Humare paas premium one BHK aur two BHK flats chhattis lakh rupaye se start ho rahe hain. Aap apne liye one BHK dekh rahe hain ya two BHK?\n[21.0s] Raj Kumar: 1 BHK dekh raha hoon.\n[23.5s] Gayatri: Humare paas one BHK chhattis lakh rupaye se start hote hain, jisme premium layout milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?\n[34.0s] Raj Kumar: Under-construction chalega. Location kahan hai?\n[37.2s] Gayatri: Dombivli East station se sirf 15 se 20 minutes ki doori par Palava Road par hai. Kya aap is weekend actual site visit karna chahenge?\n[48.0s] Raj Kumar: Details WhatsApp par bhej do pehle, main dekh ke batata hoon.\n[51.5s] Gayatri: Bilkul, main aapko WhatsApp par brochure bhej deti hoon. Aap dekh kar jab bhi comfortable ho bata sakte hain. Aapka din shubh ho, bye.",
+      "aiSummary": "Raj Kumar is interested in 1 BHK under-construction flats at Sai Complex. Inquired about location and requested brochure on WhatsApp.",
+      "sentiment": "positive",
+      "calledAt": "2026-09-13T13:23:08.000Z",
+      "outcome": "Interested",
+      "detectedQuestions": [
+        "1 BHK Flat Pricing (₹36 Lakh)",
+        "Under-construction Timeline",
+        "WhatsApp Brochure Request"
+      ]
+    },
     {
       "id": "call-raj-1789201908982",
       "leadId": "lead-raj",
