@@ -190,10 +190,11 @@ export async function POST(req: NextRequest) {
 
     // Sync to LiveKit Cloud persistent storage room metadata
     try {
-      const host = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+      if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
       const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
       const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-      const cleanHost = host.includes('://') ? host : `https://${host}`;
       const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
       
       const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
@@ -213,7 +214,7 @@ export async function POST(req: NextRequest) {
       } else {
         meta.callLogs.unshift(newCallLog);
       }
-      meta.callLogs = meta.callLogs.slice(0, 50);
+      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 50);
       await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(meta));
       console.log('[Webhook LiveKit Cloud Sync]: Successfully synced call log to gayatri-persistent-storage');
     } catch (lkErr) {
@@ -242,10 +243,11 @@ export async function GET(req: NextRequest) {
     const db = getDb();
     let cloudLogs: any[] = [];
     try {
-      const host = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+      let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+      if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
       const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
       const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-      const cleanHost = host.includes('://') ? host : `https://${host}`;
       const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
       const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
       if (rooms.length > 0 && rooms[0].metadata) {
@@ -260,9 +262,12 @@ export async function GET(req: NextRequest) {
 
     const mergedMap = new Map<string, any>();
     for (const log of (db.callLogs || [])) {
-      mergedMap.set(log.callSid || log.id, log);
+      if (log.callSid !== 'gayatri-persistent-storage') {
+        mergedMap.set(log.callSid || log.id, log);
+      }
     }
     for (const log of cloudLogs) {
+      if (log.callSid === 'gayatri-persistent-storage') continue;
       const k = log.callSid || log.id;
       const existing = mergedMap.get(k);
       mergedMap.set(k, existing ? { ...existing, ...log } : log);

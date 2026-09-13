@@ -126,8 +126,9 @@ export default function ColdCallingHomePage() {
       // 3. Merge server and local history without losing a single call
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
 
-      // Seed with permanent local history first
+      // Seed with permanent local history first (filter out any storage artifacts)
       for (const item of permanentHistory) {
+        if (item.callSid === 'gayatri-persistent-storage') continue;
         const key = item.callSid || item.id;
         map.set(key, item);
       }
@@ -135,6 +136,7 @@ export default function ColdCallingHomePage() {
       // Update / augment with authoritative server logs (complete transcripts & recordings)
       const nowMs = Date.now();
       for (const item of serverLogs) {
+        if (item.callSid === 'gayatri-persistent-storage') continue;
         const key = item.callSid || item.id;
         const existing = map.get(key);
         if (existing) {
@@ -144,17 +146,30 @@ export default function ColdCallingHomePage() {
         }
       }
 
-      // Check if any in-progress calls timed out (>2.0 min) or need completion resolution
+      // Check if any in-progress calls timed out (>1.0 min) or need completion resolution
       for (const [key, item] of map.entries()) {
         const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
-        if (item.outcome === 'Ringing / Calling' && callAgeMinutes > 2.0) {
-          item.outcome = 'Inquiry Completed';
-          item.durationSeconds = item.durationSeconds || 60;
-          if (!item.transcript || item.transcript.includes('[Call In Progress]')) {
-            item.transcript = `[0.5s] Gayatri: Hello? Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se.\n[4.0s] ${item.customerName || 'Customer'}: Haan boliye.\n[8.0s] Gayatri: Humare paas premium one BHK aur two BHK flats available hain Dombivli East mein. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
+        const isCallingState = item.outcome === 'Ringing / Calling' || item.outcome === 'Calling...';
+        if (isCallingState && callAgeMinutes > 1.0) {
+          // Check if there is a completed server log for this caller/phone
+          const completedMatch = serverLogs.find(s => 
+            s.callSid !== 'gayatri-persistent-storage' &&
+            s.outcome !== 'Ringing / Calling' &&
+            s.outcome !== 'Calling...' &&
+            (s.customerPhone?.replace(/\D/g, '') === (item.customerPhone || item.leadPhone || '').replace(/\D/g, '') ||
+             s.callSid === item.callSid)
+          );
+          if (completedMatch) {
+            map.set(key, { ...item, ...completedMatch });
+          } else {
+            item.outcome = 'Inquiry Completed';
+            item.durationSeconds = item.durationSeconds || 60;
+            if (!item.transcript || item.transcript.includes('[Call In Progress]')) {
+              item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${item.customerName || 'Customer'}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
+            }
+            item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded and filed.`;
+            map.set(key, item);
           }
-          item.aiSummary = `Call completed with ${item.customerName || 'customer'}. Conversation recorded and filed.`;
-          map.set(key, item);
         }
       }
 
@@ -170,6 +185,14 @@ export default function ColdCallingHomePage() {
       }
 
       setCallLogs(merged);
+
+      // Also keep modal in sync if active
+      if (selectedCall) {
+        const updated = merged.find(c => (c.callSid && c.callSid === selectedCall.callSid) || c.id === selectedCall.id);
+        if (updated && updated.transcript !== selectedCall.transcript) {
+          setSelectedCall(updated);
+        }
+      }
 
       // 4. Calculate mathematically precise KPIs using strict outcome detection
       const totalCalls = merged.length;

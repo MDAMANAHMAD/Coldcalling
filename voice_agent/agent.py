@@ -55,6 +55,7 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
+    JobRequest,
     WorkerOptions,
     cli,
     function_tool,
@@ -106,11 +107,11 @@ def normalize_phonetics(text: str) -> str:
             (r'\bthirty\s*six\b', 'chhattis'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
-            (r'\b2\s*BHK\b', 'two BHK'),
-            (r'\btwo\s*BHK\b', 'two BHK'),
-            (r'\b1\s*BHK\b', 'one BHK'),
-            (r'\bone\s*BHK\b', 'one BHK'),
-            (r'\bB\.H\.K\.\b', 'BHK'),
+            (r'\b2\s*BHK\b', 'two B.H.K.'),
+            (r'\btwo\s*BHK\b', 'two B.H.K.'),
+            (r'\b1\s*BHK\b', 'one B.H.K.'),
+            (r'\bone\s*BHK\b', 'one B.H.K.'),
+            (r'\bBHK\b', 'B.H.K.'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
             (r'\b3\s*(pm|baje)\b', 'three pm'),
@@ -156,9 +157,16 @@ def _phonetic_end_input(self) -> None:
     if _orig_cartesia_end_input:
         _orig_cartesia_end_input(self)
 
+_orig_cartesia_aclose = getattr(cartesia.tts.SynthesizeStream, "aclose", None)
+async def _phonetic_aclose(self) -> None:
+    _phonetic_flush(self)
+    if _orig_cartesia_aclose:
+        await _orig_cartesia_aclose(self)
+
 cartesia.tts.SynthesizeStream.push_text = _phonetic_push_text
 cartesia.tts.SynthesizeStream.flush = _phonetic_flush
 cartesia.tts.SynthesizeStream.end_input = _phonetic_end_input
+cartesia.tts.SynthesizeStream.aclose = _phonetic_aclose
 
 _orig_cartesia_synthesize = cartesia.TTS.synthesize
 def _phonetic_synthesize(self, text: str, **kwargs):
@@ -210,13 +218,14 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - PRONUNCIATION OF BHK (MANDATORY): Always pronounce configurations as "one BHK" and "two BHK". STRICTLY NEVER say "do BHK".
 - ARTICULATION: Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
 - STRICT BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 15-20 words). Keep answers direct and concise so speech generates and starts immediately.
+- IRRELEVANT QUESTIONS STRICTLY FORBIDDEN: Strictly NEVER ask personal or irrelevant questions like "kya aap family ke saath shift karne ka plan kar rahe hain" or ask about personal living situations. Focus purely on flat configuration (1 BHK or 2 BHK), budget, and site visits.
 - STRICT ANTI-REPETITION CONSTRAINTS:
   - NEVER repeat the exact same sentence or phrasing across the conversation.
   - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" after every answer. Stop speaking and allow the customer to think and reply.
 
 2. OPENING CONVERSATION FLOW
-- **Turn 0 (Call Connect Greeting)**: Call starts with the agent saying "Hello?".
-- **Turn 1 (When caller responds to 'Hello?' e.g. 'haan', 'boliye', 'kaun?', 'hello kaun?'):**
+- **Turn 0 (Call Connect Greeting)**: Call starts with the agent saying "Hello." softly at a calm, low, warm pitch.
+- **Turn 1 (When caller responds to 'Hello.' e.g. 'haan', 'boliye', 'kaun?', 'hello kaun?'):**
   - Deliver your natural intro directly without saying "Haan ji":
     - If customer asks who is calling or says hello:
       "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
@@ -245,6 +254,11 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
   and say: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details aur location WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
 - If customer wants brochure first: "Bilkul, main aapko WhatsApp par brochure bhej deti hoon. Aap dekh kar jab bhi comfortable ho bata sakte hain. Aapka din shubh ho, bye."
+- **AMENITIES INQUIRY RESPONSE (MANDATORY)**:
+  Whenever the customer asks about amenities, facilities, or features of the project, NEVER list them and remain silent. ALWAYS list them concisely and IMMEDIATELY invite them for an actual site visit:
+  "Humare project mein gym, children play area, jogging track, aur 24-hour water supply jaise premium amenities hain. Agar aap ek baar actual visit karenge toh aapko aur clear idea ho jayega. Kya aap is weekend site visit karna chahenge?"
+  In Marathi:
+  "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 
 4. MANDATORY CALL CLOSING RULE
 - Whenever ending the call (after visit booking, refusal, or completed questions):
@@ -269,7 +283,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - Nilje Station: Approx five minutes from site (mention ONLY if asked about nearest station).
   - Kalyan: Approx fifteen minutes away.
   - Thane / Navi Mumbai / Airoli: Shil Road directly connects in approx twenty five to thirty minutes.
-- Amenities: Gym, children play area, jogging track, 24-hour water supply, Jaquar fittings, Kajaria tiles. Free VIP cab pickup available for site visits.
+- Amenities: Gym, children play area, jogging track, 24-hour water supply, Jaquar fittings, Kajaria tiles. Free VIP cab pickup available for site visits. Always follow up an amenities answer by inviting the customer to visit this weekend.
 
 7. OFF-TOPIC 3-STRIKE PROTOCOL
 - Strike 1 (First off-topic occurrence): Politely steer back to property:
@@ -287,6 +301,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - 1 BHK: "आमच्याकडे एक बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात, ज्यांचे क्षेत्रफळ तीनशे पंच्याहत्तर स्क्वेअर फूट आहे."
 - 2 BHK: "आमच्याकडे दोन बीएचके फ्लॅट्स बहात्तर लाख रुपयांपासून सुरू होतात, ज्यांचे क्षेत्रफळ सातशे साठ स्क्वेअर फूट आहे."
 - Dombivli Station: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे."
+- Amenities Marathi: "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Visit invite: "छान. मग प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Scheduling Marathi: "खूप छान. आपण शनिवारी येऊ इच्छिता की रविवारी, आणि किती वाजता?"
 - Confirming Visit: Call `schedule_site_visit` and say: "मी तुमची भेट नक्की केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
@@ -1308,6 +1323,11 @@ Return ONLY raw JSON."""
 # 4. AGENT ENTRYPOINT (Instant Telephony Streaming Audio)
 # ==============================================================================
 async def entrypoint(ctx: JobContext):
+    # Strictly ignore non-telephony rooms (e.g. storage rooms or background worker rooms)
+    if not (ctx.room.name.startswith("call-") or ctx.room.name.startswith("sip-")):
+        logger.info(f"⏭️ Skipping non-telephony room: {ctx.room.name}")
+        return
+
     set_normal_priority()
     log_system_diagnostics()
     t_start = time.perf_counter()
@@ -1884,8 +1904,12 @@ async def entrypoint(ctx: JobContext):
             # persist completed transcripts and never get stuck on "Ringing / Calling".
             try:
                 from livekit import api as lk_api
+                raw_lk_url = os.getenv("LIVEKIT_URL") or "https://cold-calling-j7qhnkas.livekit.cloud"
+                clean_lk_url = raw_lk_url.replace("wss://", "https://").replace("ws://", "http://")
+                if "://" not in clean_lk_url:
+                    clean_lk_url = f"https://{clean_lk_url}"
                 lk_cloud_api = lk_api.LiveKitAPI(
-                    os.getenv("LIVEKIT_URL"),
+                    clean_lk_url,
                     os.getenv("LIVEKIT_API_KEY"),
                     os.getenv("LIVEKIT_API_SECRET")
                 )
@@ -1903,7 +1927,7 @@ async def entrypoint(ctx: JobContext):
                         empty_timeout=86400 * 30
                     ))
 
-                cloud_logs = existing_meta.get("callLogs", [])
+                cloud_logs = [l for l in existing_meta.get("callLogs", []) if l.get("callSid") != cloud_storage_room]
                 cloud_entry = {
                     "id": f"call-{int(time.time()*1000)}",
                     "leadId": f"lead-{customer_name.lower().replace(' ', '')}",
@@ -2385,10 +2409,10 @@ async def entrypoint(ctx: JobContext):
     # Start ~1.0-1.1s after pickup, saying a calm, natural "Hello?"
     # Repeats every 2 seconds if no response.
     hello_prompts = [
-        "Hello?",
-        "Hello?",
+        "Hello.",
+        "Hello.",
         "Hello, aawaaz aa rahi hai?",
-        "Hello? Sun pa rahe hain?",
+        "Hello, sun pa rahe hain?",
     ]
 
     for idx, prompt_str in enumerate(hello_prompts):
@@ -2492,10 +2516,19 @@ async def entrypoint(ctx: JobContext):
 # ==============================================================================
 # 5. HIGH-SPEED PRE-WARMED CLI RUNNER
 # ==============================================================================
+async def request_fnc(req: JobRequest) -> None:
+    # Strictly reject any non-telephony rooms (e.g. storage rooms)
+    if not (req.room.name.startswith("call-") or req.room.name.startswith("sip-")):
+        logger.info(f"🚫 Rejecting non-telephony job request for room: {req.room.name}")
+        await req.reject()
+        return
+    await req.accept()
+
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            request_fnc=request_fnc,
             prewarm_fnc=prewarm_fnc,
             num_idle_processes=1,
             load_threshold=100.0,
