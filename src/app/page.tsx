@@ -10,6 +10,7 @@ import { CallLog } from '@/lib/types';
 import { 
   PhoneCall, 
   PhoneOutgoing, 
+  PhoneOff,
   User, 
   Clock, 
   Calendar, 
@@ -41,6 +42,7 @@ export default function ColdCallingHomePage() {
   const [dialName, setDialName] = useState('Raj');
   const [dialPhone, setDialPhone] = useState('+918693081506');
   const [isDialing, setIsDialing] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
   const [dialResult, setDialResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Search & Filter State
@@ -281,6 +283,38 @@ export default function ColdCallingHomePage() {
       });
     } finally {
       setIsDialing(false);
+    }
+  };
+
+  const handleTerminateAllCalls = async () => {
+    if (!confirm('Are you sure you want to terminate all active calls immediately?')) return;
+
+    setIsTerminating(true);
+    try {
+      const res = await fetch('/api/terminate-calls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDialResult({
+          success: true,
+          message: data.message || `Terminated ${data.count} active call(s).`
+        });
+        loadData();
+      } else {
+        setDialResult({
+          success: false,
+          message: data.error || 'Failed to terminate active calls.'
+        });
+      }
+    } catch (err: any) {
+      setDialResult({
+        success: false,
+        message: err.message || 'Error connecting to terminate calls API.'
+      });
+    } finally {
+      setIsTerminating(false);
     }
   };
 
@@ -554,11 +588,11 @@ export default function ColdCallingHomePage() {
               />
             </div>
 
-            <div className="sm:self-end">
+            <div className="sm:self-end flex flex-col sm:flex-row items-center gap-2">
               <button
                 type="submit"
-                disabled={isDialing}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+                disabled={isDialing || isTerminating}
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isDialing ? (
                   <>
@@ -569,6 +603,26 @@ export default function ColdCallingHomePage() {
                   <>
                     <PhoneOutgoing className="h-4 w-4" />
                     <span>Call Phone Now</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTerminateAllCalls}
+                disabled={isTerminating}
+                title="Immediately hang up and terminate all active carrier phone calls"
+                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isTerminating ? (
+                  <>
+                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Ending Calls...</span>
+                  </>
+                ) : (
+                  <>
+                    <PhoneOff className="h-4 w-4" />
+                    <span>Terminate All Calls</span>
                   </>
                 )}
               </button>

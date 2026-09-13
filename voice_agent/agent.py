@@ -249,9 +249,9 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - If customer says NO / strictly wants Kalyan only / refuses Dombivli:
     State property unavailability explicitly and end the call gracefully:
     "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye!"
-    and immediately call `end_call()` or `update_lead_status(status="not_interested")`.
+    and stop speaking.
 - **Refusal on Pitch (If customer says hard NO / not looking for property / wrong number)**:
-  Politely say: "Okay sir, koi baat nahi. Thank you so much, aapka din shubh ho, bye!" and call `end_call()`.
+  Politely say: "Okay sir, koi baat nahi. Thank you so much, aapka din shubh ho, bye!" and stop speaking.
 
 3. HANDLING DATE CONFUSION, MID-CALL CHANGES & SITE VISIT GUIDANCE
 - **HUMAN CONVERSATIONAL CADENCE (NO ROBOTIC REPETITIONS)**:
@@ -349,9 +349,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 
 9. HANDLING REFUSALS & NO
 - SOFT NO ("Maybe later", "I'll think"): Explore gently once.
-- HARD NO ("Nahi chahiye", "Not interested", "Don't want it"): Respect it immediately: "Koi baat nahi... thank you for your time... aapka din shubh ho... bye!" Call `update_lead_status(status="not_interested")`.
-- DNC ("Don't call me", "Remove my number"): "Ji bilkul... samajh gayi... aapko disturb nahi karungi... aapka din shubh ho... bye!" Call `update_lead_status(status="not_interested")`.
-- NEVER trigger `update_lead_status` on conversational pauses or filler words like "na" or "achha na".
+- HARD NO ("Nahi chahiye", "Not interested", "Don't want it"): Respect it immediately: "Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye!" and stop speaking.
+- DNC ("Don't call me", "Remove my number"): "Ji bilkul, samajh gayi. Aapko disturb nahi karungi. Aapka din shubh ho, bye!" and stop speaking.
 
 10. OFF-TOPIC & UNRELATED CONVERSATION HANDLING (MANDATORY 3-STRIKE PROTOCOL)
 - WHAT IS OFF-TOPIC:
@@ -389,10 +388,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - IF CUSTOMER DECIDES NOT TO BOOK OR WANTS DETAILS FIRST:
   - If customer says "Abhi decide nahi kar pa raha" or "Pehle WhatsApp brochure bhej do":
     Say: "Bilkul, main aapko WhatsApp par brochure aur location link bhej deti hoon. Aap dekh kar jab bhi comfortable ho bata sakte hain. Aapka din shubh ho, bye!"
-    and call `update_lead_status(status="interested", notes="Brochure sent, visit to be decided later")`.
 - When call concludes or client is firmly not interested:
-  - Call `update_lead_status(status="not_interested")` or `end_call()`.
-  - Say: "Aapka din shubh ho... bye!"
+  - Say: "Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye!" and stop speaking.
 
 12. 100% PURE MARATHI MODE (MANDATORY WHEN CALLER SPEAKS OR ASKS FOR MARATHI)
 - TRIGGER: If the caller speaks in Marathi (e.g. "Dombivli station kiti laam ahe?", "Kasa ahat?", "Kiti padel?") OR asks to speak in Marathi (e.g. "kya aap marathi bolti ho?", "marathi mein bolo", "marathi aati hai kya?", "marathi madhe bola", "मराठीत सांगा", "मराठीत बोला"):
@@ -574,7 +571,6 @@ class PriyaRealEstateAgent(Agent):
             f"if in Hindi, say: 'Maine aapka {preferred_day}{time_str} ka site visit confirm kar diya hai. Saari details aur location WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!'."
         )
 
-    @function_tool(description="Call ONLY when client explicitly and firmly refuses (e.g. 'nahi chahiye', 'not interested', 'don't call me', 'wrong number').")
     async def update_lead_status(
         self,
         customer_name: str,
@@ -605,18 +601,17 @@ class PriyaRealEstateAgent(Agent):
             return "Lead marked as interested. You should continue talking and guide them towards a site visit."
         else:
             if self._hangup_fnc:
-                self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+                self._hangup_fnc(wait_for_speech=True, delay_seconds=1.0)
             return (
                 "Lead marked as not interested. Conclude gracefully in customer's active language: "
                 "if in Marathi, say: 'काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार!'; "
                 "if in Hindi, say: 'Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye!'."
             )
 
-    @function_tool(description="End the telephone call after saying goodbye ('Aapka din shubh ho, bye!' or 'तुमचा दिवस चांगला जावो, नमस्कार!') when the conversation has concluded.")
     async def end_call(self) -> str:
         logger.info("📞 [CALL TERMINATION TOOL INVOKED]")
         if self._hangup_fnc:
-            self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+            self._hangup_fnc(wait_for_speech=True, delay_seconds=1.0)
         return (
             "Call termination triggered. Conclude politely and say goodbye in the customer's active language: "
             "if in Marathi, say: 'तुमचा दिवस चांगला जावो, नमस्कार!'; "
@@ -1125,12 +1120,12 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-2 STT (Fast 100ms streaming endpointing without utterance_end delay)
+    # 2. Pre-warm Deepgram Nova-3 STT (Fast ~1.2s streaming multilingual endpointing for Hindi / Marathi / English)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        language="hi",
-        model="nova-2",
-        endpointing_ms=100,
+        language="multi",
+        model="nova-3",
+        endpointing_ms=25,
         smart_format=True,
         keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
@@ -1512,9 +1507,9 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         stt = deepgram.STT(
-            language="hi",
-            model="nova-2",
-            endpointing_ms=100,
+            language="multi",
+            model="nova-3",
+            endpointing_ms=25,
             smart_format=True,
             keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
@@ -1651,9 +1646,9 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 1,
-                "min_duration": 0.65,
-                "resume_false_interruption": True,
+                "min_words": 2,
+                "min_duration": 0.85,
+                "resume_false_interruption": False,
                 "false_interruption_timeout": 1.5,
             }
         }
@@ -2257,20 +2252,17 @@ async def entrypoint(ctx: JobContext):
             # 3. Telecom RTP Jitter Buffer Grace Period
             # Telecom SIP trunks (Vobiz/Twilio) and carrier networks have ~1.0-1.5s jitter buffer latency.
             # Adding 2.5s guarantees the phone speaker delivers the final word ("bye!") in full clarity,
-            # followed by a natural human conversational pause before the carrier line disconnects.
-            grace = max(delay_seconds, 2.5)
-            logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s telecom buffer grace period before sending SIP BYE...")
+            # 3. Telecom Audio Buffer Grace Period
+            # 0.8s guarantees the phone speaker delivers the final word ("bye!") in full clarity
+            grace = max(delay_seconds, 0.8)
+            logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before sending SIP BYE...")
             await asyncio.sleep(grace)
 
-            try:
-                await _finalize_and_save_call("agent_hangup")
-            except Exception as save_err:
-                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
-
+            # 4. IMMEDIATELY disconnect carrier SIP participants and release room
             logger.info("📞 [CALL TERMINATION] Forcing carrier SIP disconnect for remote participants...")
             try:
                 from livekit import api
-                # 1. Force disconnect remote SIP participants to send active SIP BYE to carrier
+                # Force disconnect remote SIP participants to send active SIP BYE to carrier
                 for p in list(ctx.room.remote_participants.values()):
                     try:
                         logger.info(f"📞 [HANGUP] Disconnecting carrier SIP participant {p.identity}...")
@@ -2281,16 +2273,16 @@ async def entrypoint(ctx: JobContext):
                     except Exception as rem_err:
                         logger.warning(f"Could not remove participant {p.identity}: {rem_err}")
 
-                # 2. Delete the room via LiveKit Server API
+                # Delete the room via LiveKit Server API
                 try:
                     await ctx.api.room.delete_room(
                         api.DeleteRoomRequest(room=ctx.room.name)
                     )
-                    logger.info("✅ LiveKit room successfully deleted!")
+                    logger.info("✅ LiveKit room successfully deleted! Carrier line released.")
                 except Exception as del_err:
                     logger.debug(f"Room delete note: {del_err}")
 
-                # 3. Disconnect local agent
+                # Disconnect local agent
                 await ctx.room.disconnect()
             except Exception as e:
                 logger.warning(f"Error in room cleanup: {e}")
@@ -2298,6 +2290,12 @@ async def entrypoint(ctx: JobContext):
                     await ctx.room.disconnect()
                 except Exception:
                     pass
+
+            # 5. Finalize transcript and post-call intelligence in the background (caller is already hung up)
+            try:
+                await _finalize_and_save_call("agent_hangup")
+            except Exception as save_err:
+                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
 
         _hangup_task = asyncio.create_task(_do_disconnect())
 
@@ -2327,11 +2325,12 @@ async def entrypoint(ctx: JobContext):
                 text = raw_text.lower()
                 ending_phrases = [
                     "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-                    "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या"
+                    "shukriya", "bye!", "bye", "baad mein call karte hain",
+                    "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
                 ]
                 if any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
-                    trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
+                    trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
             elif role_str in ["user", "customer"]:
                 last_turn = call_dialogue[-1] if call_dialogue else None

@@ -147,11 +147,11 @@ def format_line(raw_line: str) -> str:
     if "[SILENCE WATCHDOG]" in line and "Terminating call" in line:
         return f"\n {BOLD}{RED}⏳ [SILENCE TIMEOUT (>30s)]{RESET} Gayatri: \"Aapka din shubh ho... bye!\" (Auto-terminating call)"
 
-    if "Disconnecting SIP room in" in line:
-        return f" {MAGENTA}📴 Call ending... Hanging up carrier line.{RESET}"
+    if "audio buffer grace period before sending SIP BYE" in line:
+        return f" {MAGENTA}📴 Goodbye spoken. Disconnecting carrier line in 0.8s...{RESET}"
 
-    if "Terminating SIP call and deleting room" in line:
-        return f" {MAGENTA}✅ Carrier line released (SIP BYE sent).{RESET}"
+    if "Carrier SIP BYE sent" in line or "LiveKit room successfully deleted" in line:
+        return f" {BOLD}{GREEN}✅ Carrier line released (SIP BYE sent). Call ended.{RESET}"
 
     # 10.1 Post-Call Intelligence & Transcript Saving
     if "[SAVING CALL RECORD]" in line:
