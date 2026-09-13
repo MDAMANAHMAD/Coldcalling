@@ -214,8 +214,24 @@ export async function POST(req: NextRequest) {
       } else {
         meta.callLogs.unshift(newCallLog);
       }
-      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 50);
-      await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(meta));
+      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 30);
+
+      // Strip large base64 data URLs from older calls to stay within LiveKit Cloud 512KB room limit
+      for (let i = 1; i < meta.callLogs.length; i++) {
+        if (meta.callLogs[i].recordingUrl?.startsWith('data:')) {
+          meta.callLogs[i].recordingUrl = `/api/recordings/${meta.callLogs[i].callSid}.mp3`;
+        }
+      }
+
+      let metaStr = JSON.stringify(meta);
+      if (Buffer.byteLength(metaStr, 'utf-8') > 500000) {
+        if (meta.callLogs[0]?.recordingUrl?.startsWith('data:')) {
+          meta.callLogs[0].recordingUrl = `/api/recordings/${meta.callLogs[0].callSid}.mp3`;
+        }
+        metaStr = JSON.stringify(meta);
+      }
+
+      await roomClient.updateRoomMetadata('gayatri-persistent-storage', metaStr);
       console.log('[Webhook LiveKit Cloud Sync]: Successfully synced call log to gayatri-persistent-storage');
     } catch (lkErr) {
       console.warn('[Webhook LiveKit Cloud Sync Warning]:', lkErr);

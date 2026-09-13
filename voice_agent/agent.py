@@ -1352,6 +1352,13 @@ async def entrypoint(ctx: JobContext):
         os.makedirs("bookings/recordings", exist_ok=True)
         os.makedirs("bookings/transcripts", exist_ok=True)
         os.makedirs("public/recordings", exist_ok=True)
+        
+        # Ensure session recording directory is persistent on disk and never deleted by /tmp cleanup
+        persistent_rec_dir = Path("bookings/recordings") / ctx.room.name
+        persistent_rec_dir.mkdir(parents=True, exist_ok=True)
+        ctx._session_directory = persistent_rec_dir
+        logger.info(f"📁 [AUDIO RECORDING] Bound session directory to persistent path: {persistent_rec_dir}")
+
         with open("bookings/active_call.lock", "w") as f:
             f.write(str(os.getpid()))
         logger.info("🔒 Active call lock created.")
@@ -1727,32 +1734,51 @@ async def entrypoint(ctx: JobContext):
                     except Exception as close_rec_err:
                         logger.debug(f"RecorderIO aclose note: {close_rec_err}")
 
-                # 2. Check source recording file from RecorderIO output_path or ctx.session_directory
+                # 2. Check source recording file from multiple persistent and session paths
                 found_src = None
+                potential_candidates = []
+
+                # Candidate A: Directly in the persistent room recording folder
+                direct_room_ogg = Path("bookings/recordings") / ctx.room.name / "audio.ogg"
+                potential_candidates.append(direct_room_ogg)
+
+                # Candidate B: From RecorderIO output_path property
                 if hasattr(session, "_recorder_io") and session._recorder_io:
                     try:
                         rec_out = getattr(session._recorder_io, "output_path", None)
                         if callable(rec_out):
                             rec_out = rec_out()
-                        if rec_out and Path(rec_out).exists() and Path(rec_out).stat().st_size > 0:
-                            found_src = Path(rec_out)
-                            logger.info(f"🎙️ [AUDIO RECORDING] Found RecorderIO output at: {found_src} ({found_src.stat().st_size} bytes)")
+                        if rec_out:
+                            potential_candidates.append(Path(rec_out))
                     except Exception as e:
                         logger.warning(f"Could not read RecorderIO output_path: {e}")
 
+                # Candidate C: From JobContext session_directory
+                src_session_dir = getattr(ctx, "session_directory", None)
+                if src_session_dir:
+                    potential_candidates.append(Path(src_session_dir) / "audio.ogg")
+
+                for cand in potential_candidates:
+                    if cand and cand.exists() and cand.stat().st_size > 0:
+                        found_src = cand
+                        logger.info(f"🎙️ [AUDIO RECORDING] Found audio recording at: {found_src} ({found_src.stat().st_size} bytes)")
+                        break
+
+                # Candidate D: Glob search in persistent room dir or session dir
                 if not found_src:
-                    src_session_dir = getattr(ctx, "session_directory", None)
-                    if src_session_dir and Path(src_session_dir).exists():
-                        candidate = Path(src_session_dir) / "audio.ogg"
-                        if candidate.exists() and candidate.stat().st_size > 0:
-                            found_src = candidate
-                            logger.info(f"🎙️ [AUDIO RECORDING] Found audio.ogg in session_directory at: {found_src} ({found_src.stat().st_size} bytes)")
-                        else:
-                            for f in Path(src_session_dir).glob("*.ogg"):
+                    search_dirs = [
+                        Path("bookings/recordings") / ctx.room.name,
+                        Path(src_session_dir) if src_session_dir else None
+                    ]
+                    for s_dir in search_dirs:
+                        if s_dir and s_dir.exists():
+                            for f in s_dir.glob("*.ogg"):
                                 if f.stat().st_size > 0:
                                     found_src = f
-                                    logger.info(f"🎙️ [AUDIO RECORDING] Found audio file via glob: {found_src}")
+                                    logger.info(f"🎙️ [AUDIO RECORDING] Found audio file via glob: {found_src} ({found_src.stat().st_size} bytes)")
                                     break
+                            if found_src:
+                                break
 
                 if found_src and found_src.stat().st_size > 0:
                     os.makedirs("bookings/recordings", exist_ok=True)
@@ -1762,54 +1788,92 @@ async def entrypoint(ctx: JobContext):
                     dest_bookings_mp3 = Path("bookings/recordings") / f"{ctx.room.name}.mp3"
                     dest_public_mp3 = Path("public/recordings") / f"{ctx.room.name}.mp3"
 
-                    # Always save original OGG copy
+                    # Always copy original OGG recording to bookings and public
                     shutil.copy2(found_src, dest_bookings_ogg)
                     try:
                         shutil.copy2(found_src, dest_public_ogg)
                     except Exception:
                         pass
 
-                    # Convert to MP3 using ffmpeg
+                    # Attempt conversion to MP3 using ffmpeg or PyAV
                     mp3_success = False
-                    try:
-                        logger.info(f"🎙️ [AUDIO RECORDING] Converting {found_src.name} to MP3 ({dest_bookings_mp3})...")
-                        ffmpeg_cmd = [
-                            "ffmpeg", "-y",
-                            "-i", str(found_src),
-                            "-codec:a", "libmp3lame",
-                            "-b:a", "128k",
-                            str(dest_bookings_mp3)
-                        ]
-                        res = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
-                        if res.returncode == 0 and dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size > 0:
-                            mp3_success = True
-                            try:
-                                shutil.copy2(dest_bookings_mp3, dest_public_mp3)
-                            except Exception:
-                                pass
-                            logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call MP3 recording saved to {dest_bookings_mp3} ({dest_bookings_mp3.stat().st_size} bytes)")
-                        else:
-                            logger.warning(f"ffmpeg conversion note (code {res.returncode}): {res.stderr.decode('utf-8', errors='ignore')[-200:]}")
-                    except Exception as ff_err:
-                        logger.warning(f"ffmpeg conversion error: {ff_err}")
-
-                    if mp3_success:
-                        # If under 4MB, embed as Data URL for instant, zero-latency browser playback
-                        # without requiring Vercel or cloud storage to host the file.
+                    if shutil.which("ffmpeg"):
                         try:
-                            if dest_bookings_mp3.stat().st_size <= 4 * 1024 * 1024:
-                                with open(dest_bookings_mp3, "rb") as f_aud:
-                                    b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
-                                    recording_url = f"data:audio/mp3;base64,{b64_str}"
-                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) for instant browser playback.")
+                            logger.info(f"🎙️ [AUDIO RECORDING] Converting {found_src.name} to MP3 ({dest_bookings_mp3})...")
+                            ffmpeg_cmd = [
+                                "ffmpeg", "-y",
+                                "-i", str(found_src),
+                                "-codec:a", "libmp3lame",
+                                "-b:a", "32k",
+                                "-ac", "1",
+                                str(dest_bookings_mp3)
+                            ]
+                            res = subprocess.run(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+                            if res.returncode == 0 and dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size > 0:
+                                mp3_success = True
+                                try:
+                                    shutil.copy2(dest_bookings_mp3, dest_public_mp3)
+                                except Exception:
+                                    pass
+                                logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call MP3 recording saved ({dest_bookings_mp3.stat().st_size} bytes)")
                             else:
-                                recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                                logger.warning(f"ffmpeg conversion note: {res.stderr.decode('utf-8', errors='ignore')[-150:]}")
+                        except Exception as ff_err:
+                            logger.warning(f"ffmpeg conversion error: {ff_err}")
+
+                    if not mp3_success:
+                        try:
+                            import av
+                            logger.info(f"🎙️ [AUDIO RECORDING] Converting {found_src.name} to compact MP3 via PyAV ({dest_bookings_mp3})...")
+                            input_container = av.open(str(found_src))
+                            output_container = av.open(str(dest_bookings_mp3), 'w', format='mp3')
+                            in_stream = input_container.streams.audio[0]
+                            out_stream = output_container.add_stream('mp3', rate=24000)
+                            out_stream.bit_rate = 32000
+                            out_stream.layout = 'mono'
+                            resampler = av.AudioResampler(format='s16p', layout='mono', rate=24000)
+                            for frame in input_container.decode(in_stream):
+                                for rf in resampler.resample(frame):
+                                    for packet in out_stream.encode(rf):
+                                        output_container.mux(packet)
+                            for packet in out_stream.encode():
+                                output_container.mux(packet)
+                            input_container.close()
+                            output_container.close()
+                            if dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size > 0:
+                                mp3_success = True
+                                try:
+                                    shutil.copy2(dest_bookings_mp3, dest_public_mp3)
+                                except Exception:
+                                    pass
+                                logger.info(f"🎙️ [AUDIO RECORDING SAVED] Compact MP3 saved via PyAV ({dest_bookings_mp3.stat().st_size} bytes)")
+                        except Exception as pyav_err:
+                            logger.warning(f"PyAV audio conversion error: {pyav_err}")
+
+                    # Embed audio data URL for zero-latency, cloud-free playback on Vercel
+                    max_embed_bytes = 400 * 1024  # 400KB limit for seamless metadata storage
+                    if mp3_success and dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size <= max_embed_bytes:
+                        try:
+                            with open(dest_bookings_mp3, "rb") as f_aud:
+                                b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
+                                recording_url = f"data:audio/mp3;base64,{b64_str}"
+                            logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) as data URL for instant playback.")
                         except Exception as b64_err:
                             logger.warning(f"Error encoding MP3 to data URL: {b64_err}")
                             recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                    elif dest_bookings_ogg.exists() and dest_bookings_ogg.stat().st_size <= max_embed_bytes:
+                        try:
+                            with open(dest_bookings_ogg, "rb") as f_aud:
+                                b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
+                                recording_url = f"data:audio/ogg;base64,{b64_str}"
+                            logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded OGG ({dest_bookings_ogg.stat().st_size} bytes) as data URL for instant playback.")
+                        except Exception as b64_err:
+                            logger.warning(f"Error encoding OGG to data URL: {b64_err}")
+                            recording_url = f"/api/recordings/{ctx.room.name}.ogg"
                     else:
-                        recording_url = f"/api/recordings/{ctx.room.name}.ogg"
-                        logger.info(f"🎙️ [AUDIO RECORDING SAVED] Dual-channel call OGG recording saved to {dest_bookings_ogg} ({found_src.stat().st_size} bytes)")
+                        recording_url = f"/api/recordings/{ctx.room.name}.mp3" if mp3_success else f"/api/recordings/{ctx.room.name}.ogg"
+                else:
+                    logger.warning("⚠️ [AUDIO RECORDING] No audio recording file found on disk.")
             except Exception as rec_err:
                 logger.warning(f"Warning persisting call recording: {rec_err}")
 
@@ -1970,11 +2034,25 @@ async def entrypoint(ctx: JobContext):
                 else:
                     cloud_logs.insert(0, cloud_entry)
 
-                # Keep up to 50 calls
-                existing_meta["callLogs"] = cloud_logs[:50]
+                # Keep up to 30 calls
+                # Strip large base64 data URLs from older calls to stay strictly within LiveKit Cloud 512KB room metadata limit
+                for i in range(1, len(cloud_logs)):
+                    old_rec = cloud_logs[i].get("recordingUrl") or ""
+                    if old_rec.startswith("data:"):
+                        cloud_logs[i]["recordingUrl"] = f"/api/recordings/{cloud_logs[i].get('callSid')}.mp3"
+
+                existing_meta["callLogs"] = cloud_logs[:30]
+                meta_json = json.dumps(existing_meta, ensure_ascii=False)
+                if len(meta_json.encode("utf-8")) > 500000:
+                    # Emergency safety if metadata still exceeds 500KB
+                    if (cloud_entry.get("recordingUrl") or "").startswith("data:"):
+                        cloud_entry["recordingUrl"] = f"/api/recordings/{ctx.room.name}.mp3"
+                        existing_meta["callLogs"][0]["recordingUrl"] = f"/api/recordings/{ctx.room.name}.mp3"
+                    meta_json = json.dumps(existing_meta, ensure_ascii=False)
+
                 await lk_cloud_api.room.update_room_metadata(lk_api.UpdateRoomMetadataRequest(
                     room=cloud_storage_room,
-                    metadata=json.dumps(existing_meta, ensure_ascii=False)
+                    metadata=meta_json
                 ))
                 logger.info("☁️ [LIVEKIT CLOUD SYNC] Synced completed call intelligence to gayatri-persistent-storage!")
             except Exception as lk_sync_err:
@@ -2221,7 +2299,13 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before sending SIP BYE...")
             await asyncio.sleep(grace)
 
-            # 4. Release caller's phone line immediately with active SIP BYE
+            # 4. Finalize transcript, audio recording, and post-call intelligence cleanly BEFORE tearing down room
+            try:
+                await _finalize_and_save_call("agent_hangup")
+            except Exception as save_err:
+                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
+
+            # 5. Release caller's phone line immediately with active SIP BYE
             logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller...")
             try:
                 from livekit import api
@@ -2236,12 +2320,6 @@ async def entrypoint(ctx: JobContext):
                         logger.warning(f"Could not remove participant {p.identity}: {rem_err}")
             except Exception as e:
                 logger.warning(f"Error disconnecting participants: {e}")
-
-            # 5. Finalize transcript and post-call intelligence cleanly BEFORE tearing down room
-            try:
-                await _finalize_and_save_call("agent_hangup")
-            except Exception as save_err:
-                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
 
             # 6. Now that data is safely saved and connections are flushed, delete room and disconnect agent
             try:

@@ -112,23 +112,32 @@ export default function ColdCallingHomePage() {
         console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
       }
 
-      // 2. Read permanently preserved call history from browser storage
+      // 2. Read permanently preserved call history from browser storage (clean up probes)
       let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
       try {
         const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
         if (stored) {
-          permanentHistory = JSON.parse(stored);
+          permanentHistory = JSON.parse(stored).filter((item: any) => {
+            if (!item) return false;
+            const name = (item.customerName || item.leadName || '').toLowerCase();
+            const sid = (item.callSid || item.id || '').toLowerCase();
+            if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
+            return true;
+          });
         }
       } catch (err) {
         console.warn('Could not read permanent call history:', err);
       }
 
-      // 3. Merge server and local history without losing a single call
+      // 3. Merge server and local history into a clean, deduplicated map
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
 
-      // Seed with permanent local history first (filter out any storage artifacts)
+      // Seed with permanent local history first
       for (const item of permanentHistory) {
-        if (item.callSid === 'gayatri-persistent-storage') continue;
+        if (!item || item.callSid === 'gayatri-persistent-storage') continue;
+        const name = (item.customerName || item.leadName || '').toLowerCase();
+        const sid = (item.callSid || item.id || '').toLowerCase();
+        if (sid.includes('probe') || name.includes('probe')) continue;
         const key = item.callSid || item.id;
         map.set(key, item);
       }
@@ -136,21 +145,53 @@ export default function ColdCallingHomePage() {
       // Update / augment with authoritative server logs (complete transcripts & recordings)
       const nowMs = Date.now();
       for (const item of serverLogs) {
-        if (item.callSid === 'gayatri-persistent-storage') continue;
-        const key = item.callSid || item.id;
-        const existing = map.get(key) || Array.from(map.values()).find(e => Boolean(e.callSid && item.callSid && e.callSid === item.callSid));
-        if (existing) {
-          const targetKey = existing.callSid || existing.id;
-          const isPlaceholder = !existing.transcript ||
-            existing.transcript.includes('[Call initiated from Web Dashboard]') ||
-            existing.transcript.includes('[Call In Progress]') ||
-            (existing.outcome === 'Calling...' || existing.outcome === 'Ringing / Calling');
-          if (isPlaceholder || (item.transcript && item.transcript.length >= (existing.transcript || '').length)) {
-            map.set(targetKey, { ...existing, ...item });
-          } else {
-            map.set(targetKey, { ...item, ...existing });
+        if (!item || item.callSid === 'gayatri-persistent-storage') continue;
+        const name = (item.customerName || item.leadName || '').toLowerCase();
+        const sid = (item.callSid || item.id || '').toLowerCase();
+        if (sid.includes('probe') || name.includes('probe')) continue;
+
+        // Search for existing entry in map by callSid, id, or matching room name
+        let existingKey: string | undefined;
+        let existingItem: (CallLog & { leadName: string; leadPhone?: string }) | undefined;
+
+        for (const [k, v] of map.entries()) {
+          if (
+            (item.callSid && v.callSid && item.callSid === v.callSid) ||
+            k === item.id ||
+            (item.callSid && k === item.callSid) ||
+            (item.id && v.id && item.id === v.id)
+          ) {
+            existingKey = k;
+            existingItem = v;
+            break;
           }
+        }
+
+        if (existingKey && existingItem) {
+          // Remove old key so we never have duplicate rows (e.g. placeholder + completed)
+          map.delete(existingKey);
+          const finalKey = item.callSid || existingItem.callSid || item.id;
+
+          const isPlaceholder = !existingItem.transcript ||
+            existingItem.transcript.includes('[Call initiated from Web Dashboard]') ||
+            existingItem.transcript.includes('[Call In Progress]') ||
+            existingItem.transcript.includes('Haan boliye') ||
+            existingItem.outcome === 'Calling...' || existingItem.outcome === 'Ringing / Calling';
+
+          const mergedItem = (isPlaceholder || (item.transcript && item.transcript.length >= (existingItem.transcript || '').length))
+            ? { ...existingItem, ...item }
+            : { ...item, ...existingItem };
+
+          // Preserve recording URL from whichever source has it
+          if (item.recordingUrl) {
+            mergedItem.recordingUrl = item.recordingUrl;
+          } else if (existingItem.recordingUrl && !mergedItem.recordingUrl) {
+            mergedItem.recordingUrl = existingItem.recordingUrl;
+          }
+
+          map.set(finalKey, mergedItem);
         } else {
+          const key = item.callSid || item.id;
           map.set(key, item);
         }
       }
@@ -169,13 +210,11 @@ export default function ColdCallingHomePage() {
           );
           if (completedMatch) {
             map.set(key, { ...item, ...completedMatch });
-          } else {
+          } else if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated from Web Dashboard]')) {
             item.outcome = 'Inquiry Completed';
             item.durationSeconds = item.durationSeconds || 60;
             const callerName = item.customerName || item.leadName || 'Raj';
-            if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated from Web Dashboard]')) {
-              item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${callerName}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
-            }
+            item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${callerName}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
             item.aiSummary = `Call completed with ${callerName}. Conversation recorded and filed.`;
             item.customerName = callerName;
             item.leadName = callerName;
@@ -200,7 +239,12 @@ export default function ColdCallingHomePage() {
       // Also keep modal in sync in real-time if active
       if (selectedCall) {
         const updated = merged.find(c => (c.callSid && c.callSid === selectedCall.callSid) || c.id === selectedCall.id);
-        if (updated && (updated.transcript !== selectedCall.transcript || updated.outcome !== selectedCall.outcome || updated.aiSummary !== selectedCall.aiSummary)) {
+        if (updated && (
+          updated.transcript !== selectedCall.transcript || 
+          updated.outcome !== selectedCall.outcome || 
+          updated.aiSummary !== selectedCall.aiSummary ||
+          updated.recordingUrl !== selectedCall.recordingUrl
+        )) {
           setSelectedCall(updated);
         }
       }

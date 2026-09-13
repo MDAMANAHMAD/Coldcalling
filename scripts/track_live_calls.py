@@ -170,6 +170,12 @@ def format_line(raw_line: str) -> str:
     if "[TRANSCRIPT RECORDED]" in line:
         return f" {GREEN}📝 [TRANSCRIPT SAVED]{RESET} Full dialogue saved to bookings/transcripts/ and call_transcripts.jsonl"
 
+    if "[AUDIO RECORDING EMBEDDED]" in line:
+        return f" {BOLD}{GREEN}🎙️ [AUDIO RECORDING SAVED]{RESET} Audio recording embedded & ready for dashboard playback!"
+
+    if "[AUDIO RECORDING]" in line and "Flushing" not in line:
+        return f" {MAGENTA}🎙️ [AUDIO RECORDING]{RESET} Capturing dual-channel conversation audio..."
+
     if "[WEBHOOK SYNC] Delivering" in line:
         return f" {CYAN}🌐 [WEBHOOK SYNC]{RESET} Transmitting call data to Web Dashboard..."
 
