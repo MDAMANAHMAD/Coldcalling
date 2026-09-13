@@ -188,6 +188,8 @@ def format_line(raw_line: str) -> str:
 
     # 11. Errors
     if "ERROR" in line or "[AGENT SESSION ERROR]" in line:
+        if "Unclosed client session" in line or "Unclosed connector" in line:
+            return ""
         return f" {BOLD}{RED}❌ ERROR:{RESET} {line.split('ERROR')[-1].strip()}"
 
     # 12. Startup / LLM Compilation

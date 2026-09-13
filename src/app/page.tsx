@@ -471,6 +471,32 @@ export default function ColdCallingHomePage() {
     };
   };
 
+  const getSentimentTag = (call: CallLog) => {
+    const sentiment = (call.sentiment || '').toLowerCase();
+    if (sentiment === 'positive') {
+      return {
+        label: 'Positive',
+        bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+        dot: 'bg-emerald-500',
+        emoji: '😊'
+      };
+    }
+    if (sentiment === 'negative') {
+      return {
+        label: 'Negative',
+        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        dot: 'bg-rose-500',
+        emoji: '😟'
+      };
+    }
+    return {
+      label: 'Neutral',
+      bg: 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+      dot: 'bg-slate-400',
+      emoji: '😐'
+    };
+  };
+
   // Filtered call logs
   const filteredCalls = callLogs.filter(call => {
     const nameMatch = (call.customerName || call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -856,6 +882,17 @@ export default function ColdCallingHomePage() {
                           <span>{tag.label}</span>
                         </span>
 
+                        {/* Sentiment Tag */}
+                        {(() => {
+                          const sTag = getSentimentTag(call);
+                          return (
+                            <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${sTag.bg}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${sTag.dot}`} />
+                              <span>{sTag.emoji} {sTag.label}</span>
+                            </span>
+                          );
+                        })()}
+
                         {/* Audio Recording Badge */}
                         {call.recordingUrl && (
                           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
@@ -928,11 +965,18 @@ export default function ColdCallingHomePage() {
                     </h3>
                     {(() => {
                       const tag = getOutcomeTag(selectedCall);
+                      const sTag = getSentimentTag(selectedCall);
                       return (
-                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tag.bg}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
-                          <span>{tag.label}</span>
-                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tag.bg}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
+                            <span>{tag.label}</span>
+                          </span>
+                          <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sTag.bg}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${sTag.dot}`} />
+                            <span>{sTag.emoji} {sTag.label}</span>
+                          </span>
+                        </div>
                       );
                     })()}
                   </div>
@@ -950,9 +994,19 @@ export default function ColdCallingHomePage() {
               </div>
 
               {/* AI Summary Banner */}
-              <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium">
-                <span className="font-bold">AI Call Summary: </span>
-                {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
+              <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center justify-between">
+                <div>
+                  <span className="font-bold">AI Call Summary: </span>
+                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
+                </div>
+                {(() => {
+                  const sTag = getSentimentTag(selectedCall);
+                  return (
+                    <span className={`shrink-0 ml-3 inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${sTag.bg}`}>
+                      <span>{sTag.emoji} {sTag.label} Sentiment</span>
+                    </span>
+                  );
+                })()}
               </div>
 
               {/* Call Audio Player */}

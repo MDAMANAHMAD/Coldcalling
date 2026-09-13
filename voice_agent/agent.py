@@ -228,6 +228,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - HUMAN-LIKE CONVERSATIONAL VARIETY (NEVER SOUND ROBOTIC):
   - Speak like an attentive, natural human property consultant, NOT a rigid script reader.
   - NEVER repeat the exact same sentence or phrasing across turns. Adapt and vary your words naturally based on what the caller said.
+  - STRICTLY FORBIDDEN: NEVER repeat the formula "Humare paas ... start hote hain" back-to-back across multiple turns. Use varied, fresh sentence openings.
   - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" after every answer. Stop speaking and allow the customer to think and reply.
 
 2. OPENING CONVERSATION FLOW
@@ -237,14 +238,17 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
     - If customer asks who is calling or says hello:
       "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
     - If customer already confirmed their name (e.g. 'Haan main [Customer Name] bol raha hoon'):
-      "Ji [Customer Name] ji. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats chhattis lakh rupaye se start hote hain. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+      "Ji [Customer Name] ji, Sai Complex Dombivli East ke regarding call kiya hai. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK?"
     - If customer speaks Marathi:
       "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून... मी [Customer Name] यांच्याशी बोलू शकते का?"
 - **Turn 2 (Direct Value Pitch if identity confirmed in Turn 1)**:
-  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium one BHK aur two BHK flats chhattis lakh rupaye se start ho rahe hain. Aap apne liye one BHK dekh rahe hain ya two BHK?"
-- **When customer specifies configuration ('1 BHK' / '2 BHK')**:
-  - For 1 BHK: "Humare paas one BHK chhattis lakh rupaye se start hote hain, jisme premium layout milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
-  - For 2 BHK: "Humare paas two BHK bahattar lakh rupaye se start hote hain, jisme spacious layout aur modern amenities milti hain. Kya aap actual flat dekhne ke liye site visit karna chahenge?"
+  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+- **When customer specifies configuration ('1 BHK' / '2 BHK') — STRICTLY NON-REPETITIVE PHRASING:**
+  - DO NOT repeat "Humare paas ... start hote hain". Use completely fresh, informative phrasing:
+  - For 2 BHK:
+    "Theek hai. Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
+  - For 1 BHK:
+    "Samajh gayi. One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
 - **Location Shift Handling (When customer mentions Kalyan, Thane, etc.)**:
   - If customer says looking in Kalyan: "Sir humara property Kalyan mein available nahi hai. Humara project Sai Complex Dombivli East mein hai jo Kalyan se sirf fifteen minutes drive par hai. Agar aap Dombivli East consider karna chahein toh kya main details share kar sakti hoon?"
   - If customer strictly refuses Dombivli: "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye."
@@ -304,9 +308,9 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 8. 100% PURE MARATHI MODE
 - Trigger: If caller speaks or asks for Marathi ("kya aap marathi bolti ho?", "marathi madhe bola", "मराठीत बोला"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. आम्ही साई कॉम्प्लेक्सच्या एक आणि दोन बीएचके फ्लॅट्सबद्दल कॉल केला आहे, जे छत्तीस लाख रुपयांपासून सुरू होतात. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके?"
-- 1 BHK: "आमच्याकडे एक बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात, ज्यांचे क्षेत्रफळ तीनशे पंच्याहत्तर स्क्वेअर फूट आहे."
-- 2 BHK: "आमच्याकडे दोन बीएचके फ्लॅट्स बहात्तर लाख रुपयांपासून सुरू होतात, ज्यांचे क्षेत्रफळ सातशे साठ स्क्वेअर फूट आहे."
+- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके?"
+- 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
+- 2 BHK: "छान पर्याय आहे. दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Dombivli Station: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे."
 - Amenities Marathi: "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Visit invite: "छान. मग प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
@@ -1913,6 +1917,7 @@ async def entrypoint(ctx: JobContext):
             # 3. Sync to LiveKit Cloud Shared Metadata (gayatri-persistent-storage)
             # Guarantees that Vercel serverless containers and web dashboard instances
             # persist completed transcripts and never get stuck on "Ringing / Calling".
+            lk_cloud_api = None
             try:
                 from livekit import api as lk_api
                 raw_lk_url = os.getenv("LIVEKIT_URL") or "https://cold-calling-j7qhnkas.livekit.cloud"
@@ -1969,10 +1974,17 @@ async def entrypoint(ctx: JobContext):
                     room=cloud_storage_room,
                     metadata=json.dumps(existing_meta, ensure_ascii=False)
                 ))
-                await lk_cloud_api.aclose()
                 logger.info("☁️ [LIVEKIT CLOUD SYNC] Synced completed call intelligence to gayatri-persistent-storage!")
             except Exception as lk_sync_err:
                 logger.warning(f"Could not sync to LiveKit Cloud metadata: {lk_sync_err}")
+            finally:
+                if lk_cloud_api is not None:
+                    try:
+                        await lk_cloud_api.aclose()
+                        # Allow underlying aiohttp / SSL transports to flush and finish teardown on the event loop
+                        await asyncio.sleep(0.25)
+                    except Exception:
+                        pass
 
         except Exception as e:
             logger.error(f"Failed to record call billing or transcript: {e}", exc_info=True)
@@ -2201,20 +2213,16 @@ async def entrypoint(ctx: JobContext):
                         break
                     await asyncio.sleep(0.15)
 
-            # 3. Telecom RTP Jitter Buffer Grace Period
-            # Telecom SIP trunks (Vobiz/Twilio) and carrier networks have ~1.0-1.5s jitter buffer latency.
-            # Adding 2.5s guarantees the phone speaker delivers the final word ("bye!") in full clarity,
             # 3. Telecom Audio Buffer Grace Period
             # 0.8s guarantees the phone speaker delivers the final word ("bye!") in full clarity
             grace = max(delay_seconds, 0.8)
             logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before sending SIP BYE...")
             await asyncio.sleep(grace)
 
-            # 4. IMMEDIATELY disconnect carrier SIP participants and release room
-            logger.info("📞 [CALL TERMINATION] Forcing carrier SIP disconnect for remote participants...")
+            # 4. Release caller's phone line immediately with active SIP BYE
+            logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller...")
             try:
                 from livekit import api
-                # Force disconnect remote SIP participants to send active SIP BYE to carrier
                 for p in list(ctx.room.remote_participants.values()):
                     try:
                         logger.info(f"📞 [HANGUP] Disconnecting carrier SIP participant {p.identity}...")
@@ -2224,30 +2232,29 @@ async def entrypoint(ctx: JobContext):
                         logger.info(f"✅ Carrier SIP BYE sent to {p.identity}!")
                     except Exception as rem_err:
                         logger.warning(f"Could not remove participant {p.identity}: {rem_err}")
-
-                # Delete the room via LiveKit Server API
-                try:
-                    await ctx.api.room.delete_room(
-                        api.DeleteRoomRequest(room=ctx.room.name)
-                    )
-                    logger.info("✅ LiveKit room successfully deleted! Carrier line released.")
-                except Exception as del_err:
-                    logger.debug(f"Room delete note: {del_err}")
-
-                # Disconnect local agent
-                await ctx.room.disconnect()
             except Exception as e:
-                logger.warning(f"Error in room cleanup: {e}")
-                try:
-                    await ctx.room.disconnect()
-                except Exception:
-                    pass
+                logger.warning(f"Error disconnecting participants: {e}")
 
-            # 5. Finalize transcript and post-call intelligence in the background (caller is already hung up)
+            # 5. Finalize transcript and post-call intelligence cleanly BEFORE tearing down room
             try:
                 await _finalize_and_save_call("agent_hangup")
             except Exception as save_err:
                 logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
+
+            # 6. Now that data is safely saved and connections are flushed, delete room and disconnect agent
+            try:
+                from livekit import api
+                await ctx.api.room.delete_room(
+                    api.DeleteRoomRequest(room=ctx.room.name)
+                )
+                logger.info("✅ LiveKit room successfully deleted! Carrier line released.")
+            except Exception as del_err:
+                logger.debug(f"Room delete note: {del_err}")
+
+            try:
+                await ctx.room.disconnect()
+            except Exception as e:
+                logger.warning(f"Error in room disconnect: {e}")
 
         _hangup_task = asyncio.create_task(_do_disconnect())
 
