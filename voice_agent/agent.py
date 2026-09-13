@@ -1048,6 +1048,7 @@ STT_KEYWORDS = [
     ("budget", 1.5),
     ("visit", 1.5),
 ]
+STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
 STT_REPLACE = {
     "washing station": "Vashi station",
@@ -1127,7 +1128,7 @@ def prewarm_fnc(proc: JobProcess):
         model="nova-3",
         endpointing_ms=25,
         smart_format=True,
-        keywords=STT_KEYWORDS,
+        keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
@@ -1511,7 +1512,7 @@ async def entrypoint(ctx: JobContext):
             model="nova-3",
             endpointing_ms=25,
             smart_format=True,
-            keywords=STT_KEYWORDS,
+            keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
             api_key=deepgram_key
         )
