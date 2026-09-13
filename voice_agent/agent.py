@@ -142,13 +142,14 @@ def _phonetic_push_text(self, token: str) -> None:
         else:
             last_space = self._phonetic_buf.rfind(' ')
             if last_space != -1:
-                to_push = self._phonetic_buf[:last_space]
+                # Keep the space on to_push so adjacent words are NEVER merged/squashed
+                to_push = self._phonetic_buf[:last_space + 1]
                 self._phonetic_buf = self._phonetic_buf[last_space + 1:]
             else:
                 to_push = self._phonetic_buf
                 self._phonetic_buf = ''
 
-        if to_push.strip():
+        if to_push:
             normalized = normalize_phonetics(to_push)
             _orig_cartesia_push_text(self, normalized)
 
@@ -156,12 +157,19 @@ def _phonetic_flush(self) -> None:
     if hasattr(self, '_phonetic_buf') and self._phonetic_buf:
         leftover = self._phonetic_buf
         self._phonetic_buf = ''
-        if leftover.strip():
+        if leftover:
             _orig_cartesia_push_text(self, normalize_phonetics(leftover))
     _orig_cartesia_flush(self)
 
+_orig_cartesia_end_input = getattr(cartesia.tts.SynthesizeStream, "end_input", None)
+def _phonetic_end_input(self) -> None:
+    _phonetic_flush(self)
+    if _orig_cartesia_end_input:
+        _orig_cartesia_end_input(self)
+
 cartesia.tts.SynthesizeStream.push_text = _phonetic_push_text
 cartesia.tts.SynthesizeStream.flush = _phonetic_flush
+cartesia.tts.SynthesizeStream.end_input = _phonetic_end_input
 
 _orig_cartesia_synthesize = cartesia.TTS.synthesize
 def _phonetic_synthesize(self, text: str, **kwargs):
@@ -213,24 +221,38 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - You do NOT try to sell the entire property over the phone.
 - You behave like an experienced human property advisor who understands people, asks good questions, answers intelligently, handles objections calmly, and knows when to stop talking.
 - NATURAL HUMAN BEHAVIOR & CADENCE:
-  - Speak with warm conversational acknowledgments ("Haan ji", "Ji bilkul", "Samajh gayi", "Theek hai", "Achha" in Hindi; "हो नक्कीच", "समजले मला", "छान" in Marathi) before providing answers.
-  - Never repeat the exact same acknowledgment or question back-to-back.
+  - Speak with warm conversational acknowledgments ("Haan ji", "Ji bilkul", "Samajh gayi", "Theek hai", "Achha", "Sahi hai" in Hindi; "हो नक्कीच", "समजले मला", "छान" in Marathi) before providing answers.
+  - Rotate acknowledgments naturally. NEVER start every turn with "Ji bilkul" or "Haan ji".
   - ARTICULATION & PRONUNCIATION: Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
 - STRICT CONVERSATION BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 20-25 words). Keep answers direct, punchy, and concise so speech generates and starts immediately without long monologues. Maintain appropriate pauses so the user has space to think or correct you.
+- STRICT ANTI-REPETITION CONSTRAINTS (MANDATORY):
+  - NEVER repeat the exact same sentence, phrasing, or question across the conversation!
+  - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" or "Aur koi detail janna chahte hain?" after every answer! Real humans DO NOT repeatedly ask this.
+  - Confident human advisors frequently answer questions directly and STOP TALKING, allowing the customer to think and speak.
+  - When you do ask a follow-up, vary your approach dynamically:
+    - Focus on their requirement: "Aap apne hisaab se kab tak shift karne ka plan kar rahe hain?"
+    - Focus on commute: "Yeh location aapke daily travel ke hisaab se kaisa rahega?"
+    - Focus on visit: "Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
+    - Or simply provide the answer directly with ZERO follow-up question!
 
 2. OPENING CONVERSATION FLOW (MANDATORY STEP-BY-STEP SEQUENCE)
-- **Turn 1 (Spoken by Agent on call connect)**:
-  "Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
-- **Turn 2 (Direct Value Pitch when customer responds)**:
-  - If customer responds in Hindi/Hinglish (e.g. 'haan', 'boliye', 'ji boliye', 'kaun?', 'kya kaam tha?'):
-    "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium 1 BHK aur 2 BHK flats chhattis lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye 1 BHK dekh rahe hain ya 2 BHK?"
-  - If customer asks to speak in Marathi OR responds in Marathi (e.g. 'marathi madhe bola', 'kya aap marathi bolti ho?', 'kasa ahat', 'kay challay', 'marathit sanga'):
-    "हो नक्कीच! मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. आम्ही साई कॉम्प्लेक्सच्या एक आणि दोन बीएचके फ्लॅट्सबद्दल कॉल केला आहे, जे छत्तीस लाख रुपयांपासून सुरू होतात. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके?"
+- **Turn 0 (Call Connect Greeting)**:
+  - The call starts with the agent saying "Hello?".
+- **Turn 1 (When caller responds to 'Hello?' e.g. 'haan', 'hello kaun?', 'boliye', 'kaun?', 'kya kaam tha?', 'ji'):**
+  - Deliver your warm, natural introduction directly:
+    - If customer asks who is calling or says hello:
+      "Haan ji! Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
+    - If customer already confirmed their name (e.g. 'Haan main [Customer Name] bol raha hoon' / 'Haan boliye main hi hoon'):
+      "Ji [Customer Name] ji! Sai Complex Dombivli East ke regarding call kiya hai... yahan premium 1 BHK aur 2 BHK flats chhattis lakh rupaye se start ho rahe hain. Aap apne liye 1 BHK dekh rahe hain ya 2 BHK?"
+    - If customer asks to speak in Marathi OR responds in Marathi:
+      "हो नक्कीच! मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून... मी [Customer Name] यांच्याशी बोलू शकते का?"
+- **Turn 2 (Direct Value Pitch if customer just confirmed identity in Turn 1)**:
+  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium 1 BHK aur 2 BHK flats chhattis lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye 1 BHK dekh rahe hain ya 2 BHK?"
   (DO NOT ask "Kya aap Dombivli mein property dekh rahe hain?" or other restrictive qualifying questions. Pitch directly).
 - **When customer specifies configuration (e.g. '1 BHK', '2 BHK')**:
-  State the exact options and price, and ask if they have questions:
-  - For 1 BHK: "Humare paas 1 BHK chhattis lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
-  - For 2 BHK: "Humare paas 2 BHK bahattar lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
+  State the exact options and price with natural variation:
+  - For 1 BHK: "Humare paas 1 BHK chhattis lakh rupaye se start hote hain with premium layout. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
+  - For 2 BHK: "Humare paas 2 BHK bahattar lakh rupaye se start hote hain with modern amenities. Aap family ke saath shift karne ka plan kar rahe hain?"
 
 - **Location Preference & Shift Handling (CRITICAL - When customer mentions Kalyan, Thane, Navi Mumbai, etc.)**:
   - If customer says they are looking in Kalyan or any other location:
@@ -247,9 +269,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 3. HANDLING DATE CONFUSION, MID-CALL CHANGES & SITE VISIT GUIDANCE
 - **HUMAN CONVERSATIONAL CADENCE (NO ROBOTIC REPETITIONS)**:
   - Keep responses short, warm, and natural (1 to 2 sentences max, 20-25 words).
-  - DO NOT repeatedly ask "Kya aap weekend pe available ho?" after every answer!
-  - When answering customer questions (pricing, amenities, connectivity, distance), answer directly, then warmly check:
-    "Aur project se related aapka koi sawaal hai?" or "Aur koi detail janna chahte hain?"
+  - DO NOT repeatedly ask "Kya aap weekend pe available ho?" or "Aur project se related aapka koi sawaal hai?" after every turn!
+  - Answer the customer's specific question directly, then either pause naturally or ask an intelligent follow-up.
 - **SMOOTH SITE VISIT INVITATION**:
   - After answering questions, or when customer says they have no more questions (e.g. "nahi", "aur kuch nahi", "bas yahi tha"):
     Invite them naturally for a visit:
@@ -1538,7 +1559,10 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
-                temperature=0.3
+                temperature=0.3,
+                presence_penalty=0.4,
+                frequency_penalty=0.5,
+                max_output_tokens=150
             )
         elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
@@ -1552,7 +1576,10 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
-                temperature=0.3
+                temperature=0.3,
+                presence_penalty=0.4,
+                frequency_penalty=0.5,
+                max_output_tokens=150
             )
         ctx.proc.userdata["llm"] = llm
     
@@ -1629,7 +1656,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.18,
+                "min_delay": 0.40,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -1638,8 +1665,9 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.25,
+                "min_duration": 0.65,
                 "resume_false_interruption": True,
+                "false_interruption_timeout": 1.5,
             }
         }
     )
@@ -2051,6 +2079,7 @@ async def entrypoint(ctx: JobContext):
     has_prompted_silence = False
     agent_is_speaking = False
     intro_finished = False
+    caller_has_spoken = False
     watchdog_task = None
 
     @session.on("error")
@@ -2059,9 +2088,10 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, has_prompted_silence
+        nonlocal t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken
         try:
             if ev.new_state == "speaking":
+                caller_has_spoken = True
                 t_last_activity = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
@@ -2096,7 +2126,8 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
-        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence
+        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken
+        caller_has_spoken = True
         t_last_activity = time.time()
         has_prompted_silence = False
         if ev.transcript:
@@ -2324,9 +2355,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
-        # Keep up to 14 recent dialogue items + system prompt (avoids forgetting user requirements while keeping TTFT fast)
+        # Keep up to 10 recent dialogue items + system prompt (avoids forgetting user requirements while keeping TTFT fast)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            max_dialogue_items = 14
+            max_dialogue_items = 10
             items = session._chat_ctx.items
             if len(items) > max_dialogue_items + 1:
                 sys_prompt = items[0]
@@ -2444,38 +2475,57 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 1.2s for WebRTC audio negotiation and SIP RTP streams to fully settle
-    logger.info("⏳ Allowing 1.2s for audio bridge and SIP RTP connection to settle...")
-    await asyncio.sleep(1.2)
+    # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle
+    logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle...")
+    await asyncio.sleep(0.8)
 
-    greeting_text = (
-        f"Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. "
-        f"Kya main {customer_name} se baat kar sakti hoon?"
-    )
+    # Human Call Pickup Flow (User Request):
+    # Do NOT start the full intro monologue immediately upon call connect!
+    # A human starts by saying "Hello?" and repeats every 2 seconds until the caller responds.
+    # Once the caller responds (e.g. "Haan", "Boliye", "Kaun?"), Gayatri introduces herself in Turn 1.
+    hello_prompts = [
+        "Hello?",
+        "Haan ji hello?",
+        "Hello?",
+        "Hello, aawaaz aa rahi hai?",
+    ]
 
-    # Speak greeting immediately after bridge has settled.
-    # CRITICAL: allow_interruptions=False guarantees the opening greeting is NOT truncated
-    # by line pickup clicks, initial background noise, or caller saying 'Hello' as they lift the phone.
-    logger.info("🎙️ Speaking Greeting to caller (protected from false interruption)...")
-    try:
-        greeting_speech = session.say(greeting_text, allow_interruptions=False)
-        elapsed_sec = round(time.time() - t_call_start, 1)
-        if not call_dialogue or call_dialogue[-1].get("text", "").strip() != greeting_text.strip():
-            call_dialogue.append({"role": "agent", "text": greeting_text.strip(), "time": elapsed_sec})
-        
-        # Block until Gayatri has COMPLETELY finished speaking the entire intro part!
-        if greeting_speech:
-            try:
-                logger.info("⏳ Waiting for Gayatri intro speech to completely finish playing to caller...")
-                await greeting_speech.wait_for_playout()
-                logger.info("🎙️ [INTRO FINISHED] Gayatri has completed speaking the entire intro part! 10s silence countdown starts NOW.")
-            except Exception as playout_err:
-                logger.debug(f"Greeting playout exception: {playout_err}")
-    except Exception as e:
-        logger.warning(f"Greeting error: {e}")
+    for idx, prompt_str in enumerate(hello_prompts):
+        if caller_has_spoken or _hangup_scheduled:
+            break
+
+        logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}'...")
+        try:
+            h_speech = session.say(prompt_str, allow_interruptions=True)
+            elapsed_sec = round(time.time() - t_call_start, 1)
+            call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
+            if h_speech:
+                await h_speech.wait_for_playout()
+        except Exception as e:
+            logger.warning(f"Error speaking hello greeting: {e}")
+
+        # Wait 2.0s for caller response
+        t_wait_hello = time.time()
+        while time.time() - t_wait_hello < 2.0:
+            if caller_has_spoken or _hangup_scheduled:
+                break
+            await asyncio.sleep(0.1)
+
+    if not caller_has_spoken and not _hangup_scheduled:
+        logger.info("⏳ Caller silent after 4 'Hello' attempts (~10-12s). Terminating call.")
+        farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
+        try:
+            sp = session.say(farewell_text, allow_interruptions=False)
+            elapsed_sec = round(time.time() - t_call_start, 1)
+            call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
+            if sp:
+                await sp.wait_for_playout()
+        except Exception as e:
+            logger.warning(f"Error speaking silence farewell: {e}")
+        trigger_hangup(wait_for_speech=False, delay_seconds=2.0)
+        return
 
     # Silence Watchdog: 10s -> "Hello?", 30s -> Auto Hangup
-    # The countdown of 10s ONLY starts now, AFTER Gayatri has finished speaking her entire intro!
     t_last_activity = time.time()
     has_prompted_silence = False
     intro_finished = True
