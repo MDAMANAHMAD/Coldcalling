@@ -82,9 +82,9 @@ def normalize_phonetics(text: str) -> str:
             (r'\b72\b', 'बहात्तर'),
             (r'\b50\b', 'पन्नास'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वेअर फूट'),
-            (r'\b1\s*BHK\b', 'एक बी.एच.के.'),
-            (r'\b2\s*BHK\b', 'दोन बी.एच.के.'),
-            (r'\bBHK\b', 'बी.एच.के.'),
+            (r'\b1\s*BHK\b', 'एक बीएचके'),
+            (r'\b2\s*BHK\b', 'दोन बीएचके'),
+            (r'\bBHK\b', 'बीएचके'),
             (r'\b15\s*(-|te)\s*20\b', 'पंधरा ते वीस'),
             (r'\b15\b', 'पंधरा'),
             (r'\b20\b', 'वीस'),
@@ -100,13 +100,17 @@ def normalize_phonetics(text: str) -> str:
             (r'\b1110\b', 'eleven hundred ten'),
             (r'\b2285\b', 'twenty two hundred eighty five'),
             (r'\b76\s*0\b', 'seven hundred sixty'),
-            (r'\b36\b', 'thirty six'),
-            (r'\b72\b', 'seventy two'),
+            (r'\b36\b', 'chhattis'),
+            (r'\b72\b', 'bahattar'),
+            (r'\bseventy\s*two\b', 'bahattar'),
+            (r'\bthirty\s*six\b', 'chhattis'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
-            (r'\b1\s*BHK\b', 'one B.H.K.'),
-            (r'\b2\s*BHK\b', 'two B.H.K.'),
-            (r'\bBHK\b', 'B.H.K.'),
+            (r'\b2\s*BHK\b', 'do BHK'),
+            (r'\btwo\s*BHK\b', 'do BHK'),
+            (r'\b1\s*BHK\b', 'one BHK'),
+            (r'\btwo\b', 'do'),
+            (r'\bB\.H\.K\.\b', 'BHK'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
             (r'\b3\s*(pm|baje)\b', 'three pm'),
@@ -219,14 +223,14 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   "Hello... Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
 - **Turn 2 (Direct Value Pitch when customer responds)**:
   - If customer responds in Hindi/Hinglish (e.g. 'haan', 'boliye', 'ji boliye', 'kaun?', 'kya kaam tha?'):
-    "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium one aur two BHK flats thirty six lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye one BHK dekh rahe hain ya two BHK?"
+    "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan premium 1 BHK aur 2 BHK flats chhattis lakh rupaye se start ho rahe hain with modern amenities. Aap apne liye 1 BHK dekh rahe hain ya 2 BHK?"
   - If customer asks to speak in Marathi OR responds in Marathi (e.g. 'marathi madhe bola', 'kya aap marathi bolti ho?', 'kasa ahat', 'kay challay', 'marathit sanga'):
     "हो नक्कीच! मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. आम्ही साई कॉम्प्लेक्सच्या एक आणि दोन बीएचके फ्लॅट्सबद्दल कॉल केला आहे, जे छत्तीस लाख रुपयांपासून सुरू होतात. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके?"
   (DO NOT ask "Kya aap Dombivli mein property dekh rahe hain?" or other restrictive qualifying questions. Pitch directly).
-- **When customer specifies configuration (e.g. 'one BHK', 'two BHK')**:
+- **When customer specifies configuration (e.g. '1 BHK', '2 BHK')**:
   State the exact options and price, and ask if they have questions:
-  - For 1 BHK: "Humare paas one BHK thirty six lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
-  - For 2 BHK: "Humare paas two BHK seventy two lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
+  - For 1 BHK: "Humare paas 1 BHK chhattis lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
+  - For 2 BHK: "Humare paas 2 BHK bahattar lakh rupaye se start hote hain. Aur project se related aapka koi sawaal hai?"
 
 - **Location Preference & Shift Handling (CRITICAL - When customer mentions Kalyan, Thane, Navi Mumbai, etc.)**:
   - If customer says they are looking in Kalyan or any other location:
@@ -343,21 +347,21 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 
 10. OFF-TOPIC & UNRELATED CONVERSATION HANDLING (MANDATORY 3-STRIKE PROTOCOL)
 - WHAT IS OFF-TOPIC:
-  When the caller persistently discusses subjects unrelated to Sai Complex property, asks personal questions to Gayatri ("Aap kahan rehti ho?", "Aap single ho kya?", "Aapki shaadi hui hai kya?", "Aapka boyfriend hai?", "Aap sundar lagti ho"), flirts, cracks jokes, uses abusive or vulgar language, discusses politics/weather/cricket/movies, or persistently trolls.
-- STRICT 3-STRIKE PROGRESSION:
+  When the caller persistently discusses subjects unrelated to Sai Complex property, asks personal questions to Gayatri ("Aap kahan rehti ho?", "Aap single ho kya?", "Aapki shaadi hui hai kya?", "Aapka boyfriend hai?", "Khana khaya kya?", "Aap sundar lagti ho"), flirts, cracks jokes, uses abusive or vulgar language, discusses politics/weather/cricket/movies, or persistently trolls.
+- STRICT 3-STRIKE PROGRESSION (SPEAK DIRECTLY IN 1 SHORT SENTENCE, ZERO DELAY):
   - **STRIKE 1 (First Off-Topic Occurrence)**:
     - Politely acknowledge and gently steer the caller back to Sai Complex Dombivli East:
     - Hindi: "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya hum flats ya property details ke baare mein baat kar sakte hain?"
     - Marathi: "मी साई कॉम्प्लेक्स डोंबिवली पूर्वबद्दल बोलत आहे... आपण प्रोजेक्ट किंवा फ्लॅट्सच्या पर्यायांबद्दल बोलूया का?"
   - **STRIKE 2 (Second Off-Topic Occurrence — MANDATORY SOFT WARNING)**:
-    - If the caller goes off-topic a 2nd time, you MUST call `handle_off_topic(action="warn")` and deliver a polite but firm **SOFT WARNING**:
+    - If the caller goes off-topic a 2nd time, deliver a polite but firm **SOFT WARNING** directly in your spoken response without calling any tools:
     - Hindi: "Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?"
     - Marathi: "सर, कृपया मी विनंती करते की आपण फक्त साई कॉम्प्लेक्स प्रोजेक्टबद्दलच बोलूया, अन्यथा मला कॉल कट करावा लागेल. आपण फ्लॅट्सबद्दल बोलू इच्छिता का?"
   - **STRIKE 3 (Third Off-Topic Occurrence — IMMEDIATE CALL TERMINATION)**:
-    - If the caller goes off-topic AGAIN after receiving the soft warning, do NOT engage further. Conclude immediately and call `handle_off_topic(action="terminate")`:
+    - If the caller goes off-topic AGAIN after receiving the soft warning, do NOT engage further. Speak the final farewell directly in your response and the system will automatically terminate the carrier call:
     - Hindi: "Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye!"
     - Marathi: "असे वाटते की आपण सध्या प्रॉपर्टीमध्ये स्वारस्य ठेवत नाही आहात. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार!"
-  - STRICT RULE: Do NOT debate, argue, or get trapped into repetitive loops with off-topic callers. Always execute Strike 1 -> Strike 2 (Soft Warning) -> Strike 3 (Termination).
+  - STRICT RULE: Speak the response directly without calling tools for off-topic handling. Always execute Strike 1 -> Strike 2 (Soft Warning) -> Strike 3 (Termination).
 
 11. SCHEDULING MODE & CALL ENDING
 - STAY ON CALL UNTIL EXPLICIT CONFIRMATION IS REACHED:
@@ -611,11 +615,10 @@ class PriyaRealEstateAgent(Agent):
             "if in Hindi, say: 'Aapka din shubh ho, bye!'."
         )
 
-    @function_tool(description="Manage callers who repeatedly drift off-topic, ask personal questions to Gayatri, flirt, make jokes, or discuss unrelated matters. Call action='warn' on the second off-topic turn to issue a polite soft warning. Call action='terminate' on the third off-topic turn to politely terminate the call.")
-    async def handle_off_topic(
+    def record_off_topic(
         self,
         action: str  # "warn" or "terminate"
-    ) -> str:
+    ) -> None:
         self.off_topic_count = getattr(self, "off_topic_count", 0) + 1
         logger.warning(f"⚠️ [OFF-TOPIC PROTOCOL] Strike {self.off_topic_count} | Action: {action}")
 
@@ -635,17 +638,6 @@ class PriyaRealEstateAgent(Agent):
         if action == "terminate" or self.off_topic_count >= 3:
             if self._hangup_fnc:
                 self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
-            return (
-                "Off-topic limit reached. Conclude immediately and say goodbye in the customer's active language: "
-                "if in Marathi, say: 'असे वाटते की आपण सध्या प्रॉपर्टीमध्ये स्वारस्य ठेवत नाही आहात. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार!'; "
-                "if in Hindi, say: 'Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye!'."
-            )
-        else:
-            return (
-                "Soft warning issued. Deliver the polite soft warning in the customer's active language: "
-                "if in Marathi, say: 'सर, कृपया मी विनंती करते की आपण फक्त साई कॉम्प्लेक्स प्रोजेक्टबद्दलच बोलूया, अन्यथा मला कॉल कट करावा लागेल. आपण फ्लॅट्सबद्दल बोलू इच्छिता का?'; "
-                "if in Hindi, say: 'Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?'."
-            )
 
     @function_tool(description="Send Sai Complex brochure or pricing to client on WhatsApp.")
     async def send_whatsapp_brochure(
@@ -2128,7 +2120,7 @@ async def entrypoint(ctx: JobContext):
                 r"\b(kahan\s*rehti|kidhar\s*rehti|kuthe\s*rahtes|kuthe\s*rahta)\b",
                 r"\b(umar\s*kitni|age\s*kya|tumchi\s*vay)\b",
                 r"\b(photo\s*bhejo|photo\s*pathva|insta|instagram)\b",
-                r"\b(chai\s*peeyoge|coffee\s*peeyoge|date\s*pe|dinner)\b",
+                r"\b(khana|khaana|nashta|lunch|dinner|chai\s*peeyoge|coffee\s*peeyoge|date\s*pe)\b",
                 r"\b(cricket|ipl|score|mausam|havaaman|politics|modi|rahul|election)\b",
                 r"\b(joke\s*suno|joke\s*sunao|chutkula|shayari|gana\s*gao)\b",
             ]
@@ -2143,12 +2135,12 @@ async def entrypoint(ctx: JobContext):
                         if cnt == 2:
                             hist.add_message(
                                 role="system",
-                                content="[OFF-TOPIC STRIKE 2 ALERT] Caller is off-topic for the 2nd time. You MUST call handle_off_topic(action='warn') and deliver the soft warning to stay on property topics or disconnect."
+                                content="[OFF-TOPIC STRIKE 2 ALERT] Caller is off-topic for the 2nd time. Speak the soft warning directly in your response: 'Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?'"
                             )
                         elif cnt >= 3:
                             hist.add_message(
                                 role="system",
-                                content="[OFF-TOPIC STRIKE 3 ALERT] Caller is off-topic again after soft warning. You MUST call handle_off_topic(action='terminate') and conclude the call immediately with the required farewell."
+                                content="[OFF-TOPIC STRIKE 3 ALERT] Caller is off-topic again after soft warning. Conclude immediately with the farewell: 'Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye!'"
                             )
                 except Exception as steer_err:
                     logger.debug(f"Could not inject off-topic steering: {steer_err}")
@@ -2257,14 +2249,33 @@ async def entrypoint(ctx: JobContext):
             except Exception as save_err:
                 logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
 
-            logger.info("📞 [CALL TERMINATION] Terminating SIP call and deleting room now.")
+            logger.info("📞 [CALL TERMINATION] Forcing carrier SIP disconnect for remote participants...")
             try:
-                if hasattr(ctx, "delete_room"):
-                    await ctx.delete_room()
-                else:
-                    await ctx.room.disconnect()
+                from livekit import api
+                # 1. Force disconnect remote SIP participants to send active SIP BYE to carrier
+                for p in list(ctx.room.remote_participants.values()):
+                    try:
+                        logger.info(f"📞 [HANGUP] Disconnecting carrier SIP participant {p.identity}...")
+                        await ctx.api.room.remove_participant(
+                            api.RoomParticipantIdentity(room=ctx.room.name, identity=p.identity)
+                        )
+                        logger.info(f"✅ Carrier SIP BYE sent to {p.identity}!")
+                    except Exception as rem_err:
+                        logger.warning(f"Could not remove participant {p.identity}: {rem_err}")
+
+                # 2. Delete the room via LiveKit Server API
+                try:
+                    await ctx.api.room.delete_room(
+                        api.DeleteRoomRequest(room=ctx.room.name)
+                    )
+                    logger.info("✅ LiveKit room successfully deleted!")
+                except Exception as del_err:
+                    logger.debug(f"Room delete note: {del_err}")
+
+                # 3. Disconnect local agent
+                await ctx.room.disconnect()
             except Exception as e:
-                logger.warning(f"Error terminating room via delete_room: {e}")
+                logger.warning(f"Error in room cleanup: {e}")
                 try:
                     await ctx.room.disconnect()
                 except Exception:
