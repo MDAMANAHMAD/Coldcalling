@@ -129,26 +129,13 @@ def _phonetic_push_text(self, token: str) -> None:
         self._phonetic_buf = ''
     self._phonetic_buf += token
 
-    # Buffer until clause punctuation or at least 5 words to let Cartesia synthesize full phrases
-    # without cutting off word endings or stuttering between single words
-    has_punct = any(c in self._phonetic_buf for c in '.,!?;:\n')
-    word_count = len(self._phonetic_buf.split())
-
-    if has_punct or word_count >= 5:
-        if has_punct:
-            parts = re.split(r'([.,!?;:\n]+)', self._phonetic_buf)
-            to_push = ''.join(parts[:-1])
-            self._phonetic_buf = parts[-1]
-        else:
-            last_space = self._phonetic_buf.rfind(' ')
-            if last_space != -1:
-                # Keep the space on to_push so adjacent words are NEVER merged/squashed
-                to_push = self._phonetic_buf[:last_space + 1]
-                self._phonetic_buf = self._phonetic_buf[last_space + 1:]
-            else:
-                to_push = self._phonetic_buf
-                self._phonetic_buf = ''
-
+    # Buffer until true sentence punctuation (. ! ? \n) to allow Cartesia to synthesize
+    # complete, unbroken sentences with smooth, continuous prosody and zero voice breaks
+    has_sentence_end = any(c in self._phonetic_buf for c in '.!?\n')
+    if has_sentence_end:
+        parts = re.split(r'([.!?\n]+)', self._phonetic_buf)
+        to_push = ''.join(parts[:-1])
+        self._phonetic_buf = parts[-1]
         if to_push:
             normalized = normalize_phonetics(to_push)
             _orig_cartesia_push_text(self, normalized)
@@ -230,7 +217,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" or "Aur koi detail janna chahte hain?" after every answer! Real humans DO NOT repeatedly ask this.
   - Confident human advisors frequently answer questions directly and STOP TALKING, allowing the customer to think and speak.
   - When you do ask a follow-up, vary your approach dynamically:
-    - Focus on their requirement: "Aap apne hisaab se kab tak shift karne ka plan kar rahe hain?"
+    - Focus on their preference: "Aap ready-to-move dekh rahe hain ya under-construction chalega?"
     - Focus on commute: "Yeh location aapke daily travel ke hisaab se kaisa rahega?"
     - Focus on visit: "Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
     - Or simply provide the answer directly with ZERO follow-up question!
@@ -252,7 +239,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **When customer specifies configuration (e.g. '1 BHK', '2 BHK')**:
   State the exact options and price with natural variation:
   - For 1 BHK: "Humare paas 1 BHK chhattis lakh rupaye se start hote hain with premium layout. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
-  - For 2 BHK: "Humare paas 2 BHK bahattar lakh rupaye se start hote hain with modern amenities. Aap family ke saath shift karne ka plan kar rahe hain?"
+  - For 2 BHK: "Humare paas 2 BHK bahattar lakh rupaye se start hote hain with spacious layout and modern amenities."
 
 - **Location Preference & Shift Handling (CRITICAL - When customer mentions Kalyan, Thane, Navi Mumbai, etc.)**:
   - If customer says they are looking in Kalyan or any other location:
@@ -825,7 +812,7 @@ if is_main_process:
         except Exception as e:
             logger.warning(f"Could not remove stale active call lock: {e}")
 
-SELECTED_MODEL = "gemini-3.5-flash-lite" # default fallback
+SELECTED_MODEL = "gemini-3.6-flash" # default fallback
 SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
 if os.getenv("SAMBANOVA_API_KEY"):
     SELECTED_GROQ_MODEL = "gpt-oss-120b"
@@ -882,7 +869,7 @@ if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
 elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
     from livekit.plugins import google
     
-    preferred_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-3.5-flash"]
+    preferred_models = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest"]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
     if os.path.exists("bookings/active_call.lock"):
@@ -929,13 +916,13 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
                     logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
             
             if not global_llm:
-                logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
-                global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
-                SELECTED_MODEL = "gemini-3.5-flash-lite"
+                logger.warning("All preferred models failed validation. Falling back to gemini-3.6-flash.")
+                global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
+                SELECTED_MODEL = "gemini-3.6-flash"
         except Exception as outer_err:
-            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
-            global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
-            SELECTED_MODEL = "gemini-3.5-flash-lite"
+            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.6-flash.")
+            global_llm = google.LLM(model="gemini-3.6-flash", api_key=global_google_key, temperature=0.3)
+            SELECTED_MODEL = "gemini-3.6-flash"
 
 # 2. GROQ LPU (If explicitly set or Google key not configured)
 elif global_groq_key and global_groq_key.startswith("gsk_"):
@@ -1003,11 +990,11 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
                     from livekit.plugins import google
                     global_llm = google.LLM(
-                        model="gemini-3.5-flash-lite",
+                        model="gemini-3.6-flash",
                         api_key=global_google_key,
                         temperature=0.3
                     )
-                    SELECTED_MODEL = "gemini-3.5-flash-lite"
+                    SELECTED_MODEL = "gemini-3.6-flash"
                     SELECTED_GROQ_MODEL = None
                 else:
                     logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
@@ -1023,11 +1010,11 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                 logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
                 from livekit.plugins import google
                 global_llm = google.LLM(
-                    model="gemini-3.5-flash-lite",
+                    model="gemini-3.6-flash",
                     api_key=global_google_key,
                     temperature=0.3
                 )
-                SELECTED_MODEL = "gemini-3.5-flash-lite"
+                SELECTED_MODEL = "gemini-3.6-flash"
                 SELECTED_GROQ_MODEL = None
             else:
                 logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
@@ -1161,9 +1148,9 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "positivity:high").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.1"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
@@ -1171,8 +1158,8 @@ def prewarm_fnc(proc: JobProcess):
             language="hi",
             sample_rate=24000,
             model="sonic-3.5",
-            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+            speed=cartesia_speed,
+            emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume,
             word_timestamps=False
         )
@@ -1585,9 +1572,9 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "positivity:high").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.1"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
@@ -1600,8 +1587,8 @@ async def entrypoint(ctx: JobContext):
                 language="hi",
                 sample_rate=24000,
                 model="sonic-3.5",
-                speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-                emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+                speed=cartesia_speed,
+                emotion=[cartesia_emotion] if cartesia_emotion else None,
                 volume=cartesia_volume,
                 word_timestamps=False
             )
@@ -1640,8 +1627,8 @@ async def entrypoint(ctx: JobContext):
         tts.update_options(
             voice=kusha_voice_id,
             language="hi",
-            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+            speed=cartesia_speed,
+            emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume
         )
         logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}, speed={cartesia_speed}, volume={cartesia_volume}).")
@@ -1656,7 +1643,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.40,
+                "min_delay": 0.30,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -2188,8 +2175,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="mr",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+                            speed=cartesia_speed,
+                            emotion=[cartesia_emotion] if cartesia_emotion else None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Pure Marathi with Kusha Cloned Voice ({kusha_voice_id}, volume={cartesia_volume}, speed={cartesia_speed})")
@@ -2203,8 +2190,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="en",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+                            speed=cartesia_speed,
+                            emotion=[cartesia_emotion] if cartesia_emotion else None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
@@ -2212,8 +2199,8 @@ async def entrypoint(ctx: JobContext):
                         session.tts.update_options(
                             voice=kusha_voice_id,
                             language="hi",
-                            speed=cartesia_speed if cartesia_speed != 1.0 else 0.96,
-                            emotion=[cartesia_emotion] if cartesia_emotion else ["positivity:high"],
+                            speed=cartesia_speed,
+                            emotion=[cartesia_emotion] if cartesia_emotion else None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
