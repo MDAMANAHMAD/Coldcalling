@@ -86,8 +86,6 @@ def normalize_phonetics(text: str) -> str:
             (r'\b1\s*BHK\b', 'एक बीएचके'),
             (r'\b2\s*BHK\b', 'दोन बीएचके'),
             (r'\bBHK\b', 'बीएचके'),
-            (r'\b1\s*RK\b', 'एक आरके'),
-            (r'\bRK\b', 'आरके'),
             (r'\b15\s*(-|te)\s*20\b', 'पंधरा ते वीस'),
             (r'\b15\b', 'पंधरा'),
             (r'\b20\b', 'वीस'),
@@ -114,9 +112,6 @@ def normalize_phonetics(text: str) -> str:
             (r'\b1\s*BHK\b', 'one BHK'),
             (r'\bone\s*BHK\b', 'one BHK'),
             (r'\bBHK\b', 'BHK'),
-            (r'\b1\s*RK\b', 'one RK'),
-            (r'\bone\s*RK\b', 'one RK'),
-            (r'\bRK\b', 'RK'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
             (r'\b3\s*(pm|baje)\b', 'three pm'),
@@ -125,22 +120,6 @@ def normalize_phonetics(text: str) -> str:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
     # Neutralize any exclamation marks to periods to enforce calm, steady pitch without high-energy spikes
     text = text.replace('!', '.')
-    return text
-
-
-def normalize_customer_speech(text: str) -> str:
-    """Normalizes customer spoken input, correcting common STT mishearings (e.g. 'I RK' -> '1 RK')."""
-    if not text:
-        return text
-    # Map acoustic mishearings of 1 RK (Deepgram frequently hears Indian 'one RK' as 'I RK', 'one ark', '1rk', etc.)
-    pattern_1rk = re.compile(
-        r"\b(?:i\s*rk|irk|1\s*rk|1rk|one\s*rk|ek\s*rk|one\s*ark|1\s*ark|one\s*arc|ek\s*ark|van\s*rk|won\s*rk|one\s*room\s*kitchen|1\s*room\s*kitchen|ek\s*room\s*kitchen|१\s*आरके|आरके)\b",
-        re.IGNORECASE
-    )
-    text = pattern_1rk.sub("1 RK", text)
-    # Standardize spoken variants of BHK
-    text = re.sub(r"\b(?:van\s*bhk|won\s*bhk|1bhk|ek\s*bhk)\b", "1 BHK", text, flags=re.IGNORECASE)
-    text = re.sub(r"\b(?:tu\s*bhk|too\s*bhk|to\s*bhk|2bhk|do\s*bhk)\b", "2 BHK", text, flags=re.IGNORECASE)
     return text
 
 _orig_cartesia_push_text = cartesia.tts.SynthesizeStream.push_text
@@ -248,7 +227,6 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - STRICTLY FORBIDDEN: NEVER end a sentence mid-thought or leave a dangling English fragment like "with spacious layout and modern amenities". Always conclude statements with a natural follow-up question or clear next step.
 - STRICT BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 15-20 words). Keep answers direct and concise so speech generates and starts immediately.
 - IRRELEVANT QUESTIONS STRICTLY FORBIDDEN: Strictly NEVER ask personal or irrelevant questions like "kya aap family ke saath shift karne ka plan kar rahe hain" or ask about personal living situations. Focus purely on flat configuration (1 BHK or 2 BHK), budget, and site visits.
-- INVENTORY & 1 RK RULE: Sai Complex Dombivli East offers premium 1 BHK (from 36 lakh) and 2 BHK (from 72 lakh) flats only. We do NOT have 1 RK flats. If customer inquires about 1 RK (or 1 room kitchen), politely clarify that 1 RK is not available, explain that proper 1 BHK flats are available starting at 36 lakh with 375 sqft carpet and separate master bedroom, and invite them for a site visit.
 - HUMAN-LIKE CONVERSATIONAL VARIETY (NEVER SOUND ROBOTIC):
   - Speak like an attentive, natural human property consultant, NOT a rigid script reader.
   - NEVER repeat the exact same sentence or phrasing across turns. Adapt and vary your words naturally based on what the caller said.
@@ -267,16 +245,12 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
       "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून... मी [Customer Name] यांच्याशी बोलू शकते का?"
 - **Turn 2 (Direct Value Pitch if identity confirmed in Turn 1)**:
   - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK flat dekh rahe hain?"
-- **When customer specifies configuration ('1 BHK' / '2 BHK' / '1 RK') — STRICTLY NON-REPETITIVE PHRASING:**
+- **When customer specifies configuration ('1 BHK' / '2 BHK') — STRICTLY NON-REPETITIVE PHRASING:**
   - DO NOT repeat "Humare paas ... start hote hain". Use completely fresh, informative phrasing:
   - For 2 BHK:
     "Theek hai. Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
   - For 1 BHK:
     "Samajh gayi. One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
-  - For 1 RK Inquiry (When customer asks for '1 RK' / 'one RK' / 'RK' / 'one room kitchen'):
-    "Sir humare project Sai Complex mein 1 RK available nahi hai. Humare paas proper one BHK flats chhattis lakh rupaye se start hote hain, jisme 375 square feet carpet area aur separate master bedroom milta hai. Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
-  - If customer strictly insists on 1 RK only or says budget doesn't allow 1 BHK:
-    "Samajh gayi sir... filhal Sai Complex mein minimum one BHK hi available hai chhattis lakh se. Agar aage aapka one BHK ka plan bane toh zaroor bataiyega. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye."
 - **Location Shift Handling (When customer mentions Kalyan, Thane, etc.)**:
   - If customer says looking in Kalyan: "Sir humara property Kalyan mein available nahi hai. Humara project Sai Complex Dombivli East mein hai jo Kalyan se sirf fifteen minutes drive par hai. Agar aap Dombivli East consider karna chahein toh kya main details share kar sakti hoon?"
   - If customer strictly refuses Dombivli: "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye."
@@ -315,7 +289,6 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 6. PROJECT FACTS (SAI COMPLEX, DOMBIVLI EAST)
 - Developer: Shiv Sai Construction Company.
 - Location: Casario, Palava Road, Near Pratik Green, Lodha Heaven, Dombivli East — 421204.
-- 1 RK: NOT available in Sai Complex. Minimum configuration is proper 1 BHK (from 36 lakh).
 - 1 BHK Options: 375 sqft (36 lakh rupaye onwards), 520 sqft (50 lakh rupaye onwards), 755 sqft with Terrace (72 lakh rupaye onwards).
 - 2 BHK Options: 760 sqft (72 lakh rupaye onwards), 1110 sqft with Terrace (1 crore 4 lakh rupaye onwards), 2285 sqft with Terrace (2 crore 10 lakh rupaye onwards).
 - Connectivity:
@@ -340,8 +313,6 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
 - 2 BHK: "छान पर्याय आहे. दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
-- 1 RK Marathi: "सर, आमच्या साई कॉम्प्लेक्स प्रोजेक्टमध्ये 1 RK उपलब्ध नाही. येथे प्रशस्त एक बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू आहेत, ज्यामध्ये ३७५ स्क्वेअर फूट कार्पेट एरिया आणि स्वतंत्र बेडरूम मिळते. आपण प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
-- 1 RK Refusal Marathi: "समजले सर, सध्या आमच्याकडे फक्त एक आणि दोन बीएचके उपलब्ध आहेत. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
 - Dombivli Station: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे."
 - Amenities Marathi: "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
 - Visit invite: "छान. मग प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
@@ -948,13 +919,6 @@ STT_KEYWORDS = [
     ("Airoli", 2.0),
     ("Sai Complex", 2.0),
     ("Shil Road", 2.0),
-    ("1 RK", 2.5),
-    ("1RK", 2.5),
-    ("one RK", 2.5),
-    ("RK", 2.5),
-    ("ek RK", 2.5),
-    ("one room kitchen", 2.0),
-    ("1 room kitchen", 2.0),
     ("BHK", 2.0),
     ("one BHK", 2.0),
     ("two BHK", 2.0),
@@ -979,27 +943,6 @@ STT_REPLACE = {
     "dombivali": "Dombivli",
     "dombiwali": "Dombivli",
     "nilje station": "Nilje station",
-    "I RK": "1 RK",
-    "i rk": "1 RK",
-    "I rk": "1 RK",
-    "i RK": "1 RK",
-    "IRK": "1 RK",
-    "irk": "1 RK",
-    "one ark": "1 RK",
-    "1 ark": "1 RK",
-    "one arc": "1 RK",
-    "ek ark": "1 RK",
-    "one rk": "1 RK",
-    "1rk": "1 RK",
-    "ek rk": "1 RK",
-    "van rk": "1 RK",
-    "won rk": "1 RK",
-    "one room kitchen": "1 RK",
-    "1 room kitchen": "1 RK",
-    "ek room kitchen": "1 RK",
-    "one bhk": "1 BHK",
-    "two bhk": "2 BHK",
-    "do bhk": "2 BHK",
 }
 
 
@@ -1218,18 +1161,17 @@ STRICT CLASSIFICATION RULES:
 1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, refuses site visit/details, or persistently goes off-topic/trolls leading to call termination.
 2. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East. (Note: Gayatri asking does NOT mean scheduled unless the customer agreed!)
 3. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
-4. "Looking for 1 RK (Not in Inventory)": Customer specifically inquired about 1 RK or 1 room kitchen, which is not available in Sai Complex Dombivli East.
-5. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
-6. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
-7. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
+4. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
+5. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
+6. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
 
 Respond ONLY with valid JSON:
-{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Looking for 1 RK (Not in Inventory)" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+{{
+  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "Concise 1-sentence executive summary in English",
   "detectedQuestions": ["Topic 1", "Topic 2"]
-}"""
+}}"""
                 resp = client.models.generate_content(
                     model=m_name,
                     contents=prompt,
@@ -1241,7 +1183,6 @@ Respond ONLY with valid JSON:
                 data = json.loads(resp.text)
                 if data.get("outcome") in [
                     "Site Visit Scheduled", "Interested", "Not Interested", 
-                    "Looking for 1 RK (Not in Inventory)",
                     "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
                 ]:
                     logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini {m_name})] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
@@ -1261,13 +1202,11 @@ Rules:
 - "Not Interested" if caller refuses, says nahi chahiye, wrong number, no interest, or persistently drifts off-topic/trolls.
 - "Site Visit Scheduled" ONLY if caller agreed to visit (e.g. Sunday/weekend).
 - "Interested" if caller asked for price/brochure/flats.
-- "Looking for 1 RK (Not in Inventory)" if caller specifically wanted 1 RK.
-- "Location Mismatch (Kalyan)" if caller wanted Kalyan only.
 - "Inquiry Completed" for general inquiries.
 
 Classify into valid JSON:
 {{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Looking for 1 RK (Not in Inventory)" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "1 sentence executive summary in English",
   "detectedQuestions": ["topic1", "topic2"]
@@ -1303,8 +1242,6 @@ Return ONLY raw JSON."""
     all_agent = " ".join(t["text"].lower() for t in dialogue if t["role"] == "agent")
 
     detected_questions = []
-    if any(w in all_cust for w in ["1 rk", "one rk", "rk", "आरके", "one room kitchen", "1 room kitchen"]):
-        detected_questions.append("1 RK Inquiry")
     if any(w in all_cust for w in ["kalyan", "kaliyan", "कल्याण"]):
         detected_questions.append("Kalyan Location Inquiry")
     if any(w in all_cust for w in ["2 bhk", "two bhk", "price", "pricing", "kitna", "budget", "lakh", "cost", "दख", "भाव", "दर", "किंमत"]):
@@ -1347,13 +1284,7 @@ Return ONLY raw JSON."""
         and ("confirm" in all_agent or "sunday" in all_cust or "saturday" in all_cust)
     )
 
-    # 4. 1 RK INQUIRY (Not in inventory)
-    has_1rk_inquiry = (
-        any(w in all_cust for w in ["1 rk", "one rk", "rk", "आरके", "one room kitchen", "1 room kitchen"])
-        and not cust_confirmed_visit
-    )
-
-    # 5. INTERESTED (Showed interest in flats, pricing, brochure)
+    # 4. INTERESTED (Showed interest in flats, pricing, brochure)
     int_patterns = [
         r"interested", r"interest\s*hai", r"details\s*bhej", r"brochure", r"whatsapp",
         r"rate\s*bhej", r"kharidna", r"planning", r"acha\s*hai", r"रुचि\s*है", r"आवडल",
@@ -1377,10 +1308,6 @@ Return ONLY raw JSON."""
         outcome = "Site Visit Scheduled"
         sentiment = "positive"
         ai_summary = f"{customer_name} agreed to visit Sai Complex Dombivli East. Site visit confirmed."
-    elif has_1rk_inquiry:
-        outcome = "Looking for 1 RK (Not in Inventory)"
-        sentiment = "neutral"
-        ai_summary = f"{customer_name} inquired about 1 RK flat. Gayatri informed that Sai Complex Dombivli East only offers 1 BHK and 2 BHK."
     elif is_interested:
         outcome = "Interested"
         sentiment = "positive"
@@ -2236,13 +2163,10 @@ async def entrypoint(ctx: JobContext):
             else:
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
         if ev.is_final and ev.transcript:
-            clean_text = normalize_customer_speech(ev.transcript.strip())
-            if clean_text != ev.transcript.strip():
-                logger.info(f"🔄 [STT NORMALIZED] '{ev.transcript.strip()}' -> '{clean_text}'")
-            text = clean_text.lower()
+            text = ev.transcript.strip().lower()
             # Append customer turn to transcript history
             elapsed_sec = round(time.time() - t_call_start, 1)
-            call_dialogue.append({"role": "customer", "text": clean_text, "time": elapsed_sec})
+            call_dialogue.append({"role": "customer", "text": ev.transcript.strip(), "time": elapsed_sec})
             
             # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
             off_topic_patterns = [
@@ -2448,23 +2372,6 @@ async def entrypoint(ctx: JobContext):
                     trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
             elif role_str in ["user", "customer"]:
-                norm_text = normalize_customer_speech(raw_text)
-                if norm_text != raw_text:
-                    logger.info(f"🔄 [NORMALIZED CUSTOMER SPEECH IN CHAT CONTEXT] '{raw_text}' -> '{norm_text}'")
-                    raw_text = norm_text
-                    if hasattr(msg, "text_content") and msg.text_content:
-                        try:
-                            msg.text_content = norm_text
-                        except Exception:
-                            pass
-                    if hasattr(msg, "content"):
-                        try:
-                            if isinstance(msg.content, list):
-                                msg.content = [norm_text if isinstance(c, str) else c for c in msg.content]
-                            elif isinstance(msg.content, str):
-                                msg.content = norm_text
-                        except Exception:
-                            pass
                 last_turn = call_dialogue[-1] if call_dialogue else None
                 if raw_text and (not last_turn or last_turn.get("role") != "customer" or last_turn.get("text", "").strip() != raw_text):
                     elapsed_sec = round(time.time() - t_call_start, 1)
