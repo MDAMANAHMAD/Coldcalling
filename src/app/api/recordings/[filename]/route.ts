@@ -18,10 +18,11 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid file name' }, { status: 400 });
     }
 
+    const cwd = process.cwd();
     const candidatePaths = [
-      path.join(process.cwd(), 'bookings', 'recordings', safeFilename),
-      path.join(process.cwd(), 'public', 'recordings', safeFilename),
-      path.join(process.cwd(), 'recordings', safeFilename),
+      path.join(/*turbopackIgnore: true*/ cwd, 'bookings', 'recordings', safeFilename),
+      path.join(/*turbopackIgnore: true*/ cwd, 'public', 'recordings', safeFilename),
+      path.join(/*turbopackIgnore: true*/ cwd, 'recordings', safeFilename),
       path.join('/tmp', 'recordings', safeFilename)
     ];
 
