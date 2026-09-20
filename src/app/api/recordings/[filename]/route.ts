@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { RoomServiceClient } from 'livekit-server-sdk';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   req: NextRequest,
@@ -29,18 +33,95 @@ export async function GET(
       }
     }
 
-    if (!filePath) {
+    let audioBuffer: Buffer | null = null;
+    let contentType = 'audio/mpeg';
+    if (safeFilename.endsWith('.ogg')) contentType = 'audio/ogg';
+    else if (safeFilename.endsWith('.wav')) contentType = 'audio/wav';
+    else if (safeFilename.endsWith('.m4a')) contentType = 'audio/mp4';
+
+    if (filePath) {
+      try {
+        const stat = fs.statSync(filePath);
+        if (stat.size > 0) {
+          audioBuffer = fs.readFileSync(filePath);
+        }
+      } catch (readErr) {
+        console.warn(`[Recordings API] Could not read local file ${filePath}:`, readErr);
+      }
+    }
+
+    // Cloud Fallback: If not found on disk (e.g. running on Vercel), retrieve from LiveKit Cloud room
+    if (!audioBuffer) {
+      const callSid = safeFilename.replace(/\.(mp3|ogg|wav|m4a)$/i, '');
+      try {
+        const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
+        let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
+        if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
+        const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
+        const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
+        const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+
+        // 1. Check dedicated recording room: rec-{callSid}
+        const recRoomName = `rec-${callSid}`;
+        const recRooms = await roomClient.listRooms([recRoomName]);
+        if (recRooms.length > 0 && recRooms[0].metadata) {
+          try {
+            const parsed = JSON.parse(recRooms[0].metadata);
+            if (parsed.audio) {
+              audioBuffer = Buffer.from(parsed.audio, 'base64');
+              if (parsed.format === 'ogg') contentType = 'audio/ogg';
+              console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room ${recRoomName}`);
+            }
+          } catch (e) {
+            console.warn(`[Recordings API] Failed parsing metadata in ${recRoomName}:`, e);
+          }
+        }
+
+        // 2. Fallback: check gayatri-persistent-storage room for matching callSid with data URL
+        if (!audioBuffer) {
+          const storageRooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+          if (storageRooms.length > 0 && storageRooms[0].metadata) {
+            try {
+              const parsed = JSON.parse(storageRooms[0].metadata);
+              const logs = Array.isArray(parsed.callLogs) ? parsed.callLogs : [];
+              const match = logs.find((l: any) => l.callSid === callSid || l.id === callSid);
+              if (match) {
+                const recUrl = match.recordingUrl || match.recording_url || '';
+                if (recUrl.startsWith('data:audio/')) {
+                  const b64Data = recUrl.split(',', 2)[1];
+                  if (b64Data) {
+                    audioBuffer = Buffer.from(b64Data, 'base64');
+                    console.log(`[Recordings API] Extracted ${audioBuffer.length} bytes for ${callSid} from persistent-storage data URL`);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[Recordings API] Failed reading gayatri-persistent-storage:', e);
+            }
+          }
+        }
+
+        // Cache to local disk if running in environment where disk is writable
+        if (audioBuffer) {
+          try {
+            const cacheDir = path.join(process.cwd(), 'bookings', 'recordings');
+            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+            fs.writeFileSync(path.join(cacheDir, safeFilename), audioBuffer);
+          } catch (cacheErr) {
+            // Read-only filesystem on Vercel is fine; audio will stream from memory
+          }
+        }
+      } catch (cloudErr) {
+        console.warn(`[Recordings API] LiveKit Cloud audio lookup error for ${callSid}:`, cloudErr);
+      }
+    }
+
+    if (!audioBuffer || audioBuffer.length === 0) {
       return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
     }
 
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
+    const fileSize = audioBuffer.length;
     const range = req.headers.get('range');
-
-    let contentType = 'audio/ogg';
-    if (safeFilename.endsWith('.mp3')) contentType = 'audio/mpeg';
-    else if (safeFilename.endsWith('.wav')) contentType = 'audio/wav';
-    else if (safeFilename.endsWith('.m4a')) contentType = 'audio/mp4';
 
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
@@ -51,54 +132,30 @@ export async function GET(
         return new NextResponse(null, {
           status: 416,
           headers: {
-            'Content-Range': 'bytes */' + fileSize,
+            'Content-Range': `bytes */${fileSize}`,
           },
         });
       }
 
-      const chunkSize = end - start + 1;
-      const fileStream = fs.createReadStream(filePath, { start, end });
-      const webStream = new ReadableStream({
-        start(controller) {
-          fileStream.on('data', (chunk) => controller.enqueue(chunk));
-          fileStream.on('end', () => controller.close());
-          fileStream.on('error', (err) => controller.error(err));
-        },
-        cancel() {
-          fileStream.destroy();
-        },
-      });
-
-      return new NextResponse(webStream as any, {
+      const chunk = audioBuffer.subarray(start, end + 1);
+      return new NextResponse(new Uint8Array(chunk), {
         status: 206,
         headers: {
-          'Content-Range': 'bytes ' + start + '-' + end + '/' + fileSize,
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
-          'Content-Length': chunkSize.toString(),
+          'Content-Length': chunk.length.toString(),
           'Content-Type': contentType,
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
         },
       });
     } else {
-      const fileStream = fs.createReadStream(filePath);
-      const webStream = new ReadableStream({
-        start(controller) {
-          fileStream.on('data', (chunk) => controller.enqueue(chunk));
-          fileStream.on('end', () => controller.close());
-          fileStream.on('error', (err) => controller.error(err));
-        },
-        cancel() {
-          fileStream.destroy();
-        },
-      });
-
-      return new NextResponse(webStream as any, {
+      return new NextResponse(new Uint8Array(audioBuffer), {
         status: 200,
         headers: {
           'Content-Length': fileSize.toString(),
           'Content-Type': contentType,
           'Accept-Ranges': 'bytes',
-          'Cache-Control': 'public, max-age=3600',
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
         },
       });
     }

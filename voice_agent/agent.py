@@ -1852,21 +1852,28 @@ async def entrypoint(ctx: JobContext):
 
                     # Embed audio data URL for zero-latency, cloud-free playback on Vercel
                     max_embed_bytes = 400 * 1024  # 400KB limit for seamless metadata storage
-                    if mp3_success and dest_bookings_mp3.exists() and dest_bookings_mp3.stat().st_size <= max_embed_bytes:
+                    b64_audio_payload = ""
+                    if mp3_success and dest_bookings_mp3.exists():
                         try:
                             with open(dest_bookings_mp3, "rb") as f_aud:
-                                b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
-                                recording_url = f"data:audio/mp3;base64,{b64_str}"
-                            logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) as data URL for instant playback.")
+                                b64_audio_payload = base64.b64encode(f_aud.read()).decode("utf-8")
+                            if dest_bookings_mp3.stat().st_size <= max_embed_bytes:
+                                recording_url = f"data:audio/mp3;base64,{b64_audio_payload}"
+                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) as data URL for instant playback.")
+                            else:
+                                recording_url = f"/api/recordings/{ctx.room.name}.mp3"
                         except Exception as b64_err:
                             logger.warning(f"Error encoding MP3 to data URL: {b64_err}")
                             recording_url = f"/api/recordings/{ctx.room.name}.mp3"
-                    elif dest_bookings_ogg.exists() and dest_bookings_ogg.stat().st_size <= max_embed_bytes:
+                    elif dest_bookings_ogg.exists():
                         try:
                             with open(dest_bookings_ogg, "rb") as f_aud:
-                                b64_str = base64.b64encode(f_aud.read()).decode("utf-8")
-                                recording_url = f"data:audio/ogg;base64,{b64_str}"
-                            logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded OGG ({dest_bookings_ogg.stat().st_size} bytes) as data URL for instant playback.")
+                                b64_audio_payload = base64.b64encode(f_aud.read()).decode("utf-8")
+                            if dest_bookings_ogg.stat().st_size <= max_embed_bytes:
+                                recording_url = f"data:audio/ogg;base64,{b64_audio_payload}"
+                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded OGG ({dest_bookings_ogg.stat().st_size} bytes) as data URL for instant playback.")
+                            else:
+                                recording_url = f"/api/recordings/{ctx.room.name}.ogg"
                         except Exception as b64_err:
                             logger.warning(f"Error encoding OGG to data URL: {b64_err}")
                             recording_url = f"/api/recordings/{ctx.room.name}.ogg"
@@ -1874,6 +1881,7 @@ async def entrypoint(ctx: JobContext):
                         recording_url = f"/api/recordings/{ctx.room.name}.mp3" if mp3_success else f"/api/recordings/{ctx.room.name}.ogg"
                 else:
                     logger.warning("⚠️ [AUDIO RECORDING] No audio recording file found on disk.")
+                    b64_audio_payload = ""
             except Exception as rec_err:
                 logger.warning(f"Warning persisting call recording: {rec_err}")
 
@@ -1970,6 +1978,8 @@ async def entrypoint(ctx: JobContext):
                     "detectedQuestions": detected_questions,
                     "called_at": datetime.utcnow().isoformat()
                 }
+                if b64_audio_payload:
+                    webhook_payload["audioBase64"] = b64_audio_payload
                 logger.info(f"🌐 [WEBHOOK SYNC] Delivering call intelligence to {dashboard_url}/api/webhooks/voice-agent ...")
                 loop = asyncio.get_running_loop()
                 webhook_resp = await loop.run_in_executor(
@@ -2055,6 +2065,26 @@ async def entrypoint(ctx: JobContext):
                     metadata=meta_json
                 ))
                 logger.info("☁️ [LIVEKIT CLOUD SYNC] Synced completed call intelligence to gayatri-persistent-storage!")
+
+                # Persist dedicated audio recording room in LiveKit Cloud so it is NEVER deleted or stripped
+                if b64_audio_payload:
+                    try:
+                        rec_room_name = f"rec-{ctx.room.name}"
+                        rec_meta = json.dumps({
+                            "callSid": ctx.room.name,
+                            "audio": b64_audio_payload,
+                            "format": "mp3" if mp3_success else "ogg",
+                            "customerName": clean_display_name,
+                            "calledAt": datetime.utcnow().isoformat()
+                        })
+                        await lk_cloud_api.room.create_room(lk_api.CreateRoomRequest(
+                            name=rec_room_name,
+                            empty_timeout=86400 * 30,
+                            metadata=rec_meta
+                        ))
+                        logger.info(f"☁️ [AUDIO RECORDING CLOUD ROOM] Persisted audio to dedicated room: {rec_room_name}")
+                    except Exception as rec_room_err:
+                        logger.warning(f"Could not persist audio to dedicated cloud room: {rec_room_err}")
             except Exception as lk_sync_err:
                 logger.warning(f"Could not sync to LiveKit Cloud metadata: {lk_sync_err}")
             finally:

@@ -216,6 +216,35 @@ export async function POST(req: NextRequest) {
       }
       meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 30);
 
+      // If audio recording data is provided as base64 data URL, persist in a dedicated cloud room: rec-{callSid}
+      if (newCallLog.recordingUrl?.startsWith('data:audio/') || body.audioBase64) {
+        try {
+          const rawB64 = body.audioBase64 || (newCallLog.recordingUrl ? newCallLog.recordingUrl.split(',', 2)[1] : '');
+          if (rawB64) {
+            const recRoomName = `rec-${newCallLog.callSid}`;
+            const recRooms = await roomClient.listRooms([recRoomName]);
+            const recMeta = JSON.stringify({
+              callSid: newCallLog.callSid,
+              audio: rawB64,
+              format: 'mp3',
+              createdAt: new Date().toISOString()
+            });
+            if (recRooms.length === 0) {
+              await roomClient.createRoom({
+                name: recRoomName,
+                emptyTimeout: 86400 * 30,
+                metadata: recMeta
+              });
+            } else {
+              await roomClient.updateRoomMetadata(recRoomName, recMeta);
+            }
+            console.log(`[Webhook LiveKit Cloud Sync]: Successfully saved audio recording in dedicated room ${recRoomName}`);
+          }
+        } catch (recRoomErr) {
+          console.warn('[Webhook LiveKit Cloud Rec Room Warning]:', recRoomErr);
+        }
+      }
+
       // Strip large base64 data URLs from older calls to stay within LiveKit Cloud 512KB room limit
       for (let i = 1; i < meta.callLogs.length; i++) {
         if (meta.callLogs[i].recordingUrl?.startsWith('data:')) {
