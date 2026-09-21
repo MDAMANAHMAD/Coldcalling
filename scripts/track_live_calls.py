@@ -109,6 +109,11 @@ def format_line(raw_line: str) -> str:
         lat_val = latency_match.group(1) if latency_match else line
         return f" {BOLD}{GREEN}⚡ [TURN {turn_num} LATENCY]{RESET} {BOLD}{GREEN}Response Time: {lat_val}{RESET}"
 
+    if "[SILENCE RECOVERY]" in line:
+        rec_match = re.search(r"after\s*(\d+\.?\d*s)", line)
+        sec_val = rec_match.group(1) if rec_match else ""
+        return f" {DIM}⏳ [CALLER SILENCE] Gayatri checked in after {sec_val} of silence.{RESET}"
+
     # 7. LLM Latency Trace
     if "[LATENCY TRACE] LLM Metrics:" in line:
         ttft_match = re.search(r"TTFT=(\d+\.?\d*)s", line)

@@ -256,6 +256,18 @@ def set_normal_priority():
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MASTER SYSTEM PROMPT)
 
+0. STRICT ANTI-REPETITION MANDATE (ZERO CONSECUTIVE REPETITIONS)
+- YOU MUST NEVER REPEAT YOUR PREVIOUS STATEMENT, PITCH, OR QUESTION IN TWO CONSECUTIVE TURNS!
+- Look at your immediately preceding assistant message in the conversation history before responding. If you already said it, DO NOT SAY IT AGAIN.
+- If the customer gives a short filler, confirmation, or acknowledgment ("haan", "haan bolie", "boliye", "hello", "theek hai", "sun raha hoon", "details", "achha", "suniye"):
+  * STRICTLY DO NOT repeat what you just said!
+  * Never repeat the 1 BHK vs 2 BHK question if you already asked it!
+  * Instead, acknowledge with 1 word ("Ji", "Bilkul") and immediately ask a NEW, fresh question or share fresh details:
+    - E.g. Ask: "Aap ready-to-move flat dekh rahe hain ya upcoming possession chalega?"
+    - Or ask: "Aap khud rehne ke liye dekh rahe hain ya investment ke liye plan kar rahe hain?"
+    - Or explain: "Humare paas spacious master bedroom aur Jaquar fittings ke sath flats available hain. Kya iske baare mein aapka koi specific sawaal hai?"
+- EXCEPTION: You may ONLY repeat your previous statement if the customer explicitly asks you to repeat: e.g. "kya bola aapne?", "phir se boliye", "repeat kijiye", "sunai nahi diya".
+
 1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
 - You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shiv Sai Construction Company for the Sai Complex project in Dombivli East.
 - PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
@@ -288,19 +300,31 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - English: "Yes, absolutely! Sai Complex on Palava Road, Dombivli East is a prime investment. Located just five minutes from Nilje station and fifteen minutes from Kalyan, with upcoming metro and road connectivity, the area is witnessing 8 to 12% annual capital appreciation and strong rental yield. Would you like me to share the detailed brochure on WhatsApp?"
   - Marathi: "हो नक्कीच! साई कॉम्प्लेक्स पलावा रोड डोंबिवली पूर्व येथे एक उत्तम गुंतवणूक पर्याय आहे. निळजे स्टेशन फक्त पाच मिनिटांवर आहे आणि कल्याण पंधरा मिनिटांवर. येथे वाढत्या विकासामुळे ८ ते १२ टक्के वार्षिक वाढ आणि उत्तम भाडे उत्पन्न मिळत आहे. मी आपल्याला व्हॉट्सअॅपवर माहिती पाठवू का?"
 
-4. OPENING CONVERSATION FLOW
-- **Turn 0 (Call Connect Greeting)**: Call starts with the agent saying "Hello." in her natural, warm voice.
-- **Turn 1 (When caller responds e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
-  - "Hello! Main Gayatri bol rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
-- **Turn 2 (Identity Confirmed):**
-  - "Ji, Sai Complex Dombivli East ke regarding call kiya tha. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
-- **When customer specifies configuration:**
-  - 2 BHK: "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi sawaal hai?"
-  - 1 BHK: "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
-- **When customer is busy / asks to call later / future plan:**
-  - "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
-- **Refusal / Not Interested:**
-  - "Theek hai, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye."
+4. CONVERSATION PROGRESSION (ALWAYS MOVE FORWARD, NEVER REPEAT)
+- **Greeting**: Call begins with agent saying a clean, simple "Hello." (Never "Hello ji", never anything else).
+- **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
+  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+- **If caller confirms 1 BHK:**
+  - "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+- **If caller confirms 2 BHK:**
+  - "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
+- **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
+  - DO NOT repeat the 1/2 BHK pitch!
+  - Progress: "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes door. Yahan 1 BHK 36 lakh aur 2 BHK 72 lakh all-inclusive mein available hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
+- **If caller asks about possession ('ready to move' or 'upcoming'):**
+  - "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+- **If caller specifies day ('Saturday' or 'Sunday'):**
+  - "Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?" (Move straight to time, never repeat the day question!)
+- **When caller confirms time:**
+  - Invoke schedule_site_visit(...) and say: "Maine aapka visit schedule kar diya hai. Saari details WhatsApp par bhej rahi hoon. Aapka din shubh ho, bye."
+- **When customer is busy / asks to call later / future plan (STRICTLY in current language):**
+  - Hindi: "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
+  - Marathi: "काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार."
+  - English: "No problem at all, I completely understand. I will follow up with you later. Have a wonderful day, goodbye!"
+- **Refusal / Not Interested (STRICTLY in current language):**
+  - Hindi: "Theek hai, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye."
+  - Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
+  - English: "Understood, thank you for your time. Have a wonderful day, goodbye!"
 
 5. SITE VISIT CONFIRMATION & CLOSING
 - If customer wants to visit: "Saturday convenient rahega ya Sunday, aur subah ya dopahar kis time comfortable rahega?"
@@ -823,7 +847,14 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
             for model_name in preferred_models:
                 try:
                     logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
-                    candidate_llm = google.LLM(model=model_name, api_key=global_google_key, temperature=0.3)
+                    candidate_llm = google.LLM(
+                        model=model_name,
+                        api_key=global_google_key,
+                        temperature=0.3,
+                        presence_penalty=0.6,
+                        frequency_penalty=0.8,
+                        max_output_tokens=150
+                    )
                     
                     # Verify schema compilation works
                     loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
@@ -839,11 +870,25 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
             
             if not global_llm:
                 logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
-                global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
+                global_llm = google.LLM(
+                    model="gemini-3.5-flash-lite",
+                    api_key=global_google_key,
+                    temperature=0.3,
+                    presence_penalty=0.6,
+                    frequency_penalty=0.8,
+                    max_output_tokens=150
+                )
                 SELECTED_MODEL = "gemini-3.5-flash-lite"
         except Exception as outer_err:
             logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
-            global_llm = google.LLM(model="gemini-3.5-flash-lite", api_key=global_google_key, temperature=0.3)
+            global_llm = google.LLM(
+                model="gemini-3.5-flash-lite",
+                api_key=global_google_key,
+                temperature=0.3,
+                presence_penalty=0.6,
+                frequency_penalty=0.8,
+                max_output_tokens=150
+            )
             SELECTED_MODEL = "gemini-3.5-flash-lite"
 
 # 2. GROQ LPU (If explicitly set or Google key not configured)
@@ -914,7 +959,10 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     global_llm = google.LLM(
                         model="gemini-3.6-flash",
                         api_key=global_google_key,
-                        temperature=0.3
+                        temperature=0.3,
+                        presence_penalty=0.6,
+                        frequency_penalty=0.8,
+                        max_output_tokens=150
                     )
                     SELECTED_MODEL = "gemini-3.6-flash"
                     SELECTED_GROQ_MODEL = None
@@ -934,7 +982,10 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                 global_llm = google.LLM(
                     model="gemini-3.6-flash",
                     api_key=global_google_key,
-                    temperature=0.3
+                    temperature=0.3,
+                    presence_penalty=0.6,
+                    frequency_penalty=0.8,
+                    max_output_tokens=150
                 )
                 SELECTED_MODEL = "gemini-3.6-flash"
                 SELECTED_GROQ_MODEL = None
@@ -1048,24 +1099,24 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Fast ~1.2s streaming multilingual endpointing for Hindi / Marathi / English)
+    # 2. Pre-warm Deepgram Nova-3 STT (Fast streaming with 100ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=300,
+        endpointing_ms=100,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Noise-immune: 180ms min speech, 0.65 threshold to filter out fan and ambient chatter)
+    # 3. Pre-warm Silero VAD (Telephone-tuned: 0.50 threshold, 80ms min speech for instant pickup)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.18,
-        activation_threshold=0.65,
+        min_silence_duration=0.30,
+        min_speech_duration=0.08,
+        activation_threshold=0.50,
         sample_rate=16000
     )
 
@@ -1452,7 +1503,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=300,
+            endpointing_ms=100,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1485,8 +1536,8 @@ async def entrypoint(ctx: JobContext):
                 model=SELECTED_MODEL,
                 api_key=google_key,
                 temperature=0.3,
-                presence_penalty=0.4,
-                frequency_penalty=0.5,
+                presence_penalty=0.6,
+                frequency_penalty=0.8,
                 max_output_tokens=150
             )
         elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
@@ -1502,8 +1553,8 @@ async def entrypoint(ctx: JobContext):
                 model=SELECTED_MODEL,
                 api_key=google_key,
                 temperature=0.3,
-                presence_penalty=0.4,
-                frequency_penalty=0.5,
+                presence_penalty=0.6,
+                frequency_penalty=0.8,
                 max_output_tokens=150
             )
         ctx.proc.userdata["llm"] = llm
@@ -1549,14 +1600,14 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Noise-immune configuration)
+    # VAD is pre-warmed, but load as fallback if not present (Telephone-tuned: 0.50 threshold, 80ms min speech)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Noise-immune: 180ms min speech, 0.65 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Telephone-tuned: 80ms min speech, 0.50 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.18,
-            activation_threshold=0.65,
+            min_silence_duration=0.30,
+            min_speech_duration=0.08,
+            activation_threshold=0.50,
             sample_rate=16000
         )
     
@@ -1582,7 +1633,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.30,
+                "min_delay": 0.20,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -2188,6 +2239,7 @@ async def entrypoint(ctx: JobContext):
     intro_finished = False
     caller_has_spoken = False
     watchdog_task = None
+    last_agent_speech = ""
 
     @session.on("error")
     def _on_session_error(ev):
@@ -2217,11 +2269,18 @@ async def entrypoint(ctx: JobContext):
                 agent_is_speaking = True
                 if t_user_stop > 0:
                     elapsed_ms = (time.perf_counter() - t_user_stop) * 1000
-                    turn_counter += 1
-                    logger.info(
-                        f"⚡⚡⚡ [TURN {turn_counter} RESPONSE LATENCY] "
-                        f"User stopped speaking -> Agent began speaking: {elapsed_ms:.1f}ms ({elapsed_ms/1000.0:.2f}s) 🚀"
-                    )
+                    # Sanity filter: A real turn response happens within 6 seconds.
+                    # Anything > 7 seconds is silence recovery or watchdog prompt, not a turn response!
+                    if elapsed_ms <= 7000:
+                        turn_counter += 1
+                        logger.info(
+                            f"⚡⚡⚡ [TURN {turn_counter} RESPONSE LATENCY] "
+                            f"User stopped speaking -> Agent began speaking: {elapsed_ms:.1f}ms ({elapsed_ms/1000.0:.2f}s) 🚀"
+                        )
+                    else:
+                        logger.info(
+                            f"⏳ [SILENCE RECOVERY] Agent spoke after {elapsed_ms/1000.0:.1f}s caller silence."
+                        )
                     t_user_stop = 0.0
             elif ev.new_state in ["listening", "idle"]:
                 agent_is_speaking = False
@@ -2338,6 +2397,29 @@ async def entrypoint(ctx: JobContext):
                                 hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: HINDI] The caller is speaking Hindi. Answer in natural Hindi/Hinglish.")
                         except Exception as e:
                             logger.debug(f"Could not inject Hindi steering message: {e}")
+
+            # Programmatic Anti-Repetition Guardrail:
+            # Prevent repeating previous statement unless caller explicitly asks to repeat
+            repeat_triggers = [
+                "repeat", "phir se", "fir se", "kya bola", "sunai nahi", "samjha nahi",
+                "pardon", "dubara", "dobara", "punha", "parat", "boliye na kya bole"
+            ]
+            caller_requested_repeat = any(trig in text for trig in repeat_triggers)
+            if not caller_requested_repeat and last_agent_speech:
+                try:
+                    hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                    if hist and hasattr(hist, "add_message"):
+                        prev_snippet = last_agent_speech.replace('"', '').replace('\n', ' ')[:75]
+                        hist.add_message(
+                            role="system",
+                            content=(
+                                f"[STRICT ANTI-REPETITION MANDATE] Zero consecutive repetitions! "
+                                f"Do NOT repeat or rephrase: '{prev_snippet}'. "
+                                f"Move forward immediately with fresh details or ask a new, different question."
+                            )
+                        )
+                except Exception as guard_err:
+                    logger.debug(f"Anti-repetition injection notice: {guard_err}")
 
     _hangup_scheduled = False
     _hangup_task = None
@@ -2456,6 +2538,8 @@ async def entrypoint(ctx: JobContext):
             raw_text = raw_text.strip()
 
             if role_str in ["assistant", "agent"]:
+                nonlocal last_agent_speech
+                last_agent_speech = raw_text
                 last_turn = call_dialogue[-1] if call_dialogue else None
                 if raw_text and (not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text):
                     elapsed_sec = round(time.time() - t_call_start, 1)
@@ -2582,9 +2666,11 @@ async def entrypoint(ctx: JobContext):
         customer_name = "Raj"
 
     def _record_agent_speech(spoken_text: str):
+        nonlocal last_agent_speech
         raw_text = spoken_text.strip()
         if not raw_text:
             return
+        last_agent_speech = raw_text
         elapsed_sec = round(time.time() - t_call_start, 1)
         last_turn = call_dialogue[-1] if call_dialogue else None
         if not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text:
@@ -2651,39 +2737,31 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        hello_prompts = [
-            "Hello.",
-            "Hello ji.",
-            "Hello, aawaaz aa rahi hai?",
-        ]
+        prompt_str = "Hello."
+        logger.info(f"🎙️ [CALL CONNECT GREETING] Saying single natural '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
+        try:
+            t_user_stop = 0.0  # Reset so greeting is never tracked as turn latency spike
+            h_speech = session.say(prompt_str, allow_interruptions=True)
+            elapsed_sec = round(time.time() - t_call_start, 1)
+            call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
+            if h_speech:
+                await h_speech.wait_for_playout()
+        except Exception as e:
+            logger.warning(f"Error speaking hello greeting: {e}")
 
-        for idx, prompt_str in enumerate(hello_prompts):
+        # Wait up to 6.0s for caller to respond naturally
+        t_wait_hello = time.time()
+        while time.time() - t_wait_hello < 6.0:
             if caller_has_spoken or _hangup_scheduled:
                 intro_finished = True
                 break
-
-            logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
-            try:
-                h_speech = session.say(prompt_str, allow_interruptions=True)
-                elapsed_sec = round(time.time() - t_call_start, 1)
-                call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
-                if h_speech:
-                    await h_speech.wait_for_playout()
-            except Exception as e:
-                logger.warning(f"Error speaking hello greeting: {e}")
-
-            # Wait 2.0s for caller response
-            t_wait_hello = time.time()
-            while time.time() - t_wait_hello < 2.0:
-                if caller_has_spoken or _hangup_scheduled:
-                    intro_finished = True
-                    break
-                await asyncio.sleep(0.08)
+            await asyncio.sleep(0.08)
 
     if not caller_has_spoken and not _hangup_scheduled:
-        logger.info("⏳ Caller silent after hello attempts. Terminating call.")
+        logger.info("⏳ Caller silent after hello attempt. Terminating call.")
         farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
         try:
+            t_user_stop = 0.0
             sp = session.say(farewell_text, allow_interruptions=False)
             elapsed_sec = round(time.time() - t_call_start, 1)
             call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
@@ -2694,13 +2772,13 @@ async def entrypoint(ctx: JobContext):
         trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
         return
 
-    # Silence Watchdog: 10s -> "Hello?", 30s -> Auto Hangup
+    # Silence Watchdog: 16s -> Prompt, 32s -> Auto Hangup
     t_last_activity = time.time()
     has_prompted_silence = False
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking
+        nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking, t_user_stop
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Waiting for Gayatri to finish intro before counting silence...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing or while Gayatri is speaking the intro!
@@ -2710,7 +2788,7 @@ async def entrypoint(ctx: JobContext):
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 10s of caller silence.")
+        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 16s of caller silence.")
         
         while not _hangup_scheduled:
             await asyncio.sleep(0.5)
@@ -2724,10 +2802,10 @@ async def entrypoint(ctx: JobContext):
 
             silence_duration = time.time() - t_last_activity
 
-            # Stage 1: Caller silent for 10 full seconds AFTER Gayatri finished intro / speech -> Prompt in active language
-            if silence_duration >= 10.0 and not has_prompted_silence:
+            # Stage 1: Caller silent for 16 full seconds AFTER Gayatri finished speaking -> Prompt in active language
+            if silence_duration >= 16.0 and not has_prompted_silence:
                 has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s after Gayatri intro). Prompting in language '{current_lang}'...")
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>16s after Gayatri speech). Prompting in language '{current_lang}'...")
                 if current_lang == "mr":
                     prompt_text = "हॅलो? माझा आवाज येतोय का?"
                 elif current_lang == "en":
@@ -2735,6 +2813,7 @@ async def entrypoint(ctx: JobContext):
                 else:
                     prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
+                    t_user_stop = 0.0  # CRITICAL: Prevent silence watchdog from logging a 16s turn latency spike!
                     p_speech = session.say(prompt_text, allow_interruptions=True)
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": prompt_text, "time": elapsed_sec})
@@ -2744,9 +2823,9 @@ async def entrypoint(ctx: JobContext):
                 except Exception as e:
                     logger.warning(f"Error speaking silence prompt: {e}")
 
-            # Stage 2: Caller silent for 30 seconds -> End call cleanly in active language
-            elif silence_duration >= 30.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>30s). Terminating call in language '{current_lang}'...")
+            # Stage 2: Caller silent for 32 seconds -> End call cleanly in active language
+            elif silence_duration >= 32.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>32s). Terminating call in language '{current_lang}'...")
                 if current_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
                 elif current_lang == "en":
@@ -2754,6 +2833,7 @@ async def entrypoint(ctx: JobContext):
                 else:
                     farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
                 try:
+                    t_user_stop = 0.0  # Reset so farewell is never tracked as turn latency spike
                     speech_handle = session.say(farewell_text, allow_interruptions=False)
                     elapsed_sec = round(time.time() - t_call_start, 1)
                     call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
