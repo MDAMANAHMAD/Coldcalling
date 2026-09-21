@@ -67,10 +67,15 @@ import re
 
 # Monkey patch Cartesia TTS to transparently normalize numbers (e.g. 760 -> seven hundred sixty)
 # and technical terms (e.g. BHK -> B.H.K.) preventing neural TTS from swallowing syllables or pronouncing digits as '76 zero'
-def normalize_phonetics(text: str) -> str:
+ACTIVE_TTS_LANGUAGE = "hi"
+
+def normalize_phonetics(text: str, lang: str | None = None) -> str:
     if not text:
         return text
-    is_marathi = bool(re.search(r'[\u0900-\u097F]', text))
+    target_lang = lang or ACTIVE_TTS_LANGUAGE
+    is_marathi = target_lang == "mr" or bool(re.search(r'[\u0900-\u097F]', text))
+    is_english = target_lang == "en"
+
     if is_marathi:
         replacements = [
             (r'\b760\b', 'सातशे साठ'),
@@ -86,13 +91,55 @@ def normalize_phonetics(text: str) -> str:
             (r'\b1\s*BHK\b', 'एक बीएचके'),
             (r'\b2\s*BHK\b', 'दोन बीएचके'),
             (r'\bBHK\b', 'बीएचके'),
+            (r'\bcarpet\s*area\b', 'कार्पेट एरिया'),
+            (r'\bsite\s*visit\b', 'साईट व्हिजिट'),
+            (r'\bflats\b', 'फ्लॅट्स'),
+            (r'\bflat\b', 'फ्लॅट'),
+            (r'\bbalcony\b', 'बाल्कनी'),
+            (r'\bmaster\s*bedroom\b', 'मास्टर बेडरूम'),
+            (r'\bjaquar\s*fittings\b', 'जॅग्वार फिटिंग्स'),
+            (r'\bkajaria\s*tiles\b', 'कजारिया टाईल्स'),
+            (r'\bwhatsapp\b', 'व्हॉट्सअॅप'),
+            (r'\bbrochure\b', 'माहिती पुस्तिका'),
+            (r'\bready\s*to\s*move\b', 'रेडी टू मूव्ह'),
+            (r'\bunder\s*construction\b', 'अंडर कन्स्ट्रक्शन'),
+            (r'\bpossession\b', 'पझेशन'),
+            (r'\bhello\b', 'हॅलो'),
+            (r'\bbye\b', 'नमस्कार'),
             (r'\b15\s*(-|te)\s*20\b', 'पंधरा ते वीस'),
             (r'\b15\b', 'पंधरा'),
             (r'\b20\b', 'वीस'),
             (r'\b5\b', 'पाच'),
             (r'\b11\b', 'अकरा'),
+            (r'\b3\b', 'तीन'),
+            (r'\b1\s*crore\s*4\s*lakh\b', 'एक कोटी चार लाख'),
+            (r'\b2\s*crore\s*10\s*lakh\b', 'दोन कोटी दहा लाख'),
+        ]
+    elif is_english:
+        replacements = [
+            (r'\b760\b', 'seven hundred sixty'),
+            (r'\b375\b', 'three hundred seventy five'),
+            (r'\b520\b', 'five hundred twenty'),
+            (r'\b755\b', 'seven hundred fifty five'),
+            (r'\b1110\b', 'eleven hundred ten'),
+            (r'\b2285\b', 'twenty two hundred eighty five'),
+            (r'\b36\b', 'thirty six'),
+            (r'\b72\b', 'seventy two'),
+            (r'\b50\b', 'fifty'),
+            (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
+            (r'\b2\s*BHK\b', 'two BHK'),
+            (r'\btwo\s*BHK\b', 'two BHK'),
+            (r'\b1\s*BHK\b', 'one BHK'),
+            (r'\bone\s*BHK\b', 'one BHK'),
+            (r'\bBHK\b', 'B.H.K.'),
+            (r'\b15\s*(-|to)\s*20\b', 'fifteen to twenty'),
+            (r'\b11\s*am\b', 'eleven am'),
+            (r'\b3\s*pm\b', 'three pm'),
+            (r'\blakh\b', 'lakh'),
+            (r'\bcrore\b', 'crore'),
         ]
     else:
+        # Hindi / Hinglish default
         replacements = [
             (r'\b760\b', 'seven hundred sixty'),
             (r'\b375\b', 'three hundred seventy five'),
@@ -103,8 +150,6 @@ def normalize_phonetics(text: str) -> str:
             (r'\b76\s*0\b', 'seven hundred sixty'),
             (r'\b36\b', 'chhattis'),
             (r'\b72\b', 'bahattar'),
-            (r'\bseventy\s*two\b', 'bahattar'),
-            (r'\bthirty\s*six\b', 'chhattis'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
             (r'\b2\s*BHK\b', 'two BHK'),
@@ -211,138 +256,139 @@ def set_normal_priority():
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MASTER SYSTEM PROMPT)
 
-1. ROLE, OBJECTIVE & TONE
-- You are Gayatri (गायत्री), an intelligent, polite, and adaptive Real Estate Voice Assistant representing Shiv Sai Construction Company for the Sai Complex project in Dombivli East.
-- PRIMARY GOAL: Help users schedule a site visit smoothly, handle changing minds dynamically during the conversation, and ensure 100% confirmation before ending the call or locking in a slot.
-- TONE & ATTITUDE: Calm, steady, professional, and patient. Maintain a consistent, natural pitch throughout the call.
-- STRICT PITCH & EMOTION CONTROL: NEVER speak with exaggerated high pitch, celebratory joy, or dramatic excitement.
-- STRICTLY NO EXCLAMATION MARKS: NEVER use exclamation marks (!) anywhere in your responses. Use standard single periods (.) only.
-- CALM ACKNOWLEDGMENTS: Rotate calm, conversational acknowledgments naturally ("Theek hai", "Samajh gayi", "Ji" in Hindi; "समजले मला", "हो नक्कीच", "छान" in Marathi). NEVER start every turn with "Ji bilkul" or "Haan ji". Replace enthusiastic phrases like "Bahut badhiya!" with calm words like "Theek hai".
-- PRONUNCIATION OF BHK (MANDATORY): Always pronounce configurations as "one BHK" and "two BHK". STRICTLY NEVER say "do BHK".
-- NEVER END A SENTENCE ON AN ACRONYM (MANDATORY):
-  - NEVER end a sentence or question with a bare acronym like "ya two BHK?". Always append a natural noun or verb phrase like "ya two BHK flat dekh rahe hain?" or "ya two BHK prefer karenge?". This ensures the voice engine never clips or leaves "BHK" unspoken.
-- ARTICULATION & GRAMMATICALLY COMPLETE SENTENCES (MANDATORY):
-  - Speak every word clearly, distinctly, and completely. Never rush, swallow word endings, or drop syllables.
-  - MANDATORY GRAMMATICAL ENDINGS: EVERY sentence MUST have a complete grammatical Hindi/Marathi verb ending (e.g., "milta hai", "hote hain", "chahenge?", "sangto", "aahe").
-  - STRICTLY FORBIDDEN: NEVER end a sentence mid-thought or leave a dangling English fragment like "with spacious layout and modern amenities". Always conclude statements with a natural follow-up question or clear next step.
-- STRICT BREVITY & SPEED: Speak ONLY 1 to 2 short sentences per turn (maximum 15-20 words). Keep answers direct and concise so speech generates and starts immediately.
-- IRRELEVANT QUESTIONS STRICTLY FORBIDDEN: Strictly NEVER ask personal or irrelevant questions like "kya aap family ke saath shift karne ka plan kar rahe hain" or ask about personal living situations. Focus purely on flat configuration (1 BHK or 2 BHK), budget, and site visits.
-- HUMAN-LIKE CONVERSATIONAL VARIETY (NEVER SOUND ROBOTIC):
-  - Speak like an attentive, natural human property consultant, NOT a rigid script reader.
-  - NEVER repeat the exact same sentence or phrasing across turns. Adapt and vary your words naturally based on what the caller said.
-  - STRICTLY FORBIDDEN: NEVER repeat the formula "Humare paas ... start hote hain" back-to-back across multiple turns. Use varied, fresh sentence openings.
-  - STRICTLY FORBIDDEN: Do NOT append "Aur project se related aapka koi sawaal hai?" after every answer. Stop speaking and allow the customer to think and reply.
+1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
+- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shiv Sai Construction Company for the Sai Complex project in Dombivli East.
+- PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
+- TONE & ATTITUDE: Calm, warm, steady, professional, and patient. Speak exactly like a real human advisor talking on a phone call.
+- NATURAL CONSULTATIVE CONVERSATIONS (NOT AN AGGRESSIVE BOT):
+  - Strictly DO NOT push for a site visit on every single turn!
+  - Instead, answer the customer's question thoroughly first, then ask natural, consultative follow-up questions such as:
+    * "Kya flat ya layout ke regarding aapka koi specific sawaal hai?"
+    * "Aap kis tareeqe ka layout prefer karte hain?"
+    * "Aap kab tak shift hone ya buy karne ka plan kar rahe hain?"
+    * "Isme aapko aur kuch details janna hai?"
+  - Mix and vary your follow-up questions across turns. NEVER repeat the exact same closing phrase.
+  - Only invite for a site visit when the customer shows genuine interest, asks to see the flat, or agrees after exploring details.
+- STRICT PITCH & EMOTION CONTROL:
+  - NEVER speak with exaggerated pitch, celebratory joy, or robotic stiffness.
+  - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
+- PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
+- NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
+- STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantly.
 
-2. OPENING CONVERSATION FLOW
-- **Turn 0 (Call Connect Greeting)**: Call starts with the agent saying "Hello." softly at a calm, low, warm pitch.
-- **Turn 1 (When caller responds to 'Hello.' e.g. 'haan', 'boliye', 'kaun?', 'hello kaun?'):**
-  - Deliver your natural intro directly without saying "Haan ji":
-    - If customer asks who is calling or says hello:
-      "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
-    - If customer already confirmed their name (e.g. 'Haan main [Customer Name] bol raha hoon'):
-      "Ji [Customer Name] ji, Sai Complex Dombivli East ke regarding call kiya hai. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK flat dekh rahe hain?"
-    - If customer speaks Marathi:
-      "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून... मी [Customer Name] यांच्याशी बोलू शकते का?"
-- **Turn 2 (Direct Value Pitch if identity confirmed in Turn 1)**:
-  - "Ji, Sai Complex Dombivli East ke regarding call kiya hai... yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK dekh rahe hain ya two BHK flat dekh rahe hain?"
-- **When customer specifies configuration ('1 BHK' / '2 BHK') — STRICTLY NON-REPETITIVE PHRASING:**
-  - DO NOT repeat "Humare paas ... start hote hain". Use completely fresh, informative phrasing:
-  - For 2 BHK:
-    "Theek hai. Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
-  - For 1 BHK:
-    "Samajh gayi. One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?"
-- **Location Shift Handling (When customer mentions Kalyan, Thane, etc.)**:
-  - If customer says looking in Kalyan: "Sir humara property Kalyan mein available nahi hai. Humara project Sai Complex Dombivli East mein hai jo Kalyan se sirf fifteen minutes drive par hai. Agar aap Dombivli East consider karna chahein toh kya main details share kar sakti hoon?"
-  - If customer strictly refuses Dombivli: "Samajh gayi sir... filhal Kalyan mein humara project available nahi hai. Aapka samay dene ke liye shukriya, aapka din shubh ho, bye."
-- **Refusal / Not Interested / Wrong Number**:
-  - Politely say: "Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye." and stop speaking.
+2. FLAT FEATURES & SPECIFICATIONS
+- When customer asks about flat features, interiors, or amenities:
+  - Hindi: "Humare flats mein spacious master bedroom, premium Jaquar fittings, Kajaria tiles, wide balcony, aur cross-ventilation ke saath achhi natural sunlight milti hai. One BHK 375 se 520 square feet aur two BHK 760 square feet carpet area mein available hain. Kya layout ya floor plan ke regarding aapka koi sawaal hai?"
+  - Marathi: "आमच्या फ्लॅट्समध्ये प्रशस्त मास्टर बेडरूम, जॅग्वार फिटिंग्स, कजारिया टाईल्स, मोठी बाल्कनी आणि उत्तम व्हेंटिलेशन मिळते. १ बीएचके ३७५ ते ५२० स्क्वेअर फूट आणि २ बीएचके ७६० स्क्वेअर फूट कार्पेट एरिया आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
+  - English: "Our flats feature spacious master bedrooms, premium Jaquar bathroom fittings, Kajaria vitrified tile flooring, wide balconies, and cross-ventilation with ample natural sunlight. 1 BHK is 375 to 520 square feet and 2 BHK is 760 square feet carpet area. Do you have any specific questions about the floor plan?"
 
-3. SITE VISIT SCHEDULING & DATES
-- Invite for visit naturally: "Theek hai, toh kya aap actual flat dekhne ke liye is weekend site visit karna chahenge?"
-- When customer agrees to weekend / visit: Offer two clear choices: "Theek hai. Saturday convenient rahega ya Sunday, aur subah ya dopahar kis time comfortable rahega?"
-- Date confusion & mid-call changes: Immediately update without breaking flow: "Bilkul, koi issue nahi. Saturday ke badle Sunday kar dete hain. Sunday ko kaunsa time comfortable rahega?"
-- Read back final confirmed details before scheduling:
-  "Got it, maine aapka site visit Sunday subah gyarah baje note kar liya hai. Kya yeh time theek hai?"
-- ONLY when user gives final explicit confirmation ("Haan theek hai", "Yes lock it in", "Confirm kar do"):
+3. INVESTMENT & ROI INQUIRY
+- When customer asks if this is a good investment or asks about returns / future growth:
+  - Hindi: "Ji bilkul! Sai Complex Palava Road Dombivli East mein ek prime investment opportunity hai. Nilje station sirf five minutes aur Kalyan fifteen minutes drive par hai. Yahan infra aur road expansion ki wajah se 8 se 12% annual capital appreciation aur high rental demand mil rahi hai. Kya aap brochure WhatsApp par dekhna chahenge?"
+  - English: "Yes, absolutely! Sai Complex on Palava Road, Dombivli East is a prime investment. Located just five minutes from Nilje station and fifteen minutes from Kalyan, with upcoming metro and road connectivity, the area is witnessing 8 to 12% annual capital appreciation and strong rental yield. Would you like me to share the detailed brochure on WhatsApp?"
+  - Marathi: "हो नक्कीच! साई कॉम्प्लेक्स पलावा रोड डोंबिवली पूर्व येथे एक उत्तम गुंतवणूक पर्याय आहे. निळजे स्टेशन फक्त पाच मिनिटांवर आहे आणि कल्याण पंधरा मिनिटांवर. येथे वाढत्या विकासामुळे ८ ते १२ टक्के वार्षिक वाढ आणि उत्तम भाडे उत्पन्न मिळत आहे. मी आपल्याला व्हॉट्सअॅपवर माहिती पाठवू का?"
+
+4. OPENING CONVERSATION FLOW
+- **Turn 0 (Call Connect Greeting)**: Call starts with the agent saying "Hello." in her natural, warm voice.
+- **Turn 1 (When caller responds e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
+  - "Hello! Main Gayatri bol rahi hoon Sai Complex Dombivli East se... kya main [Customer Name] se baat kar sakti hoon?"
+- **Turn 2 (Identity Confirmed):**
+  - "Ji, Sai Complex Dombivli East ke regarding call kiya tha. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+- **When customer specifies configuration:**
+  - 2 BHK: "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi sawaal hai?"
+  - 1 BHK: "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+- **When customer is busy / asks to call later / future plan:**
+  - "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
+- **Refusal / Not Interested:**
+  - "Theek hai, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye."
+
+5. SITE VISIT CONFIRMATION & CLOSING
+- If customer wants to visit: "Saturday convenient rahega ya Sunday, aur subah ya dopahar kis time comfortable rahega?"
+- When user gives final explicit confirmation:
   Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
-  and say: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details aur location WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
-- If customer wants brochure first: "Bilkul, main aapko WhatsApp par brochure bhej deti hoon. Aap dekh kar jab bhi comfortable ho bata sakte hain. Aapka din shubh ho, bye."
-- **AMENITIES INQUIRY RESPONSE (MANDATORY)**:
-  Whenever the customer asks about amenities, facilities, or features of the project, NEVER list them and remain silent. ALWAYS list them concisely and IMMEDIATELY invite them for an actual site visit:
-  "Humare project mein gym, children play area, jogging track, aur 24-hour water supply jaise premium amenities hain. Agar aap ek baar actual visit karenge toh aapko aur clear idea ho jayega. Kya aap is weekend site visit karna chahenge?"
-  In Marathi:
-  "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
+  and say: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
 
-4. MANDATORY CALL CLOSING RULE
-- Whenever ending the call (after visit booking, refusal, or completed questions):
-- For Hindi/Hinglish calls: ALWAYS conclude with: "Aapka din shubh ho, bye."
-- For Marathi calls: ALWAYS conclude with: "तुमचा दिवस चांगला जावो, नमस्कार." (STRICTLY NEVER say "aapka din shubh ho" in Marathi).
+6. MANDATORY CALL CLOSING RULE
+- Hindi calls: Conclude with: "Aapka din shubh ho, bye."
+- Marathi calls: Conclude with: "तुमचा दिवस चांगला जावो, नमस्कार."
+- English calls: Conclude with: "Thank you for your time. Have a wonderful day, goodbye!"
 
-5. LANGUAGE & NUMBER FORMATTING
-- Script: Write spoken Hindi turns in clean Hinglish Latin alphabet.
-- Standard pronunciation for configurations: "one BHK" and "two BHK" (NEVER "do BHK").
-- Spoken numbers: "seven hundred sixty square feet", "three hundred seventy five square feet", "five hundred twenty square feet", "seven hundred fifty five square feet", "eleven hundred ten square feet", "twenty two hundred eighty five square feet".
-- Pricing: "thirty six lakh rupaye", "fifty lakh rupaye", "seventy two lakh rupaye", "one crore four lakh rupaye", "two crore ten lakh rupaye".
-- Connectivity: "fifteen se twenty minutes", "five minutes", "subah gyarah baje", "dopahar teen baje".
-- Single periods only. Absolutely NO markdown, NO asterisks, NO bullet points, NO emojis.
-
-6. PROJECT FACTS (SAI COMPLEX, DOMBIVLI EAST)
+7. PROJECT FACTS (SAI COMPLEX, DOMBIVLI EAST)
 - Developer: Shiv Sai Construction Company.
 - Location: Casario, Palava Road, Near Pratik Green, Lodha Heaven, Dombivli East — 421204.
-- 1 BHK Options: 375 sqft (36 lakh rupaye onwards), 520 sqft (50 lakh rupaye onwards), 755 sqft with Terrace (72 lakh rupaye onwards).
-- 2 BHK Options: 760 sqft (72 lakh rupaye onwards), 1110 sqft with Terrace (1 crore 4 lakh rupaye onwards), 2285 sqft with Terrace (2 crore 10 lakh rupaye onwards).
-- Connectivity:
-  - Dombivli Station: Approx fifteen to twenty minutes drive.
-  - Nilje Station: Approx five minutes from site (mention ONLY if asked about nearest station).
-  - Kalyan: Approx fifteen minutes away.
-  - Thane / Navi Mumbai / Airoli: Shil Road directly connects in approx twenty five to thirty minutes.
-- Amenities: Gym, children play area, jogging track, 24-hour water supply, Jaquar fittings, Kajaria tiles. Free VIP cab pickup available for site visits. Always follow up an amenities answer by inviting the customer to visit this weekend.
-
-7. OFF-TOPIC 3-STRIKE PROTOCOL
-- Strike 1 (First off-topic occurrence): Politely steer back to property:
-  "Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se... kya hum flats ya property details ke baare mein baat kar sakte hain?"
-- Strike 2 (Second off-topic occurrence — SOFT WARNING):
-  "Sir, please main aapse request karungi ki hum call ko sirf property ke baare mein hi rakhein, warna mujhe call disconnect karna padega. Kya aap flat ya pricing ke baare mein janna chahte hain?"
-- Strike 3 (Third off-topic occurrence — IMMEDIATE TERMINATION):
-  "Lagta hai aap abhi property mein interested nahi hain. Humara samay dene ke liye shukriya, aapka din shubh ho, bye."
-  (System terminates carrier line automatically).
+- 1 BHK: 375 sqft (36 lakh onwards), 520 sqft (50 lakh onwards), 755 sqft with Terrace (72 lakh onwards).
+- 2 BHK: 760 sqft (72 lakh onwards), 1110 sqft with Terrace (1 crore 4 lakh onwards), 2285 sqft with Terrace (2 crore 10 lakh onwards).
+- Connectivity: Dombivli Station (15-20 mins), Nilje Station (5 mins), Kalyan (15 mins), Thane/Navi Mumbai via Shil Road (25-30 mins).
+- Amenities: Gym, children play area, jogging track, 24-hour water supply, Jaquar fittings, Kajaria tiles. Free VIP cab pickup for site visits.
 
 8. 100% PURE MARATHI MODE
-- Trigger: If caller speaks or asks for Marathi ("kya aap marathi bolti ho?", "marathi madhe bola", "मराठीत बोला"):
+- Trigger: If caller speaks or asks for Marathi ("marathi madhe bola", "मराठीत बोला", "marathi aati hai kya"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
 - Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
-- 2 BHK: "छान पर्याय आहे. दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
-- Dombivli Station: "डोंबिवली रेल्वे स्थानक आमच्या साई कॉम्प्लेक्स प्रोजेक्टपासून फक्त पंधरा ते वीस मिनिटांच्या अंतरावर आहे."
-- Amenities Marathi: "आमच्या प्रोजेक्टमध्ये जिम, चिल्ड्रन्स प्ले एरिया, जॉगिंग ट्रॅक आणि २४ तास पाणी पुरवठा यांसारख्या आधुनिक सुविधा आहेत. आपण प्रत्यक्ष साईटला भेट दिली तर अधिक चांगली कल्पना येईल. आपण या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
-- Visit invite: "छान. मग प्रत्यक्ष फ्लॅट बघण्यासाठी या वीकेंडला साईट व्हिजिट करायला आवडेल का?"
-- Scheduling Marathi: "खूप छान. आपण शनिवारी येऊ इच्छिता की रविवारी, आणि किती वाजता?"
-- Confirming Visit: Call `schedule_site_visit` and say: "मी तुमची भेट नक्की केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
-- Closing Marathi: "तुमचा दिवस चांगला जावो, नमस्कार."
-- Rejections Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
+- 2 BHK: "दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
+- Numbers in Marathi: Always pronounce 375 as "तीनशे पंच्याहत्तर", 760 as "सातशे साठ", 520 as "पाचशे वीस", 36 as "छत्तीस", 72 as "बहात्तर".
+- Silence Watchdog in Marathi: "हॅलो? माझा आवाज येतोय का?"
+- Closing in Marathi: "तुमचा दिवस चांगला जावो, नमस्कार."
+- Rejections in Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
+
+9. 100% PURE ENGLISH MODE
+- Trigger: If caller speaks or asks for English ("can you speak English", "talk in English", "English please"):
+- Respond 100% in fluent, professional English. ZERO Hindi words.
+- Opening: "Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
+- 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lakh rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
+- 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lakh rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
+- Silence Watchdog in English: "Hello? Are you able to hear me?"
+- Closing in English: "Thank you so much for your time. Have a wonderful day, goodbye!"
 """
 
-
 # ==============================================================================
-# 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS
+# 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS (STICKY MULTILINGUAL)
 # ==============================================================================
-def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
-    """Detects spoken language, detecting explicit requests and spoken Marathi/English/Hindi."""
+def resolve_language(transcript: str, current_lang: str = "hi") -> str:
+    """
+    Detects spoken language with strict stickiness.
+    Only changes language if the customer explicitly asks to,
+    or speaks clear unambiguous sentences in another language.
+    Once locked to 'mr' or 'en', stays locked until requested to switch.
+    """
     import string
     text = transcript.strip().lower()
     words = text.split()
     clean_words = [w.strip(string.punctuation) for w in words]
-    
-    # 0. Explicit language request overrides
-    marathi_explicit = ['marathi', 'मराठी', 'marathit', 'marathi madhe', 'marathit bola', 'marathi bola', 'marathi sanga', 'marathi madhun']
+
+    # 0. Explicit language request overrides (Customer asks to change language)
+    marathi_explicit = [
+        'marathi', 'मराठी', 'marathit', 'marathi madhe', 'marathit bola',
+        'marathi bola', 'marathi sanga', 'marathi madhun', 'marathi aati',
+        'marathi yete ka', 'marathi ahe ka'
+    ]
     if any(m in text for m in marathi_explicit):
         return 'mr'
-    if 'english' in text or 'इंग्लिश' in text:
+
+    english_explicit = [
+        'english', 'इंग्लिश', 'in english', 'speak english', 'speak in english',
+        'talk in english', 'can we speak in english', 'can you speak english'
+    ]
+    if any(e in text for e in english_explicit):
         return 'en'
-    if 'hindi' in text or 'हिंदी' in text or 'हिन्दी' in text:
+
+    hindi_explicit = [
+        'hindi', 'हिंदी', 'हिन्दी', 'in hindi', 'hindi mein', 'hindi me',
+        'hindi bola', 'hindi madhe'
+    ]
+    if any(h in text for h in hindi_explicit):
         return 'hi'
-    
-    # 1. Devanagari Marathi script markers
+
+    # If already locked into Marathi ('mr'): STICK to Marathi unless explicitly requested
+    if current_lang == 'mr':
+        return 'mr'
+
+    # If already locked into English ('en'): STICK to English unless explicitly requested
+    if current_lang == 'en':
+        return 'en'
+
+    # If currently in Hindi ('hi'): Check if user spontaneously spoke Marathi or English
     if 'ळ' in transcript:
         return 'mr'
     devanagari_marathi_words = [
@@ -353,7 +399,6 @@ def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
     if any(w in text for w in devanagari_marathi_words):
         return 'mr'
 
-    # 2. Phonetic / Latin Romanized Marathi markers
     phonetic_marathi_markers = [
         'kiti', 'kuthe', 'kute', 'laam', 'kasa', 'kase', 'kashi', 'sanga', 'sang na',
         'ahe', 'aahe', 'ahet', 'aahet', 'nako', 'pahije', 'tumhi', 'tumche', 'tumchya',
@@ -364,7 +409,6 @@ def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
     if any(w in clean_words or w in text for w in phonetic_marathi_markers):
         return 'mr'
 
-    # 3. English Check
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(' ', ''))
     hinglish_markers = {
@@ -373,12 +417,11 @@ def resolve_language(transcript: str, detected_lang: str | None = None) -> str:
         'to', 'bhai', 'na', 'ab', 'kab', 'sab', 'kar', 'karna', 'krna', 'do', 'dena', 'dedo',
         'kitna', 'kitne', 'kitni', 'door', 'dur', 'kahan', 'kaha', 'kaise', 'hoga', 'hogi', 'milega'
     }
-    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.8
+    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.85
     if len(clean_words) >= 4 and is_mostly_latin and not any(w in hinglish_markers for w in clean_words):
         return 'en'
-        
-    # Default to Hindi
-    return 'hi'
+
+    return current_lang
 
 
 class PriyaRealEstateAgent(Agent):
@@ -1010,18 +1053,19 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=25,
+        endpointing_ms=300,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (16kHz native rate, stable 0.30s natural breath window)
+    # 3. Pre-warm Silero VAD (Noise-immune: 180ms min speech, 0.65 threshold to filter out fan and ambient chatter)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.30,
-        min_speech_duration=0.06,
+        min_silence_duration=0.35,
+        min_speech_duration=0.18,
+        activation_threshold=0.65,
         sample_rate=16000
     )
 
@@ -1159,15 +1203,16 @@ Analyze this recorded telephone conversation between Gayatri (AI Property Adviso
 
 STRICT CLASSIFICATION RULES:
 1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, refuses site visit/details, or persistently goes off-topic/trolls leading to call termination.
-2. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East. (Note: Gayatri asking does NOT mean scheduled unless the customer agreed!)
-3. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
-4. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
-5. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
-6. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
+2. "Future Plan / Need Afterwards": Customer is busy right now, says call later, after 2-3 months, next year, exploring for the future, or asks to follow up later.
+3. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East.
+4. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
+5. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
+6. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
+7. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
 
 Respond ONLY with valid JSON:
 {{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "outcome": "Site Visit Scheduled" | "Interested" | "Future Plan / Need Afterwards" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "Concise 1-sentence executive summary in English",
   "detectedQuestions": ["Topic 1", "Topic 2"]
@@ -1182,7 +1227,7 @@ Respond ONLY with valid JSON:
                 )
                 data = json.loads(resp.text)
                 if data.get("outcome") in [
-                    "Site Visit Scheduled", "Interested", "Not Interested", 
+                    "Site Visit Scheduled", "Interested", "Future Plan / Need Afterwards", "Not Interested", 
                     "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
                 ]:
                     logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini {m_name})] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
@@ -1200,13 +1245,14 @@ Respond ONLY with valid JSON:
 
 Rules:
 - "Not Interested" if caller refuses, says nahi chahiye, wrong number, no interest, or persistently drifts off-topic/trolls.
+- "Future Plan / Need Afterwards" if caller is busy, says call later, after 2-3 months, or exploring for future.
 - "Site Visit Scheduled" ONLY if caller agreed to visit (e.g. Sunday/weekend).
 - "Interested" if caller asked for price/brochure/flats.
 - "Inquiry Completed" for general inquiries.
 
 Classify into valid JSON:
 {{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "outcome": "Site Visit Scheduled" | "Interested" | "Future Plan / Need Afterwards" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "1 sentence executive summary in English",
   "detectedQuestions": ["topic1", "topic2"]
@@ -1406,7 +1452,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=25,
+            endpointing_ms=300,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1503,13 +1549,14 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (16kHz native sample rate)
+    # VAD is pre-warmed, but load as fallback if not present (Noise-immune configuration)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Noise-immune: 180ms min speech, 0.65 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.30,
-            min_speech_duration=0.06,
+            min_silence_duration=0.35,
+            min_speech_duration=0.18,
+            activation_threshold=0.65,
             sample_rate=16000
         )
     
@@ -1768,14 +1815,18 @@ async def entrypoint(ctx: JobContext):
                 if not found_src:
                     search_dirs = [
                         Path("bookings/recordings") / ctx.room.name,
-                        Path(src_session_dir) if src_session_dir else None
+                        Path(src_session_dir) if src_session_dir else None,
+                        Path("bookings/recordings"),
                     ]
                     for s_dir in search_dirs:
                         if s_dir and s_dir.exists():
-                            for f in s_dir.glob("*.ogg"):
-                                if f.stat().st_size > 0:
-                                    found_src = f
-                                    logger.info(f"🎙️ [AUDIO RECORDING] Found audio file via glob: {found_src} ({found_src.stat().st_size} bytes)")
+                            for ext in ["*.ogg", "*.wav", "*.mp3", "*.pcm"]:
+                                for f in s_dir.glob(ext):
+                                    if f.stat().st_size > 0 and (ctx.room.name in f.name or f.parent.name == ctx.room.name or f.name == "audio.ogg"):
+                                        found_src = f
+                                        logger.info(f"🎙️ [AUDIO RECORDING] Found audio file via glob ({ext}): {found_src} ({found_src.stat().st_size} bytes)")
+                                        break
+                                if found_src:
                                     break
                             if found_src:
                                 break
@@ -2232,11 +2283,13 @@ async def entrypoint(ctx: JobContext):
                 except Exception as steer_err:
                     logger.debug(f"Could not inject off-topic steering: {steer_err}")
 
-            new_lang = resolve_language(ev.transcript, None)
+            new_lang = resolve_language(ev.transcript, current_lang)
             
             if new_lang != current_lang:
                 current_lang = new_lang
-                logger.info(f"🗣️ Language Switch Detected: '{current_lang}' for text: '{ev.transcript}'")
+                global ACTIVE_TTS_LANGUAGE
+                ACTIVE_TTS_LANGUAGE = current_lang
+                logger.info(f"🗣️ Language Switch Detected: '{current_lang}' (ACTIVE_TTS_LANGUAGE={ACTIVE_TTS_LANGUAGE}) for text: '{ev.transcript}'")
                 
                 is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
                 if is_cartesia and hasattr(session.tts, "update_options"):
@@ -2264,6 +2317,12 @@ async def entrypoint(ctx: JobContext):
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
+                        try:
+                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                            if hist and hasattr(hist, "add_message"):
+                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: 100% PURE ENGLISH] The caller requested or is speaking English. You MUST answer 100% COMPLETELY in fluent professional ENGLISH. STRICTLY ZERO HINDI WORDS (No 'ji', 'hai', 'aapka', 'accha', 'theek', 'shubh ho'). Keep it short (1-2 sentences).")
+                        except Exception as e:
+                            logger.debug(f"Could not inject English steering message: {e}")
                     else:
                         session.tts.update_options(
                             voice=kusha_voice_id,
@@ -2337,12 +2396,17 @@ async def entrypoint(ctx: JobContext):
 
             # 5. Release caller's phone line immediately with active SIP BYE
             logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller...")
+            lk_client = None
             try:
                 from livekit import api
+                cloud_lk_url = os.getenv("LIVEKIT_URL", "https://cold-calling-j7qhnkas.livekit.cloud")
+                cloud_lk_key = os.getenv("LIVEKIT_API_KEY", "APIAkEXqBNfS2LP")
+                cloud_lk_secret = os.getenv("LIVEKIT_API_SECRET", "dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT")
+                lk_client = api.LiveKitAPI(url=cloud_lk_url, api_key=cloud_lk_key, api_secret=cloud_lk_secret)
                 for p in list(ctx.room.remote_participants.values()):
                     try:
                         logger.info(f"📞 [HANGUP] Disconnecting carrier SIP participant {p.identity}...")
-                        await ctx.api.room.remove_participant(
+                        await lk_client.room.remove_participant(
                             api.RoomParticipantIdentity(room=ctx.room.name, identity=p.identity)
                         )
                         logger.info(f"✅ Carrier SIP BYE sent to {p.identity}!")
@@ -2353,13 +2417,20 @@ async def entrypoint(ctx: JobContext):
 
             # 6. Now that data is safely saved and connections are flushed, delete room and disconnect agent
             try:
-                from livekit import api
-                await ctx.api.room.delete_room(
-                    api.DeleteRoomRequest(room=ctx.room.name)
-                )
-                logger.info("✅ LiveKit room successfully deleted! Carrier line released.")
+                if lk_client:
+                    from livekit import api
+                    await lk_client.room.delete_room(
+                        api.DeleteRoomRequest(room=ctx.room.name)
+                    )
+                    logger.info("✅ LiveKit room successfully deleted! Carrier line released.")
             except Exception as del_err:
                 logger.debug(f"Room delete note: {del_err}")
+            finally:
+                if lk_client:
+                    try:
+                        await lk_client.aclose()
+                    except Exception:
+                        pass
 
             try:
                 await ctx.room.disconnect()
@@ -2395,6 +2466,7 @@ async def entrypoint(ctx: JobContext):
                 ending_phrases = [
                     "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
                     "shukriya", "bye!", "bye", "baad mein call karte hain",
+                    "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
                     "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
                 ]
                 if any(phrase in text for phrase in ending_phrases):
@@ -2522,11 +2594,13 @@ async def entrypoint(ctx: JobContext):
         text = raw_text.lower()
         ending_phrases = [
             "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-            "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या"
+            "shukriya", "bye!", "bye", "baad mein call karte hain",
+            "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
+            "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
         ]
         if any(phrase in text for phrase in ending_phrases):
             logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
-            trigger_hangup(wait_for_speech=True, delay_seconds=2.5)
+            trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
     spoken_customer_name = f"{customer_name} ji" if not customer_name.endswith("ji") else customer_name
     agent = PriyaRealEstateAgent(
@@ -2550,37 +2624,37 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 0.8s for WebRTC audio negotiation and SIP RTP streams to fully settle naturally
-    logger.info("⏳ Allowing 0.8s for audio bridge and SIP RTP connection to settle naturally...")
-    await asyncio.sleep(0.8)
+    # Allow 0.25s for WebRTC audio negotiation and SIP RTP streams to fully settle naturally
+    logger.info("⏳ Allowing 0.25s for audio bridge and SIP RTP connection to settle naturally...")
+    await asyncio.sleep(0.25)
 
     # Human Call Pickup Flow:
-    # 1. Listen FIRST for up to 1.2s! If caller says "Hello?" upon pickup, immediately respond without colliding!
-    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 1.2s before prompting...")
+    # 1. Listen for 0.4s: If caller says "Hello?" immediately upon pickup, respond directly without colliding!
+    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 0.4s before prompting...")
     t_listen_start = time.time()
-    while time.time() - t_listen_start < 1.2:
+    while time.time() - t_listen_start < 0.4:
         if caller_has_spoken or _hangup_scheduled:
             logger.info("🎙️ [HUMAN PICKUP FLOW] Caller spoke first! Skipping initial prompt and entering conversation immediately.")
             intro_finished = True
             break
-        await asyncio.sleep(0.08)
+        await asyncio.sleep(0.05)
 
-    # 2. If caller remains silent after 1.2s, prompt gently: "Hello." every 2 seconds until response received
+    # 2. If caller remains silent, prompt gently with natural warm voice (exact same speed and volume as conversation)
     if not caller_has_spoken and not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
             session.tts.update_options(
                 voice=kusha_voice_id,
                 language="hi",
-                speed=0.88,
-                volume=0.92
+                speed=cartesia_speed,
+                volume=cartesia_volume,
+                emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
         hello_prompts = [
             "Hello.",
             "Hello ji.",
             "Hello, aawaaz aa rahi hai?",
-            "Hello, sun pa rahe hain?",
         ]
 
         for idx, prompt_str in enumerate(hello_prompts):
@@ -2588,7 +2662,7 @@ async def entrypoint(ctx: JobContext):
                 intro_finished = True
                 break
 
-            logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed=0.88)...")
+            logger.info(f"🎙️ [CALL CONNECT GREETING {idx + 1}/{len(hello_prompts)}] Saying '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
             try:
                 h_speech = session.say(prompt_str, allow_interruptions=True)
                 elapsed_sec = round(time.time() - t_call_start, 1)
@@ -2606,17 +2680,8 @@ async def entrypoint(ctx: JobContext):
                     break
                 await asyncio.sleep(0.08)
 
-        # Restore standard conversational speed for regular turns
-        if is_cartesia and hasattr(session.tts, "update_options"):
-            session.tts.update_options(
-                voice=kusha_voice_id,
-                language="hi",
-                speed=cartesia_speed,
-                volume=cartesia_volume
-            )
-
     if not caller_has_spoken and not _hangup_scheduled:
-        logger.info("⏳ Caller silent after 4 'Hello' attempts (~10-12s). Terminating call.")
+        logger.info("⏳ Caller silent after hello attempts. Terminating call.")
         farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
         try:
             sp = session.say(farewell_text, allow_interruptions=False)
@@ -2626,7 +2691,7 @@ async def entrypoint(ctx: JobContext):
                 await sp.wait_for_playout()
         except Exception as e:
             logger.warning(f"Error speaking silence farewell: {e}")
-        trigger_hangup(wait_for_speech=False, delay_seconds=2.0)
+        trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
         return
 
     # Silence Watchdog: 10s -> "Hello?", 30s -> Auto Hangup
@@ -2659,11 +2724,16 @@ async def entrypoint(ctx: JobContext):
 
             silence_duration = time.time() - t_last_activity
 
-            # Stage 1: Caller silent for 10 full seconds AFTER Gayatri finished intro / speech -> Prompt "Hello?"
+            # Stage 1: Caller silent for 10 full seconds AFTER Gayatri finished intro / speech -> Prompt in active language
             if silence_duration >= 10.0 and not has_prompted_silence:
                 has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s after Gayatri intro). Prompting 'Hello'...")
-                prompt_text = "Hello? Kya aap sun rahe hain?"
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s after Gayatri intro). Prompting in language '{current_lang}'...")
+                if current_lang == "mr":
+                    prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                elif current_lang == "en":
+                    prompt_text = "Hello? Are you able to hear me?"
+                else:
+                    prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
                     p_speech = session.say(prompt_text, allow_interruptions=True)
                     elapsed_sec = round(time.time() - t_call_start, 1)
@@ -2674,10 +2744,15 @@ async def entrypoint(ctx: JobContext):
                 except Exception as e:
                     logger.warning(f"Error speaking silence prompt: {e}")
 
-            # Stage 2: Caller silent for 30 seconds -> End call cleanly
+            # Stage 2: Caller silent for 30 seconds -> End call cleanly in active language
             elif silence_duration >= 30.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>30s). Terminating call.")
-                farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Aapka din shubh ho, bye!"
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>30s). Terminating call in language '{current_lang}'...")
+                if current_lang == "mr":
+                    farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
+                elif current_lang == "en":
+                    farewell_text = "I'm unable to hear you. We will connect later. Have a wonderful day, goodbye!"
+                else:
+                    farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
                 try:
                     speech_handle = session.say(farewell_text, allow_interruptions=False)
                     elapsed_sec = round(time.time() - t_call_start, 1)
@@ -2686,7 +2761,7 @@ async def entrypoint(ctx: JobContext):
                         await speech_handle.wait_for_playout()
                 except Exception as e:
                     logger.warning(f"Error speaking silence farewell: {e}")
-                trigger_hangup(wait_for_speech=False, delay_seconds=2.5)
+                trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
     watchdog_task = asyncio.create_task(_silence_watchdog())

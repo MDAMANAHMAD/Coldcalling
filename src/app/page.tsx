@@ -47,7 +47,7 @@ export default function ColdCallingHomePage() {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Interested' | 'Site Visit' | 'Not Interested'>('All');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Interested' | 'Future Plan' | 'Site Visit' | 'Not Interested'>('All');
 
   // Selected Call Log for Modal Transcript
   const [selectedCall, setSelectedCall] = useState<(CallLog & { leadName: string; leadPhone?: string }) | null>(null);
@@ -292,10 +292,10 @@ export default function ColdCallingHomePage() {
   useEffect(() => {
     loadData();
 
-    // Auto-poll for background updates every 8 seconds
+    // Auto-poll for background updates every 4 seconds for instant cross-device sync
     const interval = setInterval(() => {
       loadData();
-    }, 8000);
+    }, 4000);
 
     return () => clearInterval(interval);
   }, []);
@@ -460,7 +460,28 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 2. Location Mismatch (Kalyan)
+    // 2. Future Plan / Need Afterwards (Busy, call later, after 2-3 months, next year)
+    const isFuturePlan = 
+      outcome.includes('future plan') ||
+      outcome.includes('need afterwards') ||
+      outcome.includes('afterwards') ||
+      summary.includes('call later') ||
+      summary.includes('after 2') ||
+      summary.includes('after 3') ||
+      summary.includes('next year') ||
+      summary.includes('baad mein') ||
+      summary.includes('follow up later');
+
+    if (isFuturePlan) {
+      return {
+        label: 'Future Plan / Need Afterwards',
+        bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+        dot: 'bg-amber-500',
+        icon: Clock
+      };
+    }
+
+    // 3. Location Mismatch (Kalyan)
     if (outcome.includes('location mismatch') || outcome.includes('kalyan') || summary.includes('kalyan')) {
       return {
         label: 'Location Mismatch',
@@ -470,7 +491,7 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 3. Site Visit Scheduled (Must be an actual confirmation)
+    // 4. Site Visit Scheduled (Must be an actual confirmation)
     const isSiteVisit = 
       outcome.includes('site visit scheduled') || 
       (outcome.includes('site visit') && !outcome.includes('not') && !outcome.includes('dropped')) ||
@@ -488,7 +509,7 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 4. Interested (Customer interested in flats, pricing, WhatsApp details)
+    // 5. Interested (Customer interested in flats, pricing, WhatsApp details)
     const isInterested = 
       outcome === 'interested' || 
       (outcome.includes('interested') && !outcome.includes('not')) ||
@@ -505,7 +526,7 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 5. Ringing / Calling
+    // 6. Ringing / Calling
     if (outcome.includes('calling') || outcome.includes('ringing')) {
       return {
         label: 'Ringing / Calling',
@@ -515,7 +536,7 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 6. Short / Dropped
+    // 7. Short / Dropped
     if (outcome.includes('dropped') || outcome.includes('short')) {
       return {
         label: 'Short / Dropped',
@@ -570,6 +591,7 @@ export default function ColdCallingHomePage() {
     if (statusFilter === 'All') return true;
     const tag = getOutcomeTag(call).label;
     if (statusFilter === 'Interested') return tag === 'Interested';
+    if (statusFilter === 'Future Plan') return tag === 'Future Plan / Need Afterwards';
     if (statusFilter === 'Site Visit') return tag === 'Site Visit Scheduled';
     if (statusFilter === 'Not Interested') return tag === 'Not Interested';
 
@@ -858,7 +880,7 @@ export default function ColdCallingHomePage() {
 
             {/* Filter Pills */}
             <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
-              {(['All', 'Interested', 'Site Visit', 'Not Interested'] as const).map((tab) => (
+              {(['All', 'Interested', 'Future Plan', 'Site Visit', 'Not Interested'] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setStatusFilter(tab)}
@@ -1091,6 +1113,17 @@ export default function ColdCallingHomePage() {
                         className="w-full h-8 rounded-lg accent-blue-600" 
                         src={audioUrl} 
                         preload="metadata"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent && !parent.querySelector('.rec-fallback-msg')) {
+                            const note = document.createElement('span');
+                            note.className = 'rec-fallback-msg text-[11px] text-slate-400 italic';
+                            note.innerText = 'Audio recording processing on server...';
+                            parent.insertBefore(note, target);
+                          }
+                        }}
                       >
                         Your browser does not support audio playback.
                       </audio>

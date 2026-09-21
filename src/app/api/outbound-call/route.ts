@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SipClient } from 'livekit-server-sdk';
+import { SipClient, RoomServiceClient } from 'livekit-server-sdk';
 import { getDb, saveDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -106,6 +106,44 @@ export async function POST(req: NextRequest) {
       }
 
       saveDb(db);
+
+      // Sync newly placed call to LiveKit Cloud 'gayatri-persistent-storage' room metadata
+      // so it shows up IMMEDIATELY across all connected devices (mobile, laptop, tablet)
+      try {
+        const roomClient = new RoomServiceClient(host, apiKey, apiSecret);
+        const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+        let cloudMeta: any = {};
+        if (rooms.length > 0 && rooms[0].metadata) {
+          try { cloudMeta = JSON.parse(rooms[0].metadata); } catch {}
+        } else {
+          await roomClient.createRoom({
+            name: 'gayatri-persistent-storage',
+            emptyTimeout: 86400 * 30,
+          });
+        }
+        if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
+        const newLiveLog = {
+          id: callLogId,
+          leadId: `lead-${cleanId}`,
+          callSid: uniqueRoom,
+          userEmail: userEmail,
+          durationSeconds: 0,
+          recordingUrl: '',
+          transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
+          aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
+          sentiment: 'neutral',
+          calledAt: new Date().toISOString(),
+          outcome: 'Calling...',
+          customerName: customerName,
+          customerPhone: safePhone,
+          detectedQuestions: ['Outbound Initiation']
+        };
+        cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
+        await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
+        console.log(`[API OUTBOUND CALL] Synced call ${uniqueRoom} to gayatri-persistent-storage across all devices.`);
+      } catch (cloudErr) {
+        console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
+      }
     } catch (dbErr) {
       console.warn('[DB Log Warning]:', dbErr);
     }
