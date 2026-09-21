@@ -850,10 +850,7 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
                     candidate_llm = google.LLM(
                         model=model_name,
                         api_key=global_google_key,
-                        temperature=0.3,
-                        presence_penalty=0.6,
-                        frequency_penalty=0.8,
-                        max_output_tokens=150
+                        temperature=0.3
                     )
                     
                     # Verify schema compilation works
@@ -873,10 +870,7 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
                 global_llm = google.LLM(
                     model="gemini-3.5-flash-lite",
                     api_key=global_google_key,
-                    temperature=0.3,
-                    presence_penalty=0.6,
-                    frequency_penalty=0.8,
-                    max_output_tokens=150
+                    temperature=0.3
                 )
                 SELECTED_MODEL = "gemini-3.5-flash-lite"
         except Exception as outer_err:
@@ -884,10 +878,7 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
             global_llm = google.LLM(
                 model="gemini-3.5-flash-lite",
                 api_key=global_google_key,
-                temperature=0.3,
-                presence_penalty=0.6,
-                frequency_penalty=0.8,
-                max_output_tokens=150
+                temperature=0.3
             )
             SELECTED_MODEL = "gemini-3.5-flash-lite"
 
@@ -959,10 +950,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     global_llm = google.LLM(
                         model="gemini-3.6-flash",
                         api_key=global_google_key,
-                        temperature=0.3,
-                        presence_penalty=0.6,
-                        frequency_penalty=0.8,
-                        max_output_tokens=150
+                        temperature=0.3
                     )
                     SELECTED_MODEL = "gemini-3.6-flash"
                     SELECTED_GROQ_MODEL = None
@@ -982,10 +970,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                 global_llm = google.LLM(
                     model="gemini-3.6-flash",
                     api_key=global_google_key,
-                    temperature=0.3,
-                    presence_penalty=0.6,
-                    frequency_penalty=0.8,
-                    max_output_tokens=150
+                    temperature=0.3
                 )
                 SELECTED_MODEL = "gemini-3.6-flash"
                 SELECTED_GROQ_MODEL = None
@@ -1535,10 +1520,7 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
-                temperature=0.3,
-                presence_penalty=0.6,
-                frequency_penalty=0.8,
-                max_output_tokens=150
+                temperature=0.3
             )
         elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
@@ -1552,10 +1534,7 @@ async def entrypoint(ctx: JobContext):
             llm = google.LLM(
                 model=SELECTED_MODEL,
                 api_key=google_key,
-                temperature=0.3,
-                presence_penalty=0.6,
-                frequency_penalty=0.8,
-                max_output_tokens=150
+                temperature=0.3
             )
         ctx.proc.userdata["llm"] = llm
     
