@@ -1084,24 +1084,26 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Fast streaming with 100ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-fast streaming with 25ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=100,
+        endpointing_ms=25,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephone-tuned: 0.50 threshold, 80ms min speech for instant pickup)
+    # 3. Pre-warm Silero VAD (Telephone-sensitive: 0.35 threshold, 50ms min speech, 220ms silence for effortless recognition)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.30,
-        min_speech_duration=0.08,
-        activation_threshold=0.50,
+        min_silence_duration=0.22,
+        min_speech_duration=0.05,
+        activation_threshold=0.35,
+        deactivation_threshold=0.22,
+        prefix_padding_duration=0.3,
         sample_rate=16000
     )
 
@@ -1488,7 +1490,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=100,
+            endpointing_ms=25,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1579,14 +1581,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Telephone-tuned: 0.50 threshold, 80ms min speech)
+    # VAD is pre-warmed, but load as fallback if not present (Telephone-sensitive: 0.35 threshold, 50ms min speech)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Telephone-tuned: 80ms min speech, 0.50 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Telephone-sensitive: 50ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.30,
-            min_speech_duration=0.08,
-            activation_threshold=0.50,
+            min_silence_duration=0.22,
+            min_speech_duration=0.05,
+            activation_threshold=0.35,
+            deactivation_threshold=0.22,
+            prefix_padding_duration=0.3,
             sample_rate=16000
         )
     
@@ -1612,7 +1616,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.20,
+                "min_delay": 0.12,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -1620,10 +1624,10 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 2,
-                "min_duration": 0.85,
+                "min_words": 1,
+                "min_duration": 0.55,
                 "resume_false_interruption": False,
-                "false_interruption_timeout": 1.5,
+                "false_interruption_timeout": 1.2,
             }
         }
     )
@@ -2545,9 +2549,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
-        # Keep up to 10 recent dialogue items + system prompt (avoids forgetting user requirements while keeping TTFT fast)
+        # Keep up to 6 recent dialogue items + system prompt (keeps TTFT ultra-fast while preserving immediate context)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            max_dialogue_items = 10
+            max_dialogue_items = 6
             items = session._chat_ctx.items
             if len(items) > max_dialogue_items + 1:
                 sys_prompt = items[0]
