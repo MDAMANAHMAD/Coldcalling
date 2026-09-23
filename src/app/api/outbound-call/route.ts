@@ -10,9 +10,13 @@ const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
 const VERIFIED_SECRET = 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
 const VERIFIED_TRUNK = 'ST_TEGVYguUkfe9';
 
+// ── Concurrency guard: max 4 simultaneous outbound calls (~1.2-1.4 GB RAM each on 8 GB VPS) ──
+let activeOutboundCalls = 0;
+const MAX_CONCURRENT_CALLS = 4;
+
 function getCleanLiveKitUrl(): string {
   const raw = (process.env.LIVEKIT_URL || VERIFIED_HOST)
-    .replace(/['"]/g, '')
+    .replace(/['\"]/g, '')
     .trim();
   try {
     const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
@@ -23,6 +27,21 @@ function getCleanLiveKitUrl(): string {
 }
 
 export async function POST(req: NextRequest) {
+  // ── Concurrency check ──
+  if (activeOutboundCalls >= MAX_CONCURRENT_CALLS) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Server is busy: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
+        activeCount: activeOutboundCalls
+      },
+      { status: 429 }
+    );
+  }
+
+  activeOutboundCalls++;
+  console.log(`[CONCURRENCY] Slot acquired. Active outbound calls: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
+
   try {
     const body = await req.json();
     const phoneNumber = body.phoneNumber || '+918693081506';
@@ -34,9 +53,9 @@ export async function POST(req: NextRequest) {
     const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
     const host = getCleanLiveKitUrl();
-    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['"]/g, '').trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['"]/g, '').trim();
-    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['"]/g, '').trim();
+    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['\"]/g, '').trim();
+    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['\"]/g, '').trim();
+    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['\"]/g, '').trim();
 
     console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host} for user: ${userEmail}`);
 
@@ -64,6 +83,12 @@ export async function POST(req: NextRequest) {
     );
 
     console.log(`[API OUTBOUND CALL SUCCESS] Created participant:`, participant);
+
+    // Release the concurrency slot after 5 minutes (covers max ring time + typical call duration)
+    setTimeout(() => {
+      activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
+      console.log(`[CONCURRENCY] Slot released (5-min timeout). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
+    }, 300000);
 
     // Record call log in db.json immediately
     try {
@@ -152,9 +177,13 @@ export async function POST(req: NextRequest) {
       success: true,
       message: `Outbound call successfully ringing ${safePhone}!`,
       participantId: participant.participantId,
-      roomName: uniqueRoom
+      roomName: uniqueRoom,
+      activeCount: activeOutboundCalls
     });
   } catch (error: any) {
+    // Release slot on failure
+    activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
+    console.log(`[CONCURRENCY] Slot released (error). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
     console.error(`[API OUTBOUND CALL ERROR]:`, error);
     return NextResponse.json(
       {

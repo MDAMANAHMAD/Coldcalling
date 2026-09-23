@@ -90,6 +90,8 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वेअर फूट'),
             (r'\b1\s*BHK\b', 'एक बीएचके'),
             (r'\b2\s*BHK\b', 'दोन बीएचके'),
+            (r'\b1\s*RK\b', 'एक आरके'),
+            (r'\bRK\b', 'आरके'),
             (r'\bBHK\b', 'बीएचके'),
             (r'\bcarpet\s*area\b', 'कार्पेट एरिया'),
             (r'\bsite\s*visit\b', 'साईट व्हिजिट'),
@@ -131,6 +133,10 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\btwo\s*BHK\b', 'two BHK'),
             (r'\b1\s*BHK\b', 'one BHK'),
             (r'\bone\s*BHK\b', 'one BHK'),
+            (r'\b1\s*RK\b', 'one R.K.'),
+            (r'\bone\s*RK\b', 'one R.K.'),
+            (r'\b1rk\b', 'one R.K.'),
+            (r'\bRK\b', 'R.K.'),
             (r'\bBHK\b', 'B.H.K.'),
             (r'\b15\s*(-|to)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*am\b', 'eleven am'),
@@ -156,6 +162,10 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\btwo\s*BHK\b', 'two BHK'),
             (r'\b1\s*BHK\b', 'one BHK'),
             (r'\bone\s*BHK\b', 'one BHK'),
+            (r'\b1\s*RK\b', 'one R.K.'),
+            (r'\bone\s*RK\b', 'one R.K.'),
+            (r'\b1rk\b', 'one R.K.'),
+            (r'\bRK\b', 'R.K.'),
             (r'\bBHK\b', 'BHK'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
@@ -163,8 +173,9 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
         ]
     for pattern, rep in replacements:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
-    # Neutralize any exclamation marks to periods to enforce calm, steady pitch without high-energy spikes
-    text = text.replace('!', '.')
+    # Neutralize shouting exclamations in general text, but preserve natural greeting pitch
+    if not text.strip().lower().startswith("hello"):
+        text = text.replace('!', '.')
     return text
 
 _orig_cartesia_push_text = cartesia.tts.SynthesizeStream.push_text
@@ -306,6 +317,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
 - **If caller confirms 1 BHK:**
   - "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+- **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options'):**
+  - Hindi: "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain chhattis lakh rupaye all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
+  - English: "We do not have 1 RK configurations at Sai Complex; our homes start with spacious 1 BHK apartments of 375 square feet starting at 36 lakh rupees all-inclusive. Would you like to explore the 1 BHK option?"
+  - Marathi: "साई कॉम्प्लेक्समध्ये १ आरके उपलब्ध नाही; आमच्याकडे तीनशे पंच्याहत्तर स्क्वेअर फूटचे प्रशस्त १ बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात. आपण १ बीएचके पर्याय पाहू इच्छिता का?"
 - **If caller confirms 2 BHK:**
   - "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
 - **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
@@ -435,12 +450,26 @@ def resolve_language(transcript: str, current_lang: str = "hi") -> str:
 
     latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
     total_chars = len(transcript.replace(' ', ''))
+    # Removed ambiguous words ('to', 'do', 'me', 'na', 'ya', 'kar', 'ab') that overlap with English
     hinglish_markers = {
-        'hai', 'kya', 'ka', 'ki', 'ko', 'se', 'par', 'ji', 'haan', 'han', 'achha', 'acha', 
-        'bataiye', 'batao', 'btao', 'me', 'mein', 'ke', 'ne', 'aur', 'ya', 'toh', 
-        'to', 'bhai', 'na', 'ab', 'kab', 'sab', 'kar', 'karna', 'krna', 'do', 'dena', 'dedo',
-        'kitna', 'kitne', 'kitni', 'door', 'dur', 'kahan', 'kaha', 'kaise', 'hoga', 'hogi', 'milega'
+        'hai', 'kya', 'ka', 'ki', 'ko', 'se', 'par', 'ji', 'haan', 'han', 'achha', 'acha',
+        'bataiye', 'batao', 'btao', 'mein', 'ke', 'ne', 'aur', 'toh',
+        'bhai', 'kab', 'sab', 'karna', 'krna', 'dena', 'dedo',
+        'kitna', 'kitne', 'kitni', 'door', 'dur', 'kahan', 'kaha', 'kaise', 'hoga', 'hogi', 'milega',
+        'aapka', 'apka', 'hum', 'main', 'mujhe', 'tumhara', 'unka', 'woh', 'yahan', 'wahan',
+        'chahiye', 'chahte', 'theek', 'accha', 'nahi', 'nhin'
     }
+    # Explicit English starter patterns — even short queries should be classified English
+    english_starters = [
+        'do you have', 'is there', 'can you', 'tell me', 'what is', 'price please',
+        'how much', 'how many', 'are there', 'i want', 'i need', 'i am looking',
+        'any flat', 'any option', 'available', 'show me', 'give me', 'please', 'thank you',
+        '1 rk', 'one rk', '2 bhk', '1 bhk', 'one bhk', 'two bhk', 'carpet area',
+        'square feet', 'possession', 'ready to move', 'booking amount'
+    ]
+    if any(starter in text for starter in english_starters):
+        return 'en'
+
     is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.85
     if len(clean_words) >= 4 and is_mostly_latin and not any(w in hinglish_markers for w in clean_words):
         return 'en'
@@ -2344,12 +2373,6 @@ async def entrypoint(ctx: JobContext):
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Pure Marathi with Kusha Cloned Voice ({kusha_voice_id}, volume={cartesia_volume}, speed={cartesia_speed})")
-                        try:
-                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
-                            if hist and hasattr(hist, "add_message"):
-                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: 100% PURE MARATHI] The caller requested or is speaking Marathi. You MUST answer 100% COMPLETELY in PURE MARATHI (शुद्ध मराठी) in Devanagari script. STRICTLY ZERO HINDI WORDS (No 'ji', 'hai', 'humara', 'bol sakti hoon', 'kijiye', 'aapka', 'mein', 'aur', 'shubh ho'). Keep it short (1-2 sentences).")
-                        except Exception as e:
-                            logger.debug(f"Could not inject Marathi steering message: {e}")
                     elif current_lang == "en":
                         session.tts.update_options(
                             voice=kusha_voice_id,
@@ -2359,12 +2382,6 @@ async def entrypoint(ctx: JobContext):
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
-                        try:
-                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
-                            if hist and hasattr(hist, "add_message"):
-                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: 100% PURE ENGLISH] The caller requested or is speaking English. You MUST answer 100% COMPLETELY in fluent professional ENGLISH. STRICTLY ZERO HINDI WORDS (No 'ji', 'hai', 'aapka', 'accha', 'theek', 'shubh ho'). Keep it short (1-2 sentences).")
-                        except Exception as e:
-                            logger.debug(f"Could not inject English steering message: {e}")
                     else:
                         session.tts.update_options(
                             voice=kusha_voice_id,
@@ -2374,12 +2391,22 @@ async def entrypoint(ctx: JobContext):
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
-                        try:
-                            hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
-                            if hist and hasattr(hist, "add_message"):
-                                hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: HINDI] The caller is speaking Hindi. Answer in natural Hindi/Hinglish.")
-                        except Exception as e:
-                            logger.debug(f"Could not inject Hindi steering message: {e}")
+
+            # ── Per-turn language directive: injected EVERY turn regardless of switch ──
+            # This locks the LLM into the active language even without a recent switch.
+            try:
+                hist = getattr(session, "history", None) or getattr(session, "_chat_ctx", None)
+                if hist and hasattr(hist, "add_message"):
+                    if current_lang == "mr":
+                        hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: 100% PURE MARATHI] You MUST answer 100% COMPLETELY in PURE MARATHI (शुद्ध मराठी) in Devanagari script. STRICTLY ZERO HINDI WORDS (No 'ji', 'hai', 'humara', 'bol sakti hoon', 'kijiye', 'aapka', 'mein', 'aur', 'shubh ho', 'bilkul'). Keep it short (1-2 sentences).")
+                    elif current_lang == "en":
+                        hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: 100% PURE ENGLISH] You MUST answer 100% in fluent professional ENGLISH. STRICTLY ZERO Hindi or Marathi words (No 'ji', 'hai', 'aapka', 'accha', 'theek', 'shubh ho', 'bilkul', 'nahin', 'haan', 'toh'). Respond entirely in English sentences only. Keep it short (1-2 sentences).")
+                    else:
+                        hist.add_message(role="system", content="[LANGUAGE DIRECTIVE: HINDI/HINGLISH] Answer in natural Hindi or Hinglish. Keep it short (1-2 sentences).")
+            except Exception as e:
+                logger.debug(f"Could not inject per-turn language directive: {e}")
+
+
 
             # Programmatic Anti-Repetition Guardrail:
             # Prevent repeating previous statement unless caller explicitly asks to repeat

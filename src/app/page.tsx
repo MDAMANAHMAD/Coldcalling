@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   getCallLogsWithLeads, 
   getColdCallingStats,
@@ -28,7 +28,12 @@ import {
   ArrowRight,
   TrendingUp,
   Trash2,
-  Download
+  Download,
+  Upload,
+  List,
+  Play,
+  Square,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -44,6 +49,17 @@ export default function ColdCallingHomePage() {
   const [isDialing, setIsDialing] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
   const [dialResult, setDialResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // ── Batch Campaign State ──
+  type CampaignContact = { name: string; phone: string };
+  type CampaignEntry = CampaignContact & { status: 'queued' | 'calling' | 'done' | 'error'; error?: string };
+  const [batchContacts, setBatchContacts] = useState<CampaignEntry[]>([]);
+  const [campaignRunning, setCampaignRunning] = useState(false);
+  const [campaignStopped, setCampaignStopped] = useState(false);
+  const [manualList, setManualList] = useState('');
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
+  const csvFileRef = useRef<HTMLInputElement>(null);
+  const campaignStopRef = useRef(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -414,6 +430,111 @@ export default function ColdCallingHomePage() {
     } finally {
       setIsTerminating(false);
     }
+  };
+
+  // ── Batch Campaign Helpers ──
+  const parseCsvOrLines = (raw: string): { name: string; phone: string }[] => {
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    const contacts: { name: string; phone: string }[] = [];
+    for (const line of lines) {
+      // Skip header rows
+      if (/^(name|phone|contact|number)/i.test(line)) continue;
+      // CSV: "Name, Phone" or "Phone, Name"
+      const parts = line.split(/,/).map(p => p.trim().replace(/^["']|["']$/g, ''));
+      if (parts.length >= 2) {
+        const isFirstPhone = /^\+?[\d\s\-()]{7,}$/.test(parts[0]);
+        const name = isFirstPhone ? (parts[1] || 'Customer') : parts[0];
+        const phone = isFirstPhone ? parts[0] : parts[1];
+        if (/[\d+]/.test(phone)) contacts.push({ name, phone });
+      } else if (parts.length === 1) {
+        // Just a phone number
+        if (/[\d+]/.test(parts[0])) contacts.push({ name: 'Customer', phone: parts[0] });
+      }
+    }
+    return contacts;
+  };
+
+  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const parsed = parseCsvOrLines(text);
+      setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
+    };
+    reader.readAsText(file);
+  };
+
+  const handleManualListLoad = () => {
+    const parsed = parseCsvOrLines(manualList);
+    if (parsed.length === 0) return;
+    setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
+  };
+
+  const startCampaign = async () => {
+    if (batchContacts.length === 0) return;
+    campaignStopRef.current = false;
+    setCampaignRunning(true);
+    setCampaignStopped(false);
+
+    const MAX_CONCURRENT = 4;
+    let activeCount = 0;
+    let contactIdx = 0;
+    const contacts = [...batchContacts];
+
+    const dialNext = async (idx: number) => {
+      if (campaignStopRef.current) return;
+      const contact = contacts[idx];
+      setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'calling' } : c));
+
+      try {
+        const res = await fetch('/api/outbound-call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phoneNumber: contact.phone,
+            customerName: contact.name,
+            userEmail: currentUser?.email || 'test@gmail.com'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'done' } : c));
+        } else {
+          setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'error', error: data.message } : c));
+        }
+      } catch (err: any) {
+        setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'error', error: err.message } : c));
+      }
+
+      activeCount--;
+      // Trigger next in queue
+      if (!campaignStopRef.current && contactIdx < contacts.length) {
+        const nextIdx = contactIdx++;
+        activeCount++;
+        // Stagger calls by 2 seconds to avoid hammering the API
+        setTimeout(() => dialNext(nextIdx), 2000);
+      } else if (activeCount === 0) {
+        setCampaignRunning(false);
+      }
+    };
+
+    // Seed up to MAX_CONCURRENT simultaneous calls
+    while (contactIdx < contacts.length && activeCount < MAX_CONCURRENT) {
+      const idx = contactIdx++;
+      activeCount++;
+      await new Promise(r => setTimeout(r, 500)); // 500ms stagger
+      dialNext(idx);
+    }
+  };
+
+  const stopCampaign = () => {
+    campaignStopRef.current = true;
+    setCampaignRunning(false);
+    setCampaignStopped(true);
+    // Mark remaining queued items as queued (not started yet, can resume)
+    setBatchContacts(prev => prev.map(c => c.status === 'calling' ? { ...c, status: 'queued' } : c));
   };
 
   const handleDeleteCall = async (id: string, e: React.MouseEvent) => {
@@ -798,6 +919,159 @@ export default function ColdCallingHomePage() {
               ✕
             </button>
           </motion.div>
+        )}
+      </div>
+
+      {/* 1b. BATCH CAMPAIGN DIALER */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowBatchPanel(p => !p)}
+          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+        >
+          <div className="flex items-center space-x-3">
+            <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
+              <List className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-slate-900 dark:text-white">Batch Campaign Dialer</p>
+              <p className="text-[11px] text-slate-400 font-medium">Upload a CSV or paste numbers to dial up to 4 calls simultaneously</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            {batchContacts.length > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
+                {batchContacts.length} contacts
+              </span>
+            )}
+            <span className="text-slate-400 text-lg">{showBatchPanel ? '▲' : '▼'}</span>
+          </div>
+        </button>
+
+        {showBatchPanel && (
+          <div className="border-t border-slate-200 dark:border-slate-800 p-6 space-y-5">
+            {/* Input Area */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* CSV Upload */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" /> Upload CSV File
+                </p>
+                <div
+                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-violet-400 transition-colors"
+                  onClick={() => csvFileRef.current?.click()}
+                >
+                  <Upload className="h-7 w-7 text-slate-400" />
+                  <p className="text-xs text-slate-500 text-center">
+                    Click to upload <span className="font-semibold text-violet-600">.csv</span><br />
+                    <span className="text-[11px]">Format: Name, Phone or Phone, Name</span>
+                  </p>
+                  <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvUpload} />
+                </div>
+              </div>
+
+              {/* Manual Paste */}
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <List className="h-3.5 w-3.5" /> Paste Numbers Manually
+                </p>
+                <textarea
+                  value={manualList}
+                  onChange={e => setManualList(e.target.value)}
+                  placeholder={"Raj, +918693081506\nPriya, +919876543210\n+918800001234"}
+                  rows={5}
+                  className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none font-mono"
+                />
+                <button
+                  onClick={handleManualListLoad}
+                  disabled={!manualList.trim()}
+                  className="text-xs font-bold px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg disabled:opacity-40 transition-colors"
+                >
+                  Load {manualList.trim() ? `(${parseCsvOrLines(manualList).length} contacts)` : ''}
+                </button>
+              </div>
+            </div>
+
+            {/* Contact Queue */}
+            {batchContacts.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    Call Queue — {batchContacts.length} contacts
+                  </p>
+                  <div className="flex items-center gap-2 text-[11px] font-semibold">
+                    <span className="text-slate-500">✓ Done: {batchContacts.filter(c => c.status === 'done').length}</span>
+                    <span className="text-amber-500">📞 Calling: {batchContacts.filter(c => c.status === 'calling').length}</span>
+                    <span className="text-slate-400">⏳ Queued: {batchContacts.filter(c => c.status === 'queued').length}</span>
+                    <span className="text-rose-500">✗ Error: {batchContacts.filter(c => c.status === 'error').length}</span>
+                  </div>
+                </div>
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                  {batchContacts.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                          c.status === 'done' ? 'bg-emerald-500' :
+                          c.status === 'calling' ? 'bg-amber-400 animate-pulse' :
+                          c.status === 'error' ? 'bg-rose-500' : 'bg-slate-300'
+                        }`} />
+                        <span className="font-medium text-slate-700 dark:text-slate-300">{c.name}</span>
+                        <span className="text-slate-400 font-mono">{c.phone}</span>
+                      </div>
+                      <span className={`font-semibold ${
+                        c.status === 'done' ? 'text-emerald-600' :
+                        c.status === 'calling' ? 'text-amber-500' :
+                        c.status === 'error' ? 'text-rose-500' : 'text-slate-400'
+                      }`}>
+                        {c.status === 'done' ? '✓ Called' : c.status === 'calling' ? '📞 Calling…' : c.status === 'error' ? `✗ ${c.error?.slice(0, 30) ?? 'Error'}` : 'Queued'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all"
+                    style={{ width: `${(batchContacts.filter(c => c.status === 'done' || c.status === 'error').length / batchContacts.length) * 100}%` }}
+                  />
+                </div>
+
+                {/* Campaign Controls */}
+                <div className="flex items-center gap-3 pt-1">
+                  {!campaignRunning ? (
+                    <button
+                      onClick={startCampaign}
+                      disabled={batchContacts.filter(c => c.status === 'queued').length === 0}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-40 transition-all"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                      {campaignStopped ? 'Resume Campaign' : 'Start Campaign'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={stopCampaign}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                      Stop Campaign
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setBatchContacts([]); setCampaignRunning(false); setCampaignStopped(false); }}
+                    className="text-xs text-slate-500 hover:text-rose-500 font-medium transition-colors"
+                  >
+                    Clear Queue
+                  </button>
+                  {campaignStopped && (
+                    <span className="text-xs text-amber-600 font-semibold">⚠️ Campaign paused</span>
+                  )}
+                  {!campaignRunning && !campaignStopped && batchContacts.every(c => c.status === 'done' || c.status === 'error') && batchContacts.length > 0 && (
+                    <span className="text-xs text-emerald-600 font-semibold">✓ Campaign complete!</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
