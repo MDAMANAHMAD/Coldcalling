@@ -166,10 +166,9 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
 
 # Pluggable Phonetic Tokenizer for Cartesia
 # Seamlessly normalizes complete sentences with Blingfire without monkeypatching WebSocket streams
-from livekit.agents import tokenize
-from livekit.agents.tokenize import blingfire
+from livekit.agents.tokenize import blingfire, SentenceTokenizer, SentenceStream
 
-class PhoneticSentenceTokenizer(tokenize.SentenceTokenizer):
+class PhoneticSentenceTokenizer(SentenceTokenizer):
     """
     Sentence tokenizer that transparently normalizes numbers and terms
     into natural speech on complete sentences for Cartesia neural TTS,
@@ -183,9 +182,9 @@ class PhoneticSentenceTokenizer(tokenize.SentenceTokenizer):
         res = self._inner.tokenize(text=text, language=language)
         return [normalize_phonetics(t, lang=language or ACTIVE_TTS_LANGUAGE) for t in res]
 
-    def stream(self, *, language: str | None = None) -> tokenize.SentenceStream:
+    def stream(self, *, language: str | None = None) -> SentenceStream:
         inner_stream = self._inner.stream(language=language)
-        class _PhoneticStreamWrapper(tokenize.SentenceStream):
+        class _PhoneticStreamWrapper(SentenceStream):
             def __init__(self, stream):
                 super().__init__()
                 self._stream = stream
