@@ -740,7 +740,7 @@ global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 global_fireworks_key = os.getenv("FIREWORKS_API_KEY")
-llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
+llm_provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 
 # 0. FIREWORKS AI (Dedicated Voice AI Inference, Sub-100ms TTFT, High Quota)
 fw_healthy = False
@@ -755,7 +755,7 @@ if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
         )
         fw_healthy = True
     except Exception as fw_err:
-        logger.warning(f"⚠️ Fireworks AI health check failed: {fw_err}. Falling back to Google Gemini immediately.")
+        logger.warning(f"⚠️ Fireworks AI health check failed: {fw_err}. Falling back to Groq / Gemini immediately.")
 
 if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     from livekit.plugins import openai as lk_openai
@@ -772,8 +772,108 @@ if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     SELECTED_MODEL = fw_model
     global_llm_compiled = True
 
-# 1. GOOGLE GEMINI (High Quota, Instant Streaming, 0 Rate Limit Choking in Long Calls)
-elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
+# 1. GROQ LPU (Ultra-fast voice brain ~200ms TTFT, primary default when key is present)
+elif global_groq_key and global_groq_key.startswith("gsk_") and llm_provider not in ["google", "gemini"]:
+    from livekit.plugins import openai as lk_openai
+    preferred_groq_models = [
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+    ]
+    
+    # If a call is active, skip verification compilation and use cached/default model immediately
+    if os.path.exists("bookings/active_call.lock"):
+        logger.info(f"🔒 Active call detected during import. Selecting Groq model '{SELECTED_GROQ_MODEL}' without validation.")
+        global_llm = lk_openai.LLM(
+            base_url="https://api.groq.com/openai/v1",
+            model=SELECTED_GROQ_MODEL,
+            api_key=global_groq_key,
+            temperature=0.3
+        )
+    else:
+        try:
+            from livekit.agents import llm as agents_llm
+            agent_dummy = PriyaRealEstateAgent()
+            agent_tools_dummy = agent_dummy.tools
+            chat_ctx_dummy = agents_llm.ChatContext()
+            chat_ctx_dummy.add_message(role="user", content="hello")
+            
+            async def _test_compile_groq(llm_instance):
+                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                async for chunk in chat_stream:
+                    break
+
+            try:
+                loop_static = asyncio.get_event_loop()
+            except RuntimeError:
+                loop_static = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_static)
+
+            for model_name in preferred_groq_models:
+                try:
+                    logger.info(f"Trying to initialize and compile Groq model '{model_name}'...")
+                    candidate_llm = lk_openai.LLM(
+                        base_url="https://api.groq.com/openai/v1",
+                        model=model_name,
+                        api_key=global_groq_key,
+                        temperature=0.3
+                    )
+                    
+                    # Verify schema compilation works
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_groq(candidate_llm), timeout=5.0))
+                    
+                    global_llm = candidate_llm
+                    SELECTED_GROQ_MODEL = model_name
+                    global_llm_compiled = True
+                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
+            
+            if not global_llm:
+                if global_google_key:
+                    logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
+                    from livekit.plugins import google
+                    global_llm = google.LLM(
+                        model="gemini-3.5-flash-lite",
+                        api_key=global_google_key,
+                        temperature=0.3
+                    )
+                    SELECTED_MODEL = "gemini-3.5-flash-lite"
+                    SELECTED_GROQ_MODEL = None
+                else:
+                    logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
+                    global_llm = lk_openai.LLM(
+                        base_url="https://api.groq.com/openai/v1",
+                        model="llama-3.3-70b-versatile",
+                        api_key=global_groq_key,
+                        temperature=0.3
+                    )
+                    SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+        except Exception as outer_err:
+            if global_google_key:
+                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
+                from livekit.plugins import google
+                global_llm = google.LLM(
+                    model="gemini-3.5-flash-lite",
+                    api_key=global_google_key,
+                    temperature=0.3
+                )
+                SELECTED_MODEL = "gemini-3.5-flash-lite"
+                SELECTED_GROQ_MODEL = None
+            else:
+                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
+                global_llm = lk_openai.LLM(
+                    base_url="https://api.groq.com/openai/v1",
+                    model="llama-3.3-70b-versatile",
+                    api_key=global_groq_key,
+                    temperature=0.3
+                )
+                SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# 2. GOOGLE GEMINI (High Quota Fallback or when LLM_PROVIDER=google)
+elif global_google_key:
     from livekit.plugins import google
     
     preferred_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-latest"]
@@ -842,106 +942,6 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
                 temperature=0.3
             )
             SELECTED_MODEL = "gemini-3.5-flash-lite"
-
-# 2. GROQ LPU (If explicitly set or Google key not configured)
-elif global_groq_key and global_groq_key.startswith("gsk_"):
-    from livekit.plugins import openai as lk_openai
-    preferred_groq_models = [
-        "qwen/qwen3.8-27b",
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-    ]
-    
-    # If a call is active, skip verification compilation and use cached/default model immediately
-    if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting Groq model '{SELECTED_GROQ_MODEL}' without validation.")
-        global_llm = lk_openai.LLM(
-            base_url="https://api.groq.com/openai/v1",
-            model=SELECTED_GROQ_MODEL,
-            api_key=global_groq_key,
-            temperature=0.3
-        )
-    else:
-        try:
-            from livekit.agents import llm as agents_llm
-            agent_dummy = PriyaRealEstateAgent()
-            agent_tools_dummy = agent_dummy.tools
-            chat_ctx_dummy = agents_llm.ChatContext()
-            chat_ctx_dummy.add_message(role="user", content="hello")
-            
-            async def _test_compile_groq(llm_instance):
-                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                async for chunk in chat_stream:
-                    break
-
-            try:
-                loop_static = asyncio.get_event_loop()
-            except RuntimeError:
-                loop_static = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop_static)
-
-            for model_name in preferred_groq_models:
-                try:
-                    logger.info(f"Trying to initialize and compile Groq model '{model_name}'...")
-                    candidate_llm = lk_openai.LLM(
-                        base_url="https://api.groq.com/openai/v1",
-                        model=model_name,
-                        api_key=global_groq_key,
-                        temperature=0.3
-                    )
-                    
-                    # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_groq(candidate_llm), timeout=5.0))
-                    
-                    global_llm = candidate_llm
-                    SELECTED_GROQ_MODEL = model_name
-                    global_llm_compiled = True
-                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
-                    break
-                except Exception as e:
-                    logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
-            
-            if not global_llm:
-                if global_google_key:
-                    logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
-                    from livekit.plugins import google
-                    global_llm = google.LLM(
-                        model="gemini-3.6-flash",
-                        api_key=global_google_key,
-                        temperature=0.3
-                    )
-                    SELECTED_MODEL = "gemini-3.6-flash"
-                    SELECTED_GROQ_MODEL = None
-                else:
-                    logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
-                    global_llm = lk_openai.LLM(
-                        base_url="https://api.groq.com/openai/v1",
-                        model="llama-3.3-70b-versatile",
-                        api_key=global_groq_key,
-                        temperature=0.3
-                    )
-                    SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
-        except Exception as outer_err:
-            if global_google_key:
-                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
-                from livekit.plugins import google
-                global_llm = google.LLM(
-                    model="gemini-3.6-flash",
-                    api_key=global_google_key,
-                    temperature=0.3
-                )
-                SELECTED_MODEL = "gemini-3.6-flash"
-                SELECTED_GROQ_MODEL = None
-            else:
-                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
-                global_llm = lk_openai.LLM(
-                    base_url="https://api.groq.com/openai/v1",
-                    model="llama-3.3-70b-versatile",
-                    api_key=global_groq_key,
-                    temperature=0.3
-                )
-                SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 else:
     logger.warning("Neither GOOGLE_API_KEY nor GROQ_API_KEY is configured.")
 
@@ -1052,22 +1052,22 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Streaming with 150ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-fast streaming with 50ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=150,
+        endpointing_ms=50,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 350ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 280ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
+        min_silence_duration=0.28,
         min_speech_duration=0.05,
         activation_threshold=0.35,
         deactivation_threshold=0.25,
@@ -1460,7 +1460,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=150,
+            endpointing_ms=50,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1487,14 +1487,7 @@ async def entrypoint(ctx: JobContext):
                 reasoning_effort="low",
                 max_completion_tokens=160
             )
-        elif (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))) and google_key:
-            from livekit.plugins import google
-            llm = google.LLM(
-                model=SELECTED_MODEL,
-                api_key=google_key,
-                temperature=0.3
-            )
-        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
+        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL and llm_provider not in ["google", "gemini"]:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
@@ -1553,12 +1546,12 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 350ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 280ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 50ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
+            min_silence_duration=0.28,
             min_speech_duration=0.05,
             activation_threshold=0.35,
             deactivation_threshold=0.25,
@@ -1588,7 +1581,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.15,
+                "min_delay": 0.08,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -2668,17 +2661,18 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(0.25)
 
     # Human Call Pickup Flow:
-    # 1. Listen for 0.4s: If caller says "Hello?" immediately upon pickup, respond directly without colliding!
-    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 0.4s before prompting...")
+    # 1. Listen for up to 2.0s: When a caller answers, allow a natural 2-second pause.
+    # If the caller says "Hello?", "Haan boliye", etc., enter the conversation directly!
+    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 2.0s before prompting...")
     t_listen_start = time.time()
-    while time.time() - t_listen_start < 0.4:
+    while time.time() - t_listen_start < 2.0:
         if caller_has_spoken or _hangup_scheduled:
             logger.info("🎙️ [HUMAN PICKUP FLOW] Caller spoke first! Skipping initial prompt and entering conversation immediately.")
             intro_finished = True
             break
         await asyncio.sleep(0.05)
 
-    # 2. If caller remains silent, prompt gently with natural warm voice (exact same speed and volume as conversation)
+    # 2. If caller remains silent after 2.0s, prompt gently with natural warm voice (exact same speed and volume as conversation)
     if not caller_has_spoken and not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
@@ -2691,9 +2685,8 @@ async def entrypoint(ctx: JobContext):
             )
 
         prompt_str = "Hello?"
-        logger.info(f"🎙️ [CALL CONNECT GREETING] Saying single natural '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
+        logger.info(f"🎙️ [CALL CONNECT GREETING] Caller quiet for 2.0s. Saying single natural '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
         try:
-            t_user_stop = 0.0  # Reset so greeting is never tracked as turn latency spike
             h_speech = session.say(prompt_str, allow_interruptions=True)
             elapsed_sec = round(time.time() - t_call_start, 1)
             call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
@@ -2701,6 +2694,8 @@ async def entrypoint(ctx: JobContext):
                 await h_speech.wait_for_playout()
         except Exception as e:
             logger.warning(f"Error speaking hello greeting: {e}")
+        finally:
+            t_user_stop = 0.0  # Reset so playout of 'Hello?' never leaks echo into latency tracking
 
         # Wait up to 8.0s for caller to respond naturally
         t_wait_hello = time.time()
