@@ -773,7 +773,7 @@ if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     global_llm_compiled = True
 
 # 1. GROQ LPU (Ultra-fast voice brain ~200ms TTFT, primary default when key is present)
-elif global_groq_key and global_groq_key.startswith("gsk_") and llm_provider not in ["google", "gemini"]:
+elif global_groq_key and global_groq_key.startswith("gsk_") and llm_provider != "force_google":
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
         "qwen/qwen3.8-27b",
@@ -1487,7 +1487,7 @@ async def entrypoint(ctx: JobContext):
                 reasoning_effort="low",
                 max_completion_tokens=160
             )
-        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL and llm_provider not in ["google", "gemini"]:
+        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL and llm_provider != "force_google":
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
@@ -2202,7 +2202,8 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
-                t_user_stop = time.perf_counter()
+                if not agent_is_speaking:
+                    t_user_stop = time.perf_counter()
                 intro_finished = True
                 t_last_activity = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
@@ -2672,7 +2673,11 @@ async def entrypoint(ctx: JobContext):
             break
         await asyncio.sleep(0.05)
 
-    # 2. If caller remains silent after 2.0s, prompt gently with natural warm voice (exact same speed and volume as conversation)
+    # 2. Multi-Stage Natural Greeting Loop:
+    # If caller remains silent, prompt gently like a real human advisor instead of immediately hanging up!
+    # Attempt 1: "Hello?" -> wait 3.5s
+    # Attempt 2: "Hello? Kya aapko meri aawaaz aa rahi hai?" -> wait 4.0s
+    # Attempt 3: "Hello ji, kya aap sun pa rahe hain?" -> wait 5.0s
     if not caller_has_spoken and not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
@@ -2684,29 +2689,40 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        prompt_str = "Hello?"
-        logger.info(f"🎙️ [CALL CONNECT GREETING] Caller quiet for 2.0s. Saying single natural '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
-        try:
-            h_speech = session.say(prompt_str, allow_interruptions=True)
-            elapsed_sec = round(time.time() - t_call_start, 1)
-            call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
-            if h_speech:
-                await h_speech.wait_for_playout()
-        except Exception as e:
-            logger.warning(f"Error speaking hello greeting: {e}")
-        finally:
-            t_user_stop = 0.0  # Reset so playout of 'Hello?' never leaks echo into latency tracking
+        greeting_prompts = [
+            ("Hello?", 3.5),
+            ("Hello? Kya aapko meri aawaaz aa rahi hai?", 4.0),
+            ("Hello ji, kya aap sun pa rahe hain?", 5.0),
+        ]
 
-        # Wait up to 8.0s for caller to respond naturally
-        t_wait_hello = time.time()
-        while time.time() - t_wait_hello < 8.0:
+        for attempt_num, (prompt_str, wait_sec) in enumerate(greeting_prompts, start=1):
             if caller_has_spoken or _hangup_scheduled:
                 intro_finished = True
                 break
-            await asyncio.sleep(0.08)
 
+            logger.info(f"🎙️ [CALL CONNECT GREETING] Attempt {attempt_num}/3: Saying '{prompt_str}'...")
+            try:
+                h_speech = session.say(prompt_str, allow_interruptions=True)
+                elapsed_sec = round(time.time() - t_call_start, 1)
+                call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
+                if h_speech:
+                    await h_speech.wait_for_playout()
+            except Exception as e:
+                logger.warning(f"Error speaking hello greeting attempt {attempt_num}: {e}")
+            finally:
+                t_user_stop = 0.0  # Reset so playout of greeting never leaks echo into latency tracking
+
+            # Wait for caller to respond naturally
+            t_wait_hello = time.time()
+            while time.time() - t_wait_hello < wait_sec:
+                if caller_has_spoken or _hangup_scheduled:
+                    intro_finished = True
+                    break
+                await asyncio.sleep(0.08)
+
+    # 3. Only if caller remains completely silent after all 3 attempts (15+ seconds), terminate call gracefully
     if not caller_has_spoken and not _hangup_scheduled:
-        logger.info("⏳ Caller silent after hello attempt. Terminating call.")
+        logger.info("⏳ Caller silent after all 3 greeting attempts. Terminating call.")
         farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
         try:
             t_user_stop = 0.0
