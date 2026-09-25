@@ -65,8 +65,7 @@ from livekit import rtc
 from livekit.agents.voice import ModelSettings
 import re
 
-# Monkey patch Cartesia TTS to transparently normalize numbers (e.g. 760 -> seven hundred sixty)
-# and technical terms (e.g. BHK -> B.H.K.) preventing neural TTS from swallowing syllables or pronouncing digits as '76 zero'
+# Clean Phonetic Normalization for Cartesia Neural Voice
 ACTIVE_TTS_LANGUAGE = "hi"
 
 def normalize_phonetics(text: str, lang: str | None = None) -> str:
@@ -133,11 +132,11 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\btwo\s*BHK\b', 'two BHK'),
             (r'\b1\s*BHK\b', 'one BHK'),
             (r'\bone\s*BHK\b', 'one BHK'),
-            (r'\b1\s*RK\b', 'one R.K.'),
-            (r'\bone\s*RK\b', 'one R.K.'),
-            (r'\b1rk\b', 'one R.K.'),
-            (r'\bRK\b', 'R.K.'),
-            (r'\bBHK\b', 'B.H.K.'),
+            (r'\b1\s*RK\b', 'one RK'),
+            (r'\bone\s*RK\b', 'one RK'),
+            (r'\b1rk\b', 'one RK'),
+            (r'\bRK\b', 'RK'),
+            (r'\bBHK\b', 'BHK'),
             (r'\b15\s*(-|to)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*am\b', 'eleven am'),
             (r'\b3\s*pm\b', 'three pm'),
@@ -162,10 +161,10 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\btwo\s*BHK\b', 'two BHK'),
             (r'\b1\s*BHK\b', 'one BHK'),
             (r'\bone\s*BHK\b', 'one BHK'),
-            (r'\b1\s*RK\b', 'one R.K.'),
-            (r'\bone\s*RK\b', 'one R.K.'),
-            (r'\b1rk\b', 'one R.K.'),
-            (r'\bRK\b', 'R.K.'),
+            (r'\b1\s*RK\b', 'one RK'),
+            (r'\bone\s*RK\b', 'one RK'),
+            (r'\b1rk\b', 'one RK'),
+            (r'\bRK\b', 'RK'),
             (r'\bBHK\b', 'BHK'),
             (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*(am|baje)\b', 'eleven am'),
@@ -173,59 +172,51 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
         ]
     for pattern, rep in replacements:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
-    # Neutralize shouting exclamations in general text, but preserve natural greeting pitch
-    if not text.strip().lower().startswith("hello"):
-        text = text.replace('!', '.')
     return text
 
-_orig_cartesia_push_text = cartesia.tts.SynthesizeStream.push_text
-_orig_cartesia_flush = cartesia.tts.SynthesizeStream.flush
+# Pluggable Phonetic Tokenizer for Cartesia
+# Seamlessly normalizes complete sentences with Blingfire without monkeypatching WebSocket streams
+from livekit.agents import tokenize
+from livekit.agents.tokenize import blingfire
 
-def _phonetic_push_text(self, token: str) -> None:
-    if not token:
-        return
-    if not hasattr(self, '_phonetic_buf'):
-        self._phonetic_buf = ''
-    self._phonetic_buf += token
+class PhoneticSentenceTokenizer(tokenize.SentenceTokenizer):
+    """
+    Sentence tokenizer that transparently normalizes numbers and terms
+    into natural speech on complete sentences for Cartesia neural TTS,
+    without buffering latency, voice breaks, or dropped chunks.
+    """
+    def __init__(self, stream_context_len: int = 2):
+        super().__init__()
+        self._inner = blingfire.SentenceTokenizer(stream_context_len=stream_context_len)
 
-    # Buffer until true sentence punctuation (. ! ? \n) to allow Cartesia to synthesize
-    # complete, unbroken sentences with smooth, continuous prosody and zero voice breaks
-    has_sentence_end = any(c in self._phonetic_buf for c in '.!?\n')
-    if has_sentence_end:
-        parts = re.split(r'([.!?\n]+)', self._phonetic_buf)
-        to_push = ''.join(parts[:-1])
-        self._phonetic_buf = parts[-1]
-        if to_push:
-            normalized = normalize_phonetics(to_push)
-            _orig_cartesia_push_text(self, normalized)
+    def tokenize(self, *, text: str, language: str | None = None):
+        res = self._inner.tokenize(text=text, language=language)
+        return [normalize_phonetics(t) for t in res]
 
-def _phonetic_flush(self) -> None:
-    if hasattr(self, '_phonetic_buf') and self._phonetic_buf:
-        leftover = self._phonetic_buf.strip()
-        self._phonetic_buf = ''
-        if leftover:
-            norm = normalize_phonetics(leftover).strip()
-            if norm and not norm.endswith(('.', '?', '!', '।')):
-                norm += '.'
-            _orig_cartesia_push_text(self, norm)
-    _orig_cartesia_flush(self)
-
-_orig_cartesia_end_input = getattr(cartesia.tts.SynthesizeStream, "end_input", None)
-def _phonetic_end_input(self) -> None:
-    _phonetic_flush(self)
-    if _orig_cartesia_end_input:
-        _orig_cartesia_end_input(self)
-
-_orig_cartesia_aclose = getattr(cartesia.tts.SynthesizeStream, "aclose", None)
-async def _phonetic_aclose(self) -> None:
-    _phonetic_flush(self)
-    if _orig_cartesia_aclose:
-        await _orig_cartesia_aclose(self)
-
-cartesia.tts.SynthesizeStream.push_text = _phonetic_push_text
-cartesia.tts.SynthesizeStream.flush = _phonetic_flush
-cartesia.tts.SynthesizeStream.end_input = _phonetic_end_input
-cartesia.tts.SynthesizeStream.aclose = _phonetic_aclose
+    def stream(self, *, language: str | None = None):
+        inner_stream = self._inner.stream(language=language)
+        class _PhoneticStreamWrapper:
+            def __init__(self, stream):
+                self._stream = stream
+            def push_text(self, text: str) -> None:
+                self._stream.push_text(text)
+            def flush(self) -> None:
+                self._stream.flush()
+            def end_input(self) -> None:
+                self._stream.end_input()
+            async def aclose(self) -> None:
+                await self._stream.aclose()
+            @property
+            def closed(self) -> bool:
+                return self._stream.closed
+            def __aiter__(self):
+                return self
+            async def __anext__(self):
+                ev = await self._stream.__anext__()
+                if hasattr(ev, 'token') and ev.token:
+                    ev.token = normalize_phonetics(ev.token)
+                return ev
+        return _PhoneticStreamWrapper(inner_stream)
 
 _orig_cartesia_synthesize = cartesia.TTS.synthesize
 def _phonetic_synthesize(self, text: str, **kwargs):
@@ -1152,7 +1143,8 @@ def prewarm_fnc(proc: JobProcess):
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume,
-            word_timestamps=False
+            word_timestamps=False,
+            tokenizer=PhoneticSentenceTokenizer()
         )
     else:
         eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -1589,7 +1581,8 @@ async def entrypoint(ctx: JobContext):
                 speed=cartesia_speed,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
                 volume=cartesia_volume,
-                word_timestamps=False
+                word_timestamps=False,
+                tokenizer=PhoneticSentenceTokenizer()
             )
         else:
             eleven_key = os.getenv("ELEVENLABS_API_KEY")
@@ -2747,7 +2740,7 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        prompt_str = "Hello."
+        prompt_str = "Hello?"
         logger.info(f"🎙️ [CALL CONNECT GREETING] Saying single natural '{prompt_str}' (speed={cartesia_speed}, volume={cartesia_volume})...")
         try:
             t_user_stop = 0.0  # Reset so greeting is never tracked as turn latency spike
