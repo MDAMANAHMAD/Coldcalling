@@ -740,7 +740,7 @@ global_sambanova_key = os.getenv("SAMBANOVA_API_KEY")
 global_groq_key = os.getenv("GROQ_API_KEY")
 global_google_key = os.getenv("GOOGLE_API_KEY")
 global_fireworks_key = os.getenv("FIREWORKS_API_KEY")
-llm_provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
+llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
 
 # 0. FIREWORKS AI (Dedicated Voice AI Inference, Sub-100ms TTFT, High Quota)
 fw_healthy = False
@@ -755,7 +755,7 @@ if global_fireworks_key and llm_provider in ["fireworks", "fw"]:
         )
         fw_healthy = True
     except Exception as fw_err:
-        logger.warning(f"⚠️ Fireworks AI health check failed: {fw_err}. Falling back to Groq / Gemini immediately.")
+        logger.warning(f"⚠️ Fireworks AI health check failed: {fw_err}. Falling back to Google Gemini immediately.")
 
 if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     from livekit.plugins import openai as lk_openai
@@ -772,8 +772,79 @@ if fw_healthy and global_fireworks_key and llm_provider in ["fireworks", "fw"]:
     SELECTED_MODEL = fw_model
     global_llm_compiled = True
 
-# 1. GROQ LPU (Ultra-fast voice brain ~200ms TTFT, primary default when key is present)
-elif global_groq_key and global_groq_key.startswith("gsk_") and llm_provider != "force_google":
+# 1. GOOGLE GEMINI (Ultra-reliable ~555ms TTFT, high token quota, zero rate limit 429 errors)
+elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_groq_key and global_groq_key.startswith("gsk_"))):
+    from livekit.plugins import google
+    
+    preferred_models = ["gemini-3.5-flash-lite", "gemini-3.8-flash"]
+    
+    # If a call is active, skip verification compilation and use cached/default model immediately
+    if os.path.exists("bookings/active_call.lock"):
+        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
+        global_llm = google.LLM(
+            model=SELECTED_MODEL,
+            api_key=global_google_key,
+            temperature=0.3
+        )
+    else:
+        try:
+            from livekit.agents import llm as agents_llm
+            agent_dummy = PriyaRealEstateAgent()
+            agent_tools_dummy = agent_dummy.tools
+            chat_ctx_dummy = agents_llm.ChatContext()
+            chat_ctx_dummy.add_message(role="user", content="hello")
+            
+            async def _test_compile(llm_instance):
+                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                async for chunk in chat_stream:
+                    break
+
+            try:
+                loop_static = asyncio.get_event_loop()
+            except RuntimeError:
+                loop_static = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop_static)
+
+            for model_name in preferred_models:
+                try:
+                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
+                    candidate_llm = google.LLM(
+                        model=model_name,
+                        api_key=global_google_key,
+                        temperature=0.3
+                    )
+                    
+                    # Verify schema compilation works
+                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
+                    
+                    global_llm = candidate_llm
+                    SELECTED_MODEL = model_name
+                    global_llm_compiled = True
+                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
+                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
+                    break
+                except Exception as e:
+                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
+            
+            if not global_llm:
+                logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
+                global_llm = google.LLM(
+                    model="gemini-3.5-flash-lite",
+                    api_key=global_google_key,
+                    temperature=0.3
+                )
+                SELECTED_MODEL = "gemini-3.5-flash-lite"
+        except Exception as outer_err:
+            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
+            global_llm = google.LLM(
+                model="gemini-3.5-flash-lite",
+                api_key=global_google_key,
+                temperature=0.3
+            )
+            SELECTED_MODEL = "gemini-3.5-flash-lite"
+
+# 2. GROQ LPU (Fallback when explicitly configured or Google key unavailable)
+elif global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
         "qwen/qwen3.8-27b",
@@ -871,77 +942,6 @@ elif global_groq_key and global_groq_key.startswith("gsk_") and llm_provider != 
                     temperature=0.3
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
-
-# 2. GOOGLE GEMINI (High Quota Fallback or when LLM_PROVIDER=google)
-elif global_google_key:
-    from livekit.plugins import google
-    
-    preferred_models = ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-latest"]
-    
-    # If a call is active, skip verification compilation and use cached/default model immediately
-    if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
-        global_llm = google.LLM(
-            model=SELECTED_MODEL,
-            api_key=global_google_key,
-            temperature=0.3
-        )
-    else:
-        try:
-            from livekit.agents import llm as agents_llm
-            agent_dummy = PriyaRealEstateAgent()
-            agent_tools_dummy = agent_dummy.tools
-            chat_ctx_dummy = agents_llm.ChatContext()
-            chat_ctx_dummy.add_message(role="user", content="hello")
-            
-            async def _test_compile(llm_instance):
-                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                async for chunk in chat_stream:
-                    break
-
-            try:
-                loop_static = asyncio.get_event_loop()
-            except RuntimeError:
-                loop_static = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop_static)
-
-            for model_name in preferred_models:
-                try:
-                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
-                    candidate_llm = google.LLM(
-                        model=model_name,
-                        api_key=global_google_key,
-                        temperature=0.3
-                    )
-                    
-                    # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
-                    
-                    global_llm = candidate_llm
-                    SELECTED_MODEL = model_name
-                    global_llm_compiled = True
-                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
-                    break
-                except Exception as e:
-                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
-            
-            if not global_llm:
-                logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
-                global_llm = google.LLM(
-                    model="gemini-3.5-flash-lite",
-                    api_key=global_google_key,
-                    temperature=0.3
-                )
-                SELECTED_MODEL = "gemini-3.5-flash-lite"
-        except Exception as outer_err:
-            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
-            global_llm = google.LLM(
-                model="gemini-3.5-flash-lite",
-                api_key=global_google_key,
-                temperature=0.3
-            )
-            SELECTED_MODEL = "gemini-3.5-flash-lite"
 else:
     logger.warning("Neither GOOGLE_API_KEY nor GROQ_API_KEY is configured.")
 
@@ -1475,7 +1475,7 @@ async def entrypoint(ctx: JobContext):
         sambanova_key = os.getenv("SAMBANOVA_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
-        llm_provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
+        llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
         
         if fireworks_key and llm_provider in ["fireworks", "fw"]:
             fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b")
@@ -1487,7 +1487,14 @@ async def entrypoint(ctx: JobContext):
                 reasoning_effort="low",
                 max_completion_tokens=160
             )
-        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL and llm_provider != "force_google":
+        elif google_key and (llm_provider in ["google", "gemini"] or not (groq_key and groq_key.startswith("gsk_"))):
+            from livekit.plugins import google
+            llm = google.LLM(
+                model=SELECTED_MODEL,
+                api_key=google_key,
+                temperature=0.3
+            )
+        elif groq_key and groq_key.startswith("gsk_") and SELECTED_GROQ_MODEL:
             llm = openai.LLM(
                 base_url="https://api.groq.com/openai/v1",
                 model=SELECTED_GROQ_MODEL,
