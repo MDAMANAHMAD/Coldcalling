@@ -1109,20 +1109,20 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=25,
+        endpointing_ms=80,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephone-sensitive: 0.35 threshold, 50ms min speech, 220ms silence for effortless recognition)
+    # 3. Pre-warm Silero VAD (Noise-immune telephony calibration: 0.50 activation, 150ms speech, 350ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
-        min_speech_duration=0.05,
-        activation_threshold=0.35,
-        deactivation_threshold=0.22,
+        min_silence_duration=0.35,
+        min_speech_duration=0.15,
+        activation_threshold=0.50,
+        deactivation_threshold=0.35,
         prefix_padding_duration=0.3,
         sample_rate=16000
     )
@@ -1130,7 +1130,7 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -1511,7 +1511,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=25,
+            endpointing_ms=80,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1563,7 +1563,7 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
@@ -1603,15 +1603,15 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Telephone-sensitive: 0.35 threshold, 50ms min speech)
+    # VAD is pre-warmed, but load as fallback if not present (Noise-immune: 0.50 threshold, 150ms speech)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Telephone-sensitive: 50ms min speech, 0.35 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Noise-immune: 150ms min speech, 0.50 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
-            min_speech_duration=0.05,
-            activation_threshold=0.35,
-            deactivation_threshold=0.22,
+            min_silence_duration=0.35,
+            min_speech_duration=0.15,
+            activation_threshold=0.50,
+            deactivation_threshold=0.35,
             prefix_padding_duration=0.3,
             sample_rate=16000
         )
@@ -1638,7 +1638,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.12,
+                "min_delay": 0.22,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -1647,9 +1647,9 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.55,
-                "resume_false_interruption": False,
-                "false_interruption_timeout": 1.2,
+                "min_duration": 0.65,
+                "resume_false_interruption": True,
+                "false_interruption_timeout": 1.5,
             }
         }
     )
@@ -1911,7 +1911,7 @@ async def entrypoint(ctx: JobContext):
                                 "ffmpeg", "-y",
                                 "-i", str(found_src),
                                 "-codec:a", "libmp3lame",
-                                "-b:a", "32k",
+                                "-b:a", "64k",
                                 "-ac", "1",
                                 str(dest_bookings_mp3)
                             ]
@@ -1936,7 +1936,7 @@ async def entrypoint(ctx: JobContext):
                             output_container = av.open(str(dest_bookings_mp3), 'w', format='mp3')
                             in_stream = input_container.streams.audio[0]
                             out_stream = output_container.add_stream('mp3', rate=24000)
-                            out_stream.bit_rate = 32000
+                            out_stream.bit_rate = 64000
                             out_stream.layout = 'mono'
                             resampler = av.AudioResampler(format='s16p', layout='mono', rate=24000)
                             for frame in input_container.decode(in_stream):
