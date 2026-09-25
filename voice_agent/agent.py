@@ -367,94 +367,45 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 # ==============================================================================
 def resolve_language(transcript: str, current_lang: str = "hi") -> str:
     """
-    Detects spoken language with strict stickiness.
-    Only changes language if the customer explicitly asks to,
-    or speaks clear unambiguous sentences in another language.
-    Once locked to 'mr' or 'en', stays locked until requested to switch.
+    STRICT EXPLICIT LANGUAGE SWITCHING:
+    The call begins in Hindi.
+    The agent NEVER switches to English or Marathi based on spontaneous loanwords
+    (e.g. '1 BHK', '2 BHK', 'price', 'carpet area', 'available', 'possession', 'okay').
+    Language ONLY changes when the caller explicitly asks to speak in a specific language.
+    Once changed, it stays permanently locked into that language for the rest of the call.
     """
-    import string
     text = transcript.strip().lower()
-    words = text.split()
-    clean_words = [w.strip(string.punctuation) for w in words]
 
-    # 0. Explicit language request overrides (Customer asks to change language)
-    marathi_explicit = [
-        'marathi', 'मराठी', 'marathit', 'marathi madhe', 'marathit bola',
-        'marathi bola', 'marathi sanga', 'marathi madhun', 'marathi aati',
-        'marathi yete ka', 'marathi ahe ka'
-    ]
-    if any(m in text for m in marathi_explicit):
-        return 'mr'
-
+    # 1. Explicit request to switch to English
     english_explicit = [
-        'english', 'इंग्लिश', 'in english', 'speak english', 'speak in english',
-        'talk in english', 'can we speak in english', 'can you speak english'
+        'speak in english', 'speak english', 'talk in english', 'in english please',
+        'in english', 'english please', 'can you speak english', 'can we speak english',
+        'english mein baat karo', 'english me baat karo', 'english mein bolo', 'english me bolo',
+        'english madhe bola', 'english bola', 'इंग्लिश'
     ]
     if any(e in text for e in english_explicit):
         return 'en'
 
+    # 2. Explicit request to switch to Marathi
+    marathi_explicit = [
+        'marathi madhe bola', 'marathit bola', 'marathi bola', 'marathi madhun',
+        'marathi yete ka', 'marathit sanga', 'marathi sanga', 'marathi please',
+        'marathi mein bolo', 'marathi me bolo', 'marathi bhasha', 'मराठीत बोला',
+        'मराठी बोला', 'मराठी मध्ये बोला', 'मराठी'
+    ]
+    if any(m in text for m in marathi_explicit):
+        return 'mr'
+
+    # 3. Explicit request to switch to Hindi
     hindi_explicit = [
-        'hindi', 'हिंदी', 'हिन्दी', 'in hindi', 'hindi mein', 'hindi me',
-        'hindi bola', 'hindi madhe'
+        'hindi mein bolo', 'hindi me bolo', 'hindi mein baat karo', 'hindi me baat karo',
+        'hindi mein boliye', 'hindi me boliye', 'hindi please', 'speak in hindi',
+        'talk in hindi', 'hindi madhe bola', 'हिंदी में बोलो', 'हिंदी में बात करो', 'हिंदी'
     ]
     if any(h in text for h in hindi_explicit):
         return 'hi'
 
-    # If already locked into Marathi ('mr'): STICK to Marathi unless explicitly requested
-    if current_lang == 'mr':
-        return 'mr'
-
-    # If already locked into English ('en'): STICK to English unless explicitly requested
-    if current_lang == 'en':
-        return 'en'
-
-    # If currently in Hindi ('hi'): Check if user spontaneously spoke Marathi or English
-    if 'ळ' in transcript:
-        return 'mr'
-    devanagari_marathi_words = [
-        'आहे', 'आहात', 'नाही', 'काय', 'माहिती', 'पाहिजे', 'बोलतो', 'बोलते',
-        'चालेल', 'नको', 'कधी', 'कसा', 'कशी', 'कसे', 'सांगा', 'दाखवा', 'तुम्ही',
-        'आम्ही', 'मध्ये', 'आमचा', 'आमचे', 'किती', 'कुठे', 'लांब', 'दिवस', 'शनिवारी', 'रविवारी'
-    ]
-    if any(w in text for w in devanagari_marathi_words):
-        return 'mr'
-
-    phonetic_marathi_markers = [
-        'kiti', 'kuthe', 'kute', 'laam', 'kasa', 'kase', 'kashi', 'sanga', 'sang na',
-        'ahe', 'aahe', 'ahet', 'aahet', 'nako', 'pahije', 'tumhi', 'tumche', 'tumchya',
-        'tumhala', 'amhi', 'amche', 'amchya', 'amhala', 'madhe', 'madhun', 'baddal',
-        'vishayi', 'shaniwari', 'raviwari', 'somwari', 'yaaycha', 'yenar', 'chalel',
-        'ho chalel', 'bolat aahat', 'aiku yetay', 'kay challay', 'kay kartay'
-    ]
-    if any(w in clean_words or w in text for w in phonetic_marathi_markers):
-        return 'mr'
-
-    latin_chars = sum(1 for c in transcript if c.isalpha() and c.isascii())
-    total_chars = len(transcript.replace(' ', ''))
-    # Removed ambiguous words ('to', 'do', 'me', 'na', 'ya', 'kar', 'ab') that overlap with English
-    hinglish_markers = {
-        'hai', 'kya', 'ka', 'ki', 'ko', 'se', 'par', 'ji', 'haan', 'han', 'achha', 'acha',
-        'bataiye', 'batao', 'btao', 'mein', 'ke', 'ne', 'aur', 'toh',
-        'bhai', 'kab', 'sab', 'karna', 'krna', 'dena', 'dedo',
-        'kitna', 'kitne', 'kitni', 'door', 'dur', 'kahan', 'kaha', 'kaise', 'hoga', 'hogi', 'milega',
-        'aapka', 'apka', 'hum', 'main', 'mujhe', 'tumhara', 'unka', 'woh', 'yahan', 'wahan',
-        'chahiye', 'chahte', 'theek', 'accha', 'nahi', 'nhin'
-    }
-    # Explicit English starter patterns — even short queries should be classified English
-    english_starters = [
-        'do you have', 'is there', 'can you', 'tell me', 'what is', 'price please',
-        'how much', 'how many', 'are there', 'i want', 'i need', 'i am looking',
-        'any flat', 'any option', 'available', 'show me', 'give me', 'please', 'thank you',
-        '1 rk', 'one rk', '2 bhk', '1 bhk', 'one bhk', 'two bhk', 'carpet area',
-        'square feet', 'possession', 'ready to move', 'booking amount'
-    ]
-    if any(starter in text for starter in english_starters):
-        return 'en'
-
-    is_mostly_latin = total_chars > 0 and (latin_chars / total_chars) > 0.85
-    if len(clean_words) >= 4 and is_mostly_latin and not any(w in hinglish_markers for w in clean_words):
-        return 'en'
-
+    # Strictly preserve the current language if no explicit request was made
     return current_lang
 
 
@@ -1006,9 +957,14 @@ STT_KEYWORDS = [
     ("Airoli", 2.0),
     ("Sai Complex", 2.0),
     ("Shil Road", 2.0),
-    ("BHK", 2.0),
+    ("1 RK", 2.5),
+    ("one RK", 2.5),
+    ("1 BHK", 2.5),
+    ("2 BHK", 2.5),
     ("one BHK", 2.0),
     ("two BHK", 2.0),
+    ("BHK", 2.0),
+    ("RK", 2.0),
     ("Lodha", 1.8),
     ("Casario", 1.8),
     ("flat", 1.5),
@@ -1030,6 +986,10 @@ STT_REPLACE = {
     "dombivali": "Dombivli",
     "dombiwali": "Dombivli",
     "nilje station": "Nilje station",
+    "I RK": "1 RK",
+    "i rk": "1 RK",
+    "1rk": "1 RK",
+    "one rk": "1 RK",
 }
 
 
@@ -1092,23 +1052,23 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-fast streaming with 25ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Streaming with 150ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=25,
+        endpointing_ms=150,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.35 activation, 60ms speech, 220ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 350ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
-        min_speech_duration=0.06,
+        min_silence_duration=0.35,
+        min_speech_duration=0.05,
         activation_threshold=0.35,
         deactivation_threshold=0.25,
         prefix_padding_duration=0.3,
@@ -1119,7 +1079,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.92"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -1500,7 +1460,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=25,
+            endpointing_ms=150,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1552,7 +1512,7 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.92"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
@@ -1593,13 +1553,13 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 350ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 50ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
-            min_speech_duration=0.06,
+            min_silence_duration=0.35,
+            min_speech_duration=0.05,
             activation_threshold=0.35,
             deactivation_threshold=0.25,
             prefix_padding_duration=0.3,
@@ -1628,7 +1588,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.12,
+                "min_delay": 0.15,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -1637,7 +1597,7 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.40,
+                "min_duration": 0.20,
                 "resume_false_interruption": True,
                 "false_interruption_timeout": 1.2,
             }
