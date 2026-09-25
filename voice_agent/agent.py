@@ -896,11 +896,9 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
 elif global_groq_key and global_groq_key.startswith("gsk_"):
     from livekit.plugins import openai as lk_openai
     preferred_groq_models = [
+        "qwen/qwen3.8-27b",
         "openai/gpt-oss-20b",
-        "groq/compound-mini",
-        "groq/compound",
         "openai/gpt-oss-120b",
-        "qwen/qwen3.6-27b"
     ]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
@@ -1099,20 +1097,20 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="multi",
         model="nova-3",
-        endpointing_ms=80,
+        endpointing_ms=25,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Noise-immune telephony calibration: 0.50 activation, 150ms speech, 350ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.35 activation, 60ms speech, 220ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.15,
-        activation_threshold=0.50,
-        deactivation_threshold=0.35,
+        min_silence_duration=0.22,
+        min_speech_duration=0.06,
+        activation_threshold=0.35,
+        deactivation_threshold=0.25,
         prefix_padding_duration=0.3,
         sample_rate=16000
     )
@@ -1502,7 +1500,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="multi",
             model="nova-3",
-            endpointing_ms=80,
+            endpointing_ms=25,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1517,7 +1515,7 @@ async def entrypoint(ctx: JobContext):
         sambanova_key = os.getenv("SAMBANOVA_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         google_key = os.getenv("GOOGLE_API_KEY")
-        llm_provider = os.getenv("LLM_PROVIDER", "google").strip().lower()
+        llm_provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
         
         if fireworks_key and llm_provider in ["fireworks", "fw"]:
             fw_model = os.getenv("FIREWORKS_MODEL", "accounts/fireworks/models/gpt-oss-120b")
@@ -1595,15 +1593,15 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Noise-immune: 0.50 threshold, 150ms speech)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Noise-immune: 150ms min speech, 0.50 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.15,
-            activation_threshold=0.50,
-            deactivation_threshold=0.35,
+            min_silence_duration=0.22,
+            min_speech_duration=0.06,
+            activation_threshold=0.35,
+            deactivation_threshold=0.25,
             prefix_padding_duration=0.3,
             sample_rate=16000
         )
@@ -1630,7 +1628,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.22,
+                "min_delay": 0.12,
             },
             "preemptive_generation": {
                 "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
@@ -1639,9 +1637,9 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.65,
+                "min_duration": 0.40,
                 "resume_false_interruption": True,
-                "false_interruption_timeout": 1.5,
+                "false_interruption_timeout": 1.2,
             }
         }
     )
@@ -2744,9 +2742,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.warning(f"Error speaking hello greeting: {e}")
 
-        # Wait up to 6.0s for caller to respond naturally
+        # Wait up to 8.0s for caller to respond naturally
         t_wait_hello = time.time()
-        while time.time() - t_wait_hello < 6.0:
+        while time.time() - t_wait_hello < 8.0:
             if caller_has_spoken or _hangup_scheduled:
                 intro_finished = True
                 break
