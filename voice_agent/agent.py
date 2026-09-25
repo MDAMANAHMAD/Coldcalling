@@ -974,6 +974,11 @@ STT_KEYWORDS = [
     ("crore", 1.5),
     ("budget", 1.5),
     ("visit", 1.5),
+    ("Details", 2.0),
+    ("Overview", 2.0),
+    ("Ready to move", 2.0),
+    ("Possession", 2.0),
+    ("Price", 2.0),
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
@@ -990,6 +995,10 @@ STT_REPLACE = {
     "i rk": "1 RK",
     "1rk": "1 RK",
     "one rk": "1 RK",
+    "2BHK": "2 BHK",
+    "1BHK": "1 BHK",
+    "2bhk": "2 BHK",
+    "1bhk": "1 BHK",
 }
 
 
@@ -1052,22 +1061,22 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-fast streaming with 50ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Native Hindi / Hinglish low-latency acoustic model)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     proc.userdata["stt"] = deepgram.STT(
-        language="multi",
+        language="hi",
         model="nova-3",
-        endpointing_ms=50,
+        endpointing_ms=35,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 280ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 220ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.28,
+        min_silence_duration=0.22,
         min_speech_duration=0.05,
         activation_threshold=0.35,
         deactivation_threshold=0.25,
@@ -1458,9 +1467,9 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         stt = deepgram.STT(
-            language="multi",
+            language="hi",
             model="nova-3",
-            endpointing_ms=50,
+            endpointing_ms=35,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1553,12 +1562,12 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 280ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 220ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 50ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.28,
+            min_silence_duration=0.22,
             min_speech_duration=0.05,
             activation_threshold=0.35,
             deactivation_threshold=0.25,
@@ -1588,10 +1597,10 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.08,
+                "min_delay": 0.04,
             },
             "preemptive_generation": {
-                "enabled": False,  # Prevents aborted/conflicting LLM calls and 1.5s cancellation latency spikes on caller pauses
+                "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
             },
             "interruption": {
                 "enabled": True,
