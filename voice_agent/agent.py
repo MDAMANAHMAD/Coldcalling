@@ -72,7 +72,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
     if not text:
         return text
     target_lang = lang or ACTIVE_TTS_LANGUAGE
-    is_marathi = target_lang == "mr" or bool(re.search(r'[\u0900-\u097F]', text))
+    is_marathi = target_lang == "mr" or (target_lang != "hi" and target_lang != "en" and bool(re.search(r'[\u0900-\u097F]', text)))
     is_english = target_lang == "en"
 
     if is_marathi:
@@ -144,31 +144,21 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\bcrore\b', 'crore'),
         ]
     else:
-        # Hindi / Hinglish default
+        # Hindi / Hinglish default: Map BHK and acronyms to Devanagari tokens
+        # which Cartesia pronounces with natural, steady, native intonation (one BHK, two BHK)
+        # without letter-spelling stutter or pitch spikes.
         replacements = [
-            (r'\b760\b', 'seven hundred sixty'),
-            (r'\b375\b', 'three hundred seventy five'),
-            (r'\b520\b', 'five hundred twenty'),
-            (r'\b755\b', 'seven hundred fifty five'),
-            (r'\b1110\b', 'eleven hundred ten'),
-            (r'\b2285\b', 'twenty two hundred eighty five'),
-            (r'\b76\s*0\b', 'seven hundred sixty'),
-            (r'\b36\b', 'chhattis'),
-            (r'\b72\b', 'bahattar'),
-            (r'\b50\b', 'fifty'),
+            (r'\b(2|two)\s*BHK\b', 'टू बीएचके'),
+            (r'\b(1|one)\s*BHK\b', 'वन बीएचके'),
+            (r'\b(1|one)\s*RK\b', 'वन आरके'),
+            (r'\b1rk\b', 'वन आरके'),
+            (r'\bBHK\b', 'बीएचके'),
+            (r'\bRK\b', 'आरके'),
+            (r'\b76\s*0\b', '760'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
-            (r'\b2\s*BHK\b', 'two BHK'),
-            (r'\btwo\s*BHK\b', 'two BHK'),
-            (r'\b1\s*BHK\b', 'one BHK'),
-            (r'\bone\s*BHK\b', 'one BHK'),
-            (r'\b1\s*RK\b', 'one RK'),
-            (r'\bone\s*RK\b', 'one RK'),
-            (r'\b1rk\b', 'one RK'),
-            (r'\bRK\b', 'RK'),
-            (r'\bBHK\b', 'BHK'),
-            (r'\b15\s*(-|to|se)\s*20\b', 'fifteen to twenty'),
-            (r'\b11\s*(am|baje)\b', 'eleven am'),
-            (r'\b3\s*(pm|baje)\b', 'three pm'),
+            (r'\b15\s*(-|to|se)\s*20\b', '15 se 20'),
+            (r'\b11\s*(am|baje)\b', '11 baje'),
+            (r'\b3\s*(pm|baje)\b', '3 baje'),
         ]
     for pattern, rep in replacements:
         text = re.sub(pattern, rep, text, flags=re.IGNORECASE)
@@ -191,12 +181,13 @@ class PhoneticSentenceTokenizer(tokenize.SentenceTokenizer):
 
     def tokenize(self, *, text: str, language: str | None = None):
         res = self._inner.tokenize(text=text, language=language)
-        return [normalize_phonetics(t) for t in res]
+        return [normalize_phonetics(t, lang=language or ACTIVE_TTS_LANGUAGE) for t in res]
 
-    def stream(self, *, language: str | None = None):
+    def stream(self, *, language: str | None = None) -> tokenize.SentenceStream:
         inner_stream = self._inner.stream(language=language)
-        class _PhoneticStreamWrapper:
+        class _PhoneticStreamWrapper(tokenize.SentenceStream):
             def __init__(self, stream):
+                super().__init__()
                 self._stream = stream
             def push_text(self, text: str) -> None:
                 self._stream.push_text(text)
@@ -214,7 +205,7 @@ class PhoneticSentenceTokenizer(tokenize.SentenceTokenizer):
             async def __anext__(self):
                 ev = await self._stream.__anext__()
                 if hasattr(ev, 'token') and ev.token:
-                    ev.token = normalize_phonetics(ev.token)
+                    ev.token = normalize_phonetics(ev.token, lang=language or ACTIVE_TTS_LANGUAGE)
                 return ev
         return _PhoneticStreamWrapper(inner_stream)
 
@@ -1130,6 +1121,7 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
     cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
@@ -1139,7 +1131,7 @@ def prewarm_fnc(proc: JobProcess):
             voice=kusha_voice_id,
             language="hi",
             sample_rate=24000,
-            model="sonic-3.5",
+            model=cartesia_model,
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume,
@@ -1566,18 +1558,19 @@ async def entrypoint(ctx: JobContext):
     cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
         cartesia_key = os.getenv("CARTESIA_API_KEY")
         if cartesia_key and len(cartesia_key) > 10:
-            logger.info(f"Initializing Cartesia TTS as Primary with Kusha Cloned Voice ({kusha_voice_id}) on sonic-3.5 (speed={cartesia_speed}, volume={cartesia_volume})...")
+            logger.info(f"Initializing Cartesia TTS as Primary with Kusha Cloned Voice ({kusha_voice_id}) on {cartesia_model} (speed={cartesia_speed}, volume={cartesia_volume})...")
             tts = cartesia.TTS(
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="hi",
                 sample_rate=24000,
-                model="sonic-3.5",
+                model=cartesia_model,
                 speed=cartesia_speed,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
                 volume=cartesia_volume,
