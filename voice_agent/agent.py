@@ -1099,8 +1099,10 @@ def prewarm_fnc(proc: JobProcess):
         language="hi",
         model="nova-3",
         endpointing_ms=25,
-        utterance_end_ms=1000,
+        utterance_end_ms=None,
         smart_format=True,
+        no_delay=True,
+        interim_results=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
@@ -1503,8 +1505,10 @@ async def entrypoint(ctx: JobContext):
             language="hi",
             model="nova-3",
             endpointing_ms=25,
-            utterance_end_ms=1000,
+            utterance_end_ms=None,
             smart_format=True,
+            no_delay=True,
+            interim_results=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
             api_key=deepgram_key
@@ -1631,16 +1635,17 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.28,
+                "min_delay": 0.16,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
+                "preemptive_tts": True,  # Pre-synthesizes audio during caller pause for instantaneous 0ms playout
             },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.22,
+                "min_duration": 0.20,
                 "resume_false_interruption": True,
                 "false_interruption_timeout": 1.2,
             }
@@ -2253,8 +2258,7 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
-                if not agent_is_speaking:
-                    t_user_stop = time.perf_counter()
+                t_user_stop = time.perf_counter()
                 intro_finished = True
                 t_last_activity = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
@@ -2786,7 +2790,7 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.warning(f"Error speaking hello greeting attempt {attempt_num}: {e}")
             finally:
-                t_user_stop = 0.0  # Reset so playout of greeting never leaks echo into latency tracking
+                pass
 
             # Wait for caller to respond naturally
             t_wait_hello = time.time()
