@@ -629,6 +629,36 @@ class PriyaRealEstateAgent(Agent):
             logger.debug(f"Fast path evaluation notice: {fast_err}")
 
         # Standard intelligence path for all subsequent turns or specific inquiries
+        # LANGUAGE LOCK: Inject a hard per-turn language constraint into chat_ctx so the LLM
+        # never drifts to another language mid-conversation. This fires on every LLM fallback call.
+        try:
+            _lang_now = ACTIVE_TTS_LANGUAGE
+            if _lang_now == "mr":
+                _lang_instruction = (
+                    "STRICT LANGUAGE LOCK — MANDATORY: You are currently speaking 100% PURE Marathi. "
+                    "DO NOT use a single Hindi or English word in your response. "
+                    "Reply entirely in Marathi Devanagari script. "
+                    "Only switch language if the caller explicitly asks you to speak in Hindi or English right now."
+                )
+            elif _lang_now == "en":
+                _lang_instruction = (
+                    "STRICT LANGUAGE LOCK — MANDATORY: You are currently speaking 100% PURE English. "
+                    "DO NOT use any Hindi or Marathi words in your response. "
+                    "Reply entirely in fluent English. "
+                    "Only switch language if the caller explicitly asks you to speak in Hindi or Marathi right now."
+                )
+            else:
+                _lang_instruction = (
+                    "STRICT LANGUAGE LOCK — MANDATORY: You are currently speaking Hindi/Hinglish. "
+                    "DO NOT switch to Marathi or full English mid-conversation. "
+                    "Keep responding in Hindi or Hinglish as you have been. "
+                    "Only switch language if the caller explicitly asks you to speak in Marathi or English right now."
+                )
+            chat_ctx = chat_ctx.copy()
+            chat_ctx.add_message(role="system", content=_lang_instruction)
+        except Exception as lang_lock_err:
+            logger.debug(f"Language lock injection skipped: {lang_lock_err}")
+
         res = Agent.default.llm_node(self, chat_ctx, tools, model_settings)
         if hasattr(res, "__aiter__"):
             async for chunk in res:
