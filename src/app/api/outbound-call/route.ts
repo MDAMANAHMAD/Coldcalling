@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SipClient, RoomServiceClient } from 'livekit-server-sdk';
+import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
 import { getDb, saveDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const VERIFIED_HOST = 'https://cold-calling-j7qhnkas.livekit.cloud';
-const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
-const VERIFIED_SECRET = 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
-const VERIFIED_TRUNK = 'ST_TEGVYguUkfe9';
-
 // ── Concurrency guard: max 4 simultaneous outbound calls (~1.2-1.4 GB RAM each on 8 GB VPS) ──
 let activeOutboundCalls = 0;
 const MAX_CONCURRENT_CALLS = 4;
-
-function getCleanLiveKitUrl(): string {
-  const raw = (process.env.LIVEKIT_URL || VERIFIED_HOST)
-    .replace(/['\"]/g, '')
-    .trim();
-  try {
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
-    return `https://${parsed.host}`;
-  } catch {
-    return VERIFIED_HOST;
-  }
-}
 
 export async function POST(req: NextRequest) {
   // ── Concurrency check ──
@@ -53,14 +36,9 @@ export async function POST(req: NextRequest) {
     const cleanId = safePhone.replace('+', '');
     const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
-    const host = getCleanLiveKitUrl();
-    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['\"]/g, '').trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['\"]/g, '').trim();
-    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['\"]/g, '').trim();
+    const { client: sipClient, trunkId } = getSipClient();
 
-    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} on ${host} for user: ${userEmail}`);
-
-    const sipClient = new SipClient(host, apiKey, apiSecret);
+    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} with trunk ${trunkId} for user: ${userEmail}`);
 
     const metadata = JSON.stringify({
       customer_name: customerName,
@@ -136,7 +114,7 @@ export async function POST(req: NextRequest) {
       // Sync newly placed call to LiveKit Cloud 'gayatri-persistent-storage' room metadata
       // so it shows up IMMEDIATELY across all connected devices (mobile, laptop, tablet)
       try {
-        const roomClient = new RoomServiceClient(host, apiKey, apiSecret, { requestTimeout: 30 });
+        const roomClient = getRoomServiceClient(30);
         const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
         let cloudMeta: any = {};
         if (rooms.length > 0 && rooms[0].metadata) {

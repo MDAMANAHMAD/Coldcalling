@@ -1,35 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { RoomServiceClient } from 'livekit-server-sdk';
+import { getRoomServiceClient } from '@/lib/livekit';
 import fs from 'fs';
 import path from 'path';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const VERIFIED_HOST = 'https://cold-calling-j7qhnkas.livekit.cloud';
-const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
-const VERIFIED_SECRET = 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
-
-function getCleanLiveKitUrl(): string {
-  const raw = (process.env.LIVEKIT_URL || VERIFIED_HOST)
-    .replace(/['"]/g, '')
-    .trim();
-  try {
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
-    return `https://${parsed.host}`;
-  } catch {
-    return VERIFIED_HOST;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const host = getCleanLiveKitUrl();
-    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['"]/g, '').trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['"]/g, '').trim();
-
-    console.log(`[API TERMINATE ALL CALLS] Connecting to LiveKit at ${host}...`);
-    const roomService = new RoomServiceClient(host, apiKey, apiSecret);
+    const roomService = getRoomServiceClient(30);
 
     const rooms = await roomService.listRooms();
     console.log(`[API TERMINATE ALL CALLS] Found ${rooms.length} active room(s).`);
@@ -38,6 +17,9 @@ export async function POST(req: NextRequest) {
     const terminatedRooms: string[] = [];
 
     for (const room of rooms) {
+      if (room.name === 'gayatri-persistent-storage' || room.name.startsWith('rec-')) {
+        continue; // Never delete persistent metadata or saved recording chunks
+      }
       try {
         console.log(`[API TERMINATE ALL CALLS] Deleting room: ${room.name}...`);
         await roomService.deleteRoom(room.name);

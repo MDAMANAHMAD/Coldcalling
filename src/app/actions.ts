@@ -3,7 +3,7 @@
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import { SipClient, RoomServiceClient } from 'livekit-server-sdk';
+import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
 import fs from 'fs';
 import path from 'path';
 
@@ -88,12 +88,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
 
   // Also query LiveKit Cloud room metadata gayatri-persistent-storage
   try {
-    const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
-    let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
-    if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
-    const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-    const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret, { requestTimeout: 30 });
+    const roomClient = getRoomServiceClient(30);
     const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
     if (rooms.length > 0 && rooms[0].metadata) {
       const parsed = JSON.parse(rooms[0].metadata);
@@ -167,31 +162,10 @@ export async function getColdCallingStats() {
 }
 
 const VERIFIED_HOST = 'https://cold-calling-j7qhnkas.livekit.cloud';
-const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
-const VERIFIED_SECRET = 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT';
-const VERIFIED_TRUNK = 'ST_TEGVYguUkfe9';
-
-function getCleanLiveKitUrl(): string {
-  const raw = (process.env.LIVEKIT_URL || VERIFIED_HOST)
-    .replace(/['"]/g, '')
-    .trim();
-  try {
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
-    return `https://${parsed.host}`;
-  } catch {
-    return VERIFIED_HOST;
-  }
-}
-
 // --- DIRECT OUTBOUND CALL ACTION (NON-BLOCKING) ---
 export async function triggerLiveKitOutboundCall(phoneNumber: string, customerName: string): Promise<{ success: boolean; message: string; roomName?: string; error?: string }> {
   try {
-    const httpUrl = getCleanLiveKitUrl();
-    const apiKey = (process.env.LIVEKIT_API_KEY || VERIFIED_KEY).replace(/['"]/g, '').trim();
-    const apiSecret = (process.env.LIVEKIT_API_SECRET || VERIFIED_SECRET).replace(/['"]/g, '').trim();
-    const trunkId = (process.env.SIP_OUTBOUND_TRUNK_ID || VERIFIED_TRUNK).replace(/['"]/g, '').trim();
-
-    const sipClient = new SipClient(httpUrl, apiKey, apiSecret);
+    const { client: sipClient, trunkId } = getSipClient();
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');

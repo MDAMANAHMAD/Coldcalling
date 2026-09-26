@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { RoomServiceClient } from 'livekit-server-sdk';
+import { getRoomServiceClient } from '@/lib/livekit';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -59,12 +59,7 @@ export async function GET(
     // Cloud Fallback: If not found on disk (e.g. running on Vercel), retrieve from LiveKit Cloud room
     if (!audioBuffer) {
       try {
-        const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
-        let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
-        if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
-        const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
-        const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-        const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret, { requestTimeout: 30 });
+        const roomClient = getRoomServiceClient(30);
 
         // Fast Cloud Audio Retrieval: Target only this call's specific chunk rooms first (~1.5s)
         const targetNames = [`rec-${callSid}`];
