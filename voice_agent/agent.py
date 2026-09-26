@@ -1823,9 +1823,10 @@ async def entrypoint(ctx: JobContext):
                 found_src = None
                 potential_candidates = []
 
-                # Candidate A: Directly in the persistent room recording folder
-                direct_room_ogg = Path("bookings/recordings") / ctx.room.name / "audio.ogg"
-                potential_candidates.append(direct_room_ogg)
+                # Candidate A: Directly in persistent recordings folder
+                potential_candidates.append(Path("bookings/recordings") / f"{ctx.room.name}.ogg")
+                potential_candidates.append(Path("bookings/recordings") / f"{ctx.room.name}.mp3")
+                potential_candidates.append(Path("bookings/recordings") / ctx.room.name / "audio.ogg")
 
                 # Candidate B: From RecorderIO output_path property
                 if hasattr(session, "_recorder_io") and session._recorder_io:
@@ -2514,17 +2515,18 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.warning(f"Error disconnecting participants: {e}")
 
+            # 6. Finalize transcript, audio recording compression, and post-call intelligence BEFORE disconnecting room
+            try:
+                await _finalize_and_save_call("agent_hangup")
+            except Exception as save_err:
+                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
+
+            # 7. Safely disconnect LiveKit room connection
             try:
                 await ctx.room.disconnect()
                 logger.info("✅ LiveKit room connection closed for caller.")
             except Exception as e:
                 logger.warning(f"Error in room disconnect: {e}")
-
-            # 6. Finalize transcript, audio recording compression, and post-call intelligence cleanly in background
-            try:
-                await _finalize_and_save_call("agent_hangup")
-            except Exception as save_err:
-                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
 
             # 7. Delete room in LiveKit Cloud
             try:
@@ -2704,6 +2706,10 @@ async def entrypoint(ctx: JobContext):
         on_speech_captured=_record_agent_speech
     )
 
+    # Reset any previous session on job context to prevent "Only one AgentSession can be the primary at a time"
+    if hasattr(ctx, "_primary_agent_session"):
+        ctx._primary_agent_session = None
+
     # Start session with dual-channel stereo recording (Caller on input, Gayatri AI on output)
     t_session_start = time.perf_counter()
     logger.info("⏱️ [RECORDING & PERF] Calling session.start(record={'audio': True})...")
@@ -2712,6 +2718,24 @@ async def entrypoint(ctx: JobContext):
     except Exception as rec_err:
         logger.warning(f"Warning starting recording: {rec_err}. Falling back to record=False")
         await session.start(agent=agent, room=ctx.room, record=False)
+
+    # Guarantee persistent audio recording stream directly to bookings/recordings/{ctx.room.name}.ogg
+    persistent_rec_file = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
+    persistent_rec_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if getattr(session, "_recorder_io", None) is None:
+            from livekit.agents.voice.recorder_io import RecorderIO
+            session._recorder_io = RecorderIO(agent_session=session)
+            if hasattr(session, "input") and hasattr(session.input, "audio") and session.input.audio:
+                session.input.audio = session._recorder_io.record_input(session.input.audio)
+            if hasattr(session, "output") and hasattr(session.output, "audio") and session.output.audio:
+                session.output.audio = session._recorder_io.record_output(session.output.audio)
+
+        if hasattr(session, "_recorder_io") and session._recorder_io and not session._recorder_io.recording:
+            await session._recorder_io.start(output_path=persistent_rec_file)
+            logger.info(f"🎙️ [AUDIO RECORDING DIRECT] Persistent recording stream active at: {persistent_rec_file}")
+    except Exception as rec_setup_err:
+        logger.warning(f"RecorderIO direct initialization note: {rec_setup_err}")
     
     t_session_ready = (time.perf_counter() - t_session_start) * 1000
     t_total_ready = (time.perf_counter() - t_start) * 1000

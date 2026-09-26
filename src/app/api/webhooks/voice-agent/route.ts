@@ -296,6 +296,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const db = getDb();
+    let cloudError: string | null = null;
     let cloudLogs: any[] = [];
     try {
       const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
@@ -311,7 +312,8 @@ export async function GET(req: NextRequest) {
           cloudLogs = parsed.callLogs;
         }
       }
-    } catch (lkErr) {
+    } catch (lkErr: any) {
+      cloudError = lkErr?.message || String(lkErr);
       console.warn('[GET Webhook LiveKit Cloud Read Warning]:', lkErr);
     }
 
@@ -340,6 +342,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      version: 'v2.1-persistent',
+      cloudLogsCount: cloudLogs.length,
+      cloudError,
       callLogs: logs,
       leads: db.leads || []
     }, {

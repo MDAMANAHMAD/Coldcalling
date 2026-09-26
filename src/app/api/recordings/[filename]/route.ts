@@ -53,10 +53,11 @@ export async function GET(
       }
     }
 
+    const callSid = safeFilename.replace(/\.(mp3|ogg|wav|m4a)$/i, '');
+    let lastCloudError = '';
+
     // Cloud Fallback: If not found on disk (e.g. running on Vercel), retrieve from LiveKit Cloud room
     if (!audioBuffer) {
-      const callSid = safeFilename.replace(/\.(mp3|ogg|wav|m4a)$/i, '');
-      let lastCloudError = '';
       try {
         const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
         let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
@@ -172,13 +173,18 @@ export async function GET(
             // Read-only filesystem on Vercel is fine; audio will stream from memory
           }
         }
-      } catch (cloudErr) {
+      } catch (cloudErr: any) {
+        lastCloudError = cloudErr?.message || String(cloudErr);
         console.warn(`[Recordings API] LiveKit Cloud audio lookup error for ${callSid}:`, cloudErr);
       }
     }
 
     if (!audioBuffer || audioBuffer.length === 0) {
-      return NextResponse.json({ error: 'Recording not found' }, { status: 404 });
+      return NextResponse.json({
+        error: 'Recording not found',
+        callSid,
+        details: lastCloudError || 'Audio chunk rooms not yet synced from voice server'
+      }, { status: 404 });
     }
 
     const fileSize = audioBuffer.length;
