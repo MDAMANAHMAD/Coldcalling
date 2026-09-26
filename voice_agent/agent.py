@@ -295,6 +295,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 4. CONVERSATION PROGRESSION (ALWAYS MOVE FORWARD, NEVER REPEAT)
 - **Greeting**: Call begins with agent saying a clean, simple "Hello." (Never "Hello ji", never anything else).
 - **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
+  - STRICT PROHIBITION: NEVER ask "Kya main aapse baat kar sakti hoon?" or "Kya main aapse do minute baat kar sakti hoon?". NEVER ask permission to speak!
+  - Immediately give the Sai Complex pitch directly:
   - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
 - **If caller confirms 1 BHK:**
   - "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
@@ -473,7 +475,7 @@ class PriyaRealEstateAgent(Agent):
 
         # Trigger automatic call termination after goodbye message is spoken
         if self._hangup_fnc:
-            self._hangup_fnc(wait_for_speech=True, delay_seconds=2.5)
+            self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
 
         time_str = f" at {preferred_time}" if preferred_time != "Not specified" else ""
         return (
@@ -636,51 +638,6 @@ class PriyaRealEstateAgent(Agent):
         except Exception as e:
             logger.error(f"❌ Error sending WhatsApp: {e}")
             return "Maine aapke number par WhatsApp details note kar li hain, thodi der mein receive ho jayegi."
-
-    async def llm_node(self, chat_ctx, tools, model_settings: ModelSettings):
-        collected = []
-        try:
-            async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
-                if isinstance(chunk, str):
-                    collected.append(chunk)
-                elif hasattr(chunk, "choices") and chunk.choices:
-                    delta = chunk.choices[0].delta
-                    if hasattr(delta, "content") and delta.content:
-                        collected.append(delta.content)
-                yield chunk
-        finally:
-            full_text = "".join(collected).strip()
-            if full_text and self._on_speech_captured:
-                try:
-                    self._on_speech_captured(full_text)
-                except Exception as e:
-                    logger.warning(f"Error in on_speech_captured from llm_node: {e}")
-
-    async def tts_node(self, text, model_settings: ModelSettings):
-        collected_chunks = []
-        try:
-            async def _intercept():
-                try:
-                    async for chunk in text:
-                        collected_chunks.append(chunk)
-                        yield chunk
-                finally:
-                    full_text = "".join(collected_chunks).strip()
-                    if full_text and self._on_speech_captured:
-                        try:
-                            self._on_speech_captured(full_text)
-                        except Exception as e:
-                            logger.warning(f"Error in on_speech_captured: {e}")
-
-            async for frame in Agent.default.tts_node(self, _intercept(), model_settings):
-                yield frame
-        finally:
-            full_text = "".join(collected_chunks).strip()
-            if full_text and self._on_speech_captured:
-                try:
-                    self._on_speech_captured(full_text)
-                except Exception as e:
-                    pass
 
 # ==============================================================================
 # Model Cache and Process Lifecycle Helpers
@@ -1714,54 +1671,50 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"   💸 Estimated Cost: Vobiz=₹{cost_vobiz:.2f}, Cartesia=₹{cost_cartesia:.2f}, LLM=₹{cost_llm:.2f} | Total=₹{total_cost:.2f} (₹{per_minute_cost:.2f}/min)")
 
             # --- FULL TRANSCRIPT CAPTURE & INTELLIGENCE EXTRACTION ---
-            # 1. Backfill any dialogue items from agent.chat_ctx, session._chat_ctx, or session.history
-            try:
-                chat_items = []
-                contexts_to_check = []
-                if agent:
-                    if hasattr(agent, "chat_ctx") and agent.chat_ctx:
-                        contexts_to_check.append(agent.chat_ctx)
-                    if hasattr(agent, "_chat_ctx") and agent._chat_ctx:
-                        contexts_to_check.append(agent._chat_ctx)
-                if hasattr(session, "_chat_ctx") and session._chat_ctx:
-                    contexts_to_check.append(session._chat_ctx)
-                if hasattr(session, "history") and session.history:
-                    contexts_to_check.append(session.history)
+            # If call_dialogue is empty (edge case), extract from chat context
+            if not call_dialogue:
+                try:
+                    chat_items = []
+                    contexts_to_check = []
+                    if agent:
+                        if hasattr(agent, "chat_ctx") and agent.chat_ctx:
+                            contexts_to_check.append(agent.chat_ctx)
+                        if hasattr(agent, "_chat_ctx") and agent._chat_ctx:
+                            contexts_to_check.append(agent._chat_ctx)
+                    if hasattr(session, "_chat_ctx") and session._chat_ctx:
+                        contexts_to_check.append(session._chat_ctx)
+                    if hasattr(session, "history") and session.history:
+                        contexts_to_check.append(session.history)
 
-                for ctx_obj in contexts_to_check:
-                    if hasattr(ctx_obj, "items") and isinstance(ctx_obj.items, list):
-                        chat_items.extend(ctx_obj.items)
-                    elif hasattr(ctx_obj, "messages"):
-                        msgs = ctx_obj.messages() if callable(ctx_obj.messages) else ctx_obj.messages
-                        if isinstance(msgs, list):
-                            chat_items.extend(msgs)
+                    for ctx_obj in contexts_to_check:
+                        if hasattr(ctx_obj, "items") and isinstance(ctx_obj.items, list):
+                            chat_items.extend(ctx_obj.items)
+                        elif hasattr(ctx_obj, "messages"):
+                            msgs = ctx_obj.messages() if callable(ctx_obj.messages) else ctx_obj.messages
+                            if isinstance(msgs, list):
+                                chat_items.extend(msgs)
 
-                def _norm(s: str) -> str:
-                    return re.sub(r'[^\w\s]', '', s).strip().lower()
-
-                existing_texts = {_norm(t.get("text", "")) for t in call_dialogue}
-                for msg in chat_items:
-                    m_role = str(getattr(msg, "role", "")).lower()
-                    if m_role in ["system", "tool"]:
-                        continue
-                    raw_m = getattr(msg, "text_content", "") or ""
-                    if not raw_m:
-                        m_content = getattr(msg, "content", "")
-                        if isinstance(m_content, list):
-                            raw_m = " ".join(str(c) for c in m_content if c)
-                        else:
-                            raw_m = str(m_content or "")
-                    raw_m = raw_m.strip()
-                    if raw_m and _norm(raw_m) not in existing_texts:
-                        role_key = "agent" if m_role in ["assistant", "agent"] else "customer"
-                        call_dialogue.append({
-                            "role": role_key,
-                            "text": raw_m,
-                            "time": round(time.time() - t_call_start, 1)
-                        })
-                        existing_texts.add(_norm(raw_m))
-            except Exception as backfill_err:
-                logger.debug(f"Chat context backfill notice: {backfill_err}")
+                    for msg in chat_items:
+                        m_role = str(getattr(msg, "role", "")).lower()
+                        if m_role in ["system", "tool"]:
+                            continue
+                        raw_m = getattr(msg, "text_content", "") or ""
+                        if not raw_m:
+                            m_content = getattr(msg, "content", "")
+                            if isinstance(m_content, list):
+                                raw_m = " ".join(str(c) for c in m_content if c)
+                            else:
+                                raw_m = str(m_content or "")
+                        raw_m = raw_m.strip()
+                        if raw_m and not raw_m.startswith("{"):
+                            role_key = "agent" if m_role in ["assistant", "agent"] else "customer"
+                            call_dialogue.append({
+                                "role": role_key,
+                                "text": raw_m,
+                                "time": round(time.time() - t_call_start, 1)
+                            })
+                except Exception as backfill_err:
+                    logger.debug(f"Chat context emergency fallback notice: {backfill_err}")
 
             formatted_lines = []
             for turn in call_dialogue:
@@ -1870,7 +1823,8 @@ async def entrypoint(ctx: JobContext):
                                 "ffmpeg", "-y",
                                 "-i", str(found_src),
                                 "-codec:a", "libmp3lame",
-                                "-b:a", "64k",
+                                "-b:a", "32k",
+                                "-ar", "24000",
                                 "-ac", "1",
                                 str(dest_bookings_mp3)
                             ]
@@ -1895,7 +1849,7 @@ async def entrypoint(ctx: JobContext):
                             output_container = av.open(str(dest_bookings_mp3), 'w', format='mp3')
                             in_stream = input_container.streams.audio[0]
                             out_stream = output_container.add_stream('mp3', rate=24000)
-                            out_stream.bit_rate = 64000
+                            out_stream.bit_rate = 32000
                             out_stream.layout = 'mono'
                             resampler = av.AudioResampler(format='s16p', layout='mono', rate=24000)
                             for frame in input_container.decode(in_stream):
@@ -1916,35 +1870,21 @@ async def entrypoint(ctx: JobContext):
                         except Exception as pyav_err:
                             logger.warning(f"PyAV audio conversion error: {pyav_err}")
 
-                    # Embed audio data URL for zero-latency, cloud-free playback on Vercel
-                    max_embed_bytes = 400 * 1024  # 400KB limit for seamless metadata storage
                     b64_audio_payload = ""
                     if mp3_success and dest_bookings_mp3.exists():
                         try:
                             with open(dest_bookings_mp3, "rb") as f_aud:
                                 b64_audio_payload = base64.b64encode(f_aud.read()).decode("utf-8")
-                            if dest_bookings_mp3.stat().st_size <= max_embed_bytes:
-                                recording_url = f"data:audio/mp3;base64,{b64_audio_payload}"
-                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded MP3 ({dest_bookings_mp3.stat().st_size} bytes) as data URL for instant playback.")
-                            else:
-                                recording_url = f"/api/recordings/{ctx.room.name}.mp3"
                         except Exception as b64_err:
-                            logger.warning(f"Error encoding MP3 to data URL: {b64_err}")
-                            recording_url = f"/api/recordings/{ctx.room.name}.mp3"
+                            logger.warning(f"Error encoding MP3: {b64_err}")
                     elif dest_bookings_ogg.exists():
                         try:
                             with open(dest_bookings_ogg, "rb") as f_aud:
                                 b64_audio_payload = base64.b64encode(f_aud.read()).decode("utf-8")
-                            if dest_bookings_ogg.stat().st_size <= max_embed_bytes:
-                                recording_url = f"data:audio/ogg;base64,{b64_audio_payload}"
-                                logger.info(f"🎙️ [AUDIO RECORDING EMBEDDED] Embedded OGG ({dest_bookings_ogg.stat().st_size} bytes) as data URL for instant playback.")
-                            else:
-                                recording_url = f"/api/recordings/{ctx.room.name}.ogg"
                         except Exception as b64_err:
-                            logger.warning(f"Error encoding OGG to data URL: {b64_err}")
-                            recording_url = f"/api/recordings/{ctx.room.name}.ogg"
-                    else:
-                        recording_url = f"/api/recordings/{ctx.room.name}.mp3" if mp3_success else f"/api/recordings/{ctx.room.name}.ogg"
+                            logger.warning(f"Error encoding OGG: {b64_err}")
+
+                    recording_url = f"/api/recordings/{ctx.room.name}.mp3"
                 else:
                     logger.warning("⚠️ [AUDIO RECORDING] No audio recording file found on disk.")
                     b64_audio_payload = ""
@@ -2132,23 +2072,32 @@ async def entrypoint(ctx: JobContext):
                 ))
                 logger.info("☁️ [LIVEKIT CLOUD SYNC] Synced completed call intelligence to gayatri-persistent-storage!")
 
-                # Persist dedicated audio recording room in LiveKit Cloud so it is NEVER deleted or stripped
+                # Persist dedicated audio recording room(s) in LiveKit Cloud in safe 40KB chunks
                 if b64_audio_payload:
                     try:
-                        rec_room_name = f"rec-{ctx.room.name}"
-                        rec_meta = json.dumps({
-                            "callSid": ctx.room.name,
-                            "audio": b64_audio_payload,
-                            "format": "mp3" if mp3_success else "ogg",
-                            "customerName": clean_display_name,
-                            "calledAt": datetime.utcnow().isoformat()
-                        })
-                        await lk_cloud_api.room.create_room(lk_api.CreateRoomRequest(
-                            name=rec_room_name,
-                            empty_timeout=86400 * 30,
-                            metadata=rec_meta
-                        ))
-                        logger.info(f"☁️ [AUDIO RECORDING CLOUD ROOM] Persisted audio to dedicated room: {rec_room_name}")
+                        chunk_size = 40000
+                        chunks = [b64_audio_payload[i:i+chunk_size] for i in range(0, len(b64_audio_payload), chunk_size)]
+                        total_chunks = len(chunks)
+                        for idx, chunk in enumerate(chunks):
+                            c_room_name = f"rec-{ctx.room.name}-{idx}" if total_chunks > 1 else f"rec-{ctx.room.name}"
+                            c_meta = json.dumps({
+                                "callSid": ctx.room.name,
+                                "chunk": idx,
+                                "total": total_chunks,
+                                "audio": chunk,
+                                "format": "mp3" if mp3_success else "ogg",
+                                "customerName": clean_display_name,
+                                "calledAt": datetime.utcnow().isoformat()
+                            })
+                            try:
+                                await lk_cloud_api.room.create_room(lk_api.CreateRoomRequest(
+                                    name=c_room_name,
+                                    empty_timeout=86400 * 30,
+                                    metadata=c_meta
+                                ))
+                            except Exception as c_err:
+                                logger.warning(f"Error creating audio chunk room {c_room_name}: {c_err}")
+                        logger.info(f"☁️ [AUDIO RECORDING CLOUD ROOM] Persisted {total_chunks} audio chunk(s) to LiveKit Cloud!")
                     except Exception as rec_room_err:
                         logger.warning(f"Could not persist audio to dedicated cloud room: {rec_room_err}")
             except Exception as lk_sync_err:
@@ -2253,6 +2202,35 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logger.debug(f"Agent state changed error: {err}")
 
+    def record_dialogue_turn(role: str, text: str):
+        nonlocal last_agent_speech
+        clean_text = text.strip()
+        if not clean_text:
+            return
+        
+        # Filter out system tags, JSON, or internal prompt directives
+        if clean_text.startswith("{") and clean_text.endswith("}"):
+            return
+        if clean_text.startswith("[LANGUAGE DIRECTIVE") or clean_text.startswith("[STRICT ANTI") or clean_text.startswith("[OFF-TOPIC"):
+            return
+
+        now_time = round(time.time() - t_call_start, 1)
+        norm_clean = re.sub(r'[^\w\s]', '', clean_text).strip().lower()
+
+        # Check last 3 turns: if exact or near-duplicate from the same speaker, skip
+        for prev in reversed(call_dialogue[-3:]):
+            if prev.get("role") == role:
+                prev_norm = re.sub(r'[^\w\s]', '', prev.get("text", "")).strip().lower()
+                if prev_norm == norm_clean or (len(norm_clean) > 8 and (norm_clean in prev_norm or prev_norm in norm_clean)):
+                    return
+
+        call_dialogue.append({"role": role, "text": clean_text, "time": now_time})
+        if role == "agent":
+            last_agent_speech = clean_text
+            logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] [{now_time}s] '{clean_text}'")
+        else:
+            logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] [{now_time}s] '{clean_text}'")
+
     current_lang = "hi"
 
     @session.on("user_input_transcribed")
@@ -2269,9 +2247,7 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
-            # Append customer turn to transcript history
-            elapsed_sec = round(time.time() - t_call_start, 1)
-            call_dialogue.append({"role": "customer", "text": ev.transcript.strip(), "time": elapsed_sec})
+            record_dialogue_turn("customer", ev.transcript.strip())
             
             # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
             off_topic_patterns = [
@@ -2387,7 +2363,7 @@ async def entrypoint(ctx: JobContext):
     _hangup_scheduled = False
     _hangup_task = None
 
-    def trigger_hangup(wait_for_speech: bool = True, delay_seconds: float = 2.5):
+    def trigger_hangup(wait_for_speech: bool = True, delay_seconds: float = 0.8):
         nonlocal _hangup_scheduled, _hangup_task
         if _hangup_scheduled:
             return
@@ -2397,17 +2373,16 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"📞 [CALL TERMINATION TRIGGERED] (wait_for_speech={wait_for_speech}, telecom_grace={delay_seconds}s)")
             
             if wait_for_speech:
-                # 1. Give up to 3.5s for the agent to start speaking if not already speaking
-                # (Allows LLM response generation and Cartesia TTS audio stream initialization)
+                # 1. Give up to 2.5s for the agent to start speaking if not already speaking
                 t_wait_start = time.time()
-                while time.time() - t_wait_start < 3.5:
+                while time.time() - t_wait_start < 2.5:
                     if session.agent_state == "speaking" or session.current_speech is not None:
                         break
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.08)
 
                 # 2. Lock interruptions and wait until agent speech has completely finished playing out
                 t_speech_wait = time.time()
-                while time.time() - t_speech_wait < 20.0:
+                while time.time() - t_speech_wait < 15.0:
                     speech = session.current_speech
                     if speech:
                         if hasattr(speech, "allow_interruptions"):
@@ -2425,22 +2400,23 @@ async def entrypoint(ctx: JobContext):
                     if session.agent_state != "speaking" and (session.current_speech is None or session.current_speech.done()):
                         logger.info("🎙️ [CALL TERMINATION] Final agent speech has completely finished playing out!")
                         break
-                    await asyncio.sleep(0.15)
+                    await asyncio.sleep(0.1)
 
-            # 3. Telecom Audio Buffer Grace Period
-            # 0.8s guarantees the phone speaker delivers the final word ("bye!") in full clarity
-            grace = max(delay_seconds, 0.8)
-            logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before sending SIP BYE...")
+            # 3. Telecom Audio Buffer Grace Period: 0.8s guarantees caller hears final word in clarity
+            grace = min(max(delay_seconds, 0.6), 1.0)
+            logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before releasing carrier line...")
             await asyncio.sleep(grace)
 
-            # 4. Finalize transcript, audio recording, and post-call intelligence cleanly BEFORE tearing down room
-            try:
-                await _finalize_and_save_call("agent_hangup")
-            except Exception as save_err:
-                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
+            # 4. Flush RecorderIO stream to disk before releasing carrier line (<100ms)
+            if hasattr(session, "_recorder_io") and session._recorder_io:
+                logger.info("🎙️ [AUDIO RECORDING] Flushing RecorderIO stream to disk...")
+                try:
+                    await asyncio.wait_for(session._recorder_io.aclose(), timeout=1.5)
+                except Exception as close_rec_err:
+                    logger.debug(f"RecorderIO aclose note: {close_rec_err}")
 
-            # 5. Release caller's phone line immediately with active SIP BYE
-            logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller...")
+            # 5. Release caller's phone line IMMEDIATELY (< 2.0s strict requirement)
+            logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller line...")
             lk_client = None
             try:
                 from livekit import api
@@ -2460,7 +2436,19 @@ async def entrypoint(ctx: JobContext):
             except Exception as e:
                 logger.warning(f"Error disconnecting participants: {e}")
 
-            # 6. Now that data is safely saved and connections are flushed, delete room and disconnect agent
+            try:
+                await ctx.room.disconnect()
+                logger.info("✅ LiveKit room connection closed for caller.")
+            except Exception as e:
+                logger.warning(f"Error in room disconnect: {e}")
+
+            # 6. Finalize transcript, audio recording compression, and post-call intelligence cleanly in background
+            try:
+                await _finalize_and_save_call("agent_hangup")
+            except Exception as save_err:
+                logger.warning(f"Error finalizing call in trigger_hangup: {save_err}")
+
+            # 7. Delete room in LiveKit Cloud
             try:
                 if lk_client:
                     from livekit import api
@@ -2476,11 +2464,6 @@ async def entrypoint(ctx: JobContext):
                         await lk_client.aclose()
                     except Exception:
                         pass
-
-            try:
-                await ctx.room.disconnect()
-            except Exception as e:
-                logger.warning(f"Error in room disconnect: {e}")
 
         _hangup_task = asyncio.create_task(_do_disconnect())
 
@@ -2501,13 +2484,7 @@ async def entrypoint(ctx: JobContext):
             raw_text = raw_text.strip()
 
             if role_str in ["assistant", "agent"]:
-                nonlocal last_agent_speech
-                last_agent_speech = raw_text
-                last_turn = call_dialogue[-1] if call_dialogue else None
-                if raw_text and (not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text):
-                    elapsed_sec = round(time.time() - t_call_start, 1)
-                    call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
-                    logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] '{raw_text}' at {elapsed_sec}s")
+                record_dialogue_turn("agent", raw_text)
 
                 text = raw_text.lower()
                 ending_phrases = [
@@ -2521,11 +2498,7 @@ async def entrypoint(ctx: JobContext):
                     trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
             elif role_str in ["user", "customer"]:
-                last_turn = call_dialogue[-1] if call_dialogue else None
-                if raw_text and (not last_turn or last_turn.get("role") != "customer" or last_turn.get("text", "").strip() != raw_text):
-                    elapsed_sec = round(time.time() - t_call_start, 1)
-                    call_dialogue.append({"role": "customer", "text": raw_text, "time": elapsed_sec})
-                    logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] '{raw_text}' at {elapsed_sec}s")
+                record_dialogue_turn("customer", raw_text)
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
@@ -2629,16 +2602,10 @@ async def entrypoint(ctx: JobContext):
         customer_name = "Raj"
 
     def _record_agent_speech(spoken_text: str):
-        nonlocal last_agent_speech
         raw_text = spoken_text.strip()
         if not raw_text:
             return
-        last_agent_speech = raw_text
-        elapsed_sec = round(time.time() - t_call_start, 1)
-        last_turn = call_dialogue[-1] if call_dialogue else None
-        if not last_turn or last_turn.get("role") != "agent" or last_turn.get("text", "").strip() != raw_text:
-            call_dialogue.append({"role": "agent", "text": raw_text, "time": elapsed_sec})
-            logger.info(f"🎙️ [DIALOGUE CAPTURED: GAYATRI] '{raw_text}' at {elapsed_sec}s")
+        record_dialogue_turn("agent", raw_text)
 
         text = raw_text.lower()
         ending_phrases = [
@@ -2673,27 +2640,26 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 0.25s for WebRTC audio negotiation and SIP RTP streams to fully settle naturally
-    logger.info("⏳ Allowing 0.25s for audio bridge and SIP RTP connection to settle naturally...")
-    await asyncio.sleep(0.25)
+    # Allow 0.08s for WebRTC audio negotiation and SIP RTP streams to settle naturally
+    logger.info("⏳ Allowing 0.08s for audio bridge and SIP RTP connection to settle naturally...")
+    await asyncio.sleep(0.08)
 
     # Human Call Pickup Flow:
-    # 1. Listen for up to 2.0s: When a caller answers, allow a natural 2-second pause.
-    # If the caller says "Hello?", "Haan boliye", etc., enter the conversation directly!
-    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 2.0s before prompting...")
+    # 1. Listen for up to 0.6s: If caller says "Hello?", "Haan boliye", etc., enter conversation directly!
+    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 0.6s before prompting...")
     t_listen_start = time.time()
-    while time.time() - t_listen_start < 2.0:
+    while time.time() - t_listen_start < 0.6:
         if caller_has_spoken or _hangup_scheduled:
             logger.info("🎙️ [HUMAN PICKUP FLOW] Caller spoke first! Skipping initial prompt and entering conversation immediately.")
             intro_finished = True
             break
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(0.04)
 
-    # 2. Multi-Stage Natural Greeting Loop:
-    # If caller remains silent, prompt gently like a real human advisor instead of immediately hanging up!
-    # Attempt 1: "Hello?" -> wait 3.5s
-    # Attempt 2: "Hello? Kya aapko meri aawaaz aa rahi hai?" -> wait 4.0s
-    # Attempt 3: "Hello ji, kya aap sun pa rahe hain?" -> wait 5.0s
+    # 2. Snappy Multi-Stage Natural Greeting Loop:
+    # If caller remains silent, prompt gently like a real human advisor instead of dead air!
+    # Attempt 1: "Hello?" -> wait 2.5s
+    # Attempt 2: "Hello? Kya aapko meri aawaaz aa rahi hai?" -> wait 3.0s
+    # Attempt 3: "Hello ji, kya aap sun pa rahe hain?" -> wait 3.5s
     if not caller_has_spoken and not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
@@ -2706,9 +2672,9 @@ async def entrypoint(ctx: JobContext):
             )
 
         greeting_prompts = [
-            ("Hello?", 3.5),
-            ("Hello? Kya aapko meri aawaaz aa rahi hai?", 4.0),
-            ("Hello ji, kya aap sun pa rahe hain?", 5.0),
+            ("Hello?", 2.5),
+            ("Hello? Kya aapko meri aawaaz aa rahi hai?", 3.0),
+            ("Hello ji, kya aap sun pa rahe hain?", 3.5),
         ]
 
         for attempt_num, (prompt_str, wait_sec) in enumerate(greeting_prompts, start=1):
@@ -2718,9 +2684,8 @@ async def entrypoint(ctx: JobContext):
 
             logger.info(f"🎙️ [CALL CONNECT GREETING] Attempt {attempt_num}/3: Saying '{prompt_str}'...")
             try:
+                record_dialogue_turn("agent", prompt_str)
                 h_speech = session.say(prompt_str, allow_interruptions=True)
-                elapsed_sec = round(time.time() - t_call_start, 1)
-                call_dialogue.append({"role": "agent", "text": prompt_str, "time": elapsed_sec})
                 if h_speech:
                     await h_speech.wait_for_playout()
             except Exception as e:
@@ -2734,17 +2699,16 @@ async def entrypoint(ctx: JobContext):
                 if caller_has_spoken or _hangup_scheduled:
                     intro_finished = True
                     break
-                await asyncio.sleep(0.08)
+                await asyncio.sleep(0.05)
 
-    # 3. Only if caller remains completely silent after all 3 attempts (15+ seconds), terminate call gracefully
+    # 3. Only if caller remains completely silent after all 3 attempts (10+ seconds), terminate call gracefully
     if not caller_has_spoken and not _hangup_scheduled:
         logger.info("⏳ Caller silent after all 3 greeting attempts. Terminating call.")
         farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
         try:
             t_user_stop = 0.0
+            record_dialogue_turn("agent", farewell_text)
             sp = session.say(farewell_text, allow_interruptions=False)
-            elapsed_sec = round(time.time() - t_call_start, 1)
-            call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
             if sp:
                 await sp.wait_for_playout()
         except Exception as e:
@@ -2794,9 +2758,8 @@ async def entrypoint(ctx: JobContext):
                     prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
                     t_user_stop = 0.0  # CRITICAL: Prevent silence watchdog from logging a 16s turn latency spike!
+                    record_dialogue_turn("agent", prompt_text)
                     p_speech = session.say(prompt_text, allow_interruptions=True)
-                    elapsed_sec = round(time.time() - t_call_start, 1)
-                    call_dialogue.append({"role": "agent", "text": prompt_text, "time": elapsed_sec})
                     if p_speech:
                         await p_speech.wait_for_playout()
                     t_last_activity = time.time()
@@ -2814,9 +2777,8 @@ async def entrypoint(ctx: JobContext):
                     farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
                 try:
                     t_user_stop = 0.0  # Reset so farewell is never tracked as turn latency spike
+                    record_dialogue_turn("agent", farewell_text)
                     speech_handle = session.say(farewell_text, allow_interruptions=False)
-                    elapsed_sec = round(time.time() - t_call_start, 1)
-                    call_dialogue.append({"role": "agent", "text": farewell_text, "time": elapsed_sec})
                     if speech_handle:
                         await speech_handle.wait_for_playout()
                 except Exception as e:

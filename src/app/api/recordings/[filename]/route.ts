@@ -62,19 +62,57 @@ export async function GET(
         const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
         const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
 
-        // 1. Check dedicated recording room: rec-{callSid}
-        const recRoomName = `rec-${callSid}`;
-        const recRooms = await roomClient.listRooms([recRoomName]);
-        if (recRooms.length > 0 && recRooms[0].metadata) {
+        // 1. Check chunked recording rooms first: rec-{callSid}-0
+        const recRoom0 = `rec-${callSid}-0`;
+        const rooms0 = await roomClient.listRooms([recRoom0]);
+        if (rooms0.length > 0 && rooms0[0].metadata) {
           try {
-            const parsed = JSON.parse(recRooms[0].metadata);
-            if (parsed.audio) {
-              audioBuffer = Buffer.from(parsed.audio, 'base64');
-              if (parsed.format === 'ogg') contentType = 'audio/ogg';
-              console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room ${recRoomName}`);
+            const p0 = JSON.parse(rooms0[0].metadata);
+            const total = typeof p0.total === 'number' ? p0.total : 1;
+            const chunkNames = Array.from({ length: total }, (_, i) => `rec-${callSid}-${i}`);
+            const allChunkRooms = await roomClient.listRooms(chunkNames);
+            const chunkMap = new Map<number, string>();
+            for (const cr of allChunkRooms) {
+              if (cr.metadata) {
+                try {
+                  const cp = JSON.parse(cr.metadata);
+                  if (typeof cp.chunk === 'number' && cp.audio) {
+                    chunkMap.set(cp.chunk, cp.audio);
+                  }
+                } catch {}
+              }
+            }
+            if (chunkMap.size === total) {
+              let fullB64 = '';
+              for (let i = 0; i < total; i++) {
+                fullB64 += chunkMap.get(i) || '';
+              }
+              if (fullB64) {
+                audioBuffer = Buffer.from(fullB64, 'base64');
+                contentType = 'audio/mpeg';
+                console.log(`[Recordings API] Reassembled ${audioBuffer.length} bytes from ${total} chunks for ${callSid}`);
+              }
             }
           } catch (e) {
-            console.warn(`[Recordings API] Failed parsing metadata in ${recRoomName}:`, e);
+            console.warn(`[Recordings API] Failed reassembling chunked recording for ${callSid}:`, e);
+          }
+        }
+
+        // 2. Fallback: Check dedicated single recording room: rec-{callSid}
+        if (!audioBuffer) {
+          const recRoomName = `rec-${callSid}`;
+          const recRooms = await roomClient.listRooms([recRoomName]);
+          if (recRooms.length > 0 && recRooms[0].metadata) {
+            try {
+              const parsed = JSON.parse(recRooms[0].metadata);
+              if (parsed.audio) {
+                audioBuffer = Buffer.from(parsed.audio, 'base64');
+                if (parsed.format === 'ogg') contentType = 'audio/ogg';
+                console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room ${recRoomName}`);
+              }
+            } catch (e) {
+              console.warn(`[Recordings API] Failed parsing metadata in ${recRoomName}:`, e);
+            }
           }
         }
 

@@ -221,24 +221,31 @@ export async function POST(req: NextRequest) {
         try {
           const rawB64 = body.audioBase64 || (newCallLog.recordingUrl ? newCallLog.recordingUrl.split(',', 2)[1] : '');
           if (rawB64) {
-            const recRoomName = `rec-${newCallLog.callSid}`;
-            const recRooms = await roomClient.listRooms([recRoomName]);
-            const recMeta = JSON.stringify({
-              callSid: newCallLog.callSid,
-              audio: rawB64,
-              format: 'mp3',
-              createdAt: new Date().toISOString()
-            });
-            if (recRooms.length === 0) {
-              await roomClient.createRoom({
-                name: recRoomName,
-                emptyTimeout: 86400 * 30,
-                metadata: recMeta
+            const chunkSize = 40000;
+            const totalChunks = Math.ceil(rawB64.length / chunkSize);
+            for (let i = 0; i < totalChunks; i++) {
+              const chunk = rawB64.slice(i * chunkSize, (i + 1) * chunkSize);
+              const cRoomName = totalChunks > 1 ? `rec-${newCallLog.callSid}-${i}` : `rec-${newCallLog.callSid}`;
+              const cMeta = JSON.stringify({
+                callSid: newCallLog.callSid,
+                chunk: i,
+                total: totalChunks,
+                audio: chunk,
+                format: 'mp3',
+                createdAt: new Date().toISOString()
               });
-            } else {
-              await roomClient.updateRoomMetadata(recRoomName, recMeta);
+              const exRooms = await roomClient.listRooms([cRoomName]);
+              if (exRooms.length === 0) {
+                await roomClient.createRoom({
+                  name: cRoomName,
+                  emptyTimeout: 86400 * 30,
+                  metadata: cMeta
+                });
+              } else {
+                await roomClient.updateRoomMetadata(cRoomName, cMeta);
+              }
             }
-            console.log(`[Webhook LiveKit Cloud Sync]: Successfully saved audio recording in dedicated room ${recRoomName}`);
+            console.log(`[Webhook LiveKit Cloud Sync]: Successfully saved ${totalChunks} audio chunk(s) for ${newCallLog.callSid}`);
           }
         } catch (recRoomErr) {
           console.warn('[Webhook LiveKit Cloud Rec Room Warning]:', recRoomErr);
