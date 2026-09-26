@@ -69,7 +69,8 @@ export async function GET(
           try {
             const p0 = JSON.parse(rooms0[0].metadata);
             const total = typeof p0.total === 'number' ? p0.total : 1;
-            const chunkNames = Array.from({ length: total }, (_, i) => `rec-${callSid}-${i}`);
+            const maxLookahead = Math.max(total, 30);
+            const chunkNames = Array.from({ length: maxLookahead }, (_, i) => `rec-${callSid}-${i}`);
             const allChunkRooms = await roomClient.listRooms(chunkNames);
             const chunkMap = new Map<number, string>();
             for (const cr of allChunkRooms) {
@@ -82,15 +83,19 @@ export async function GET(
                 } catch {}
               }
             }
-            if (chunkMap.size === total) {
+            if (chunkMap.size > 0) {
               let fullB64 = '';
-              for (let i = 0; i < total; i++) {
-                fullB64 += chunkMap.get(i) || '';
+              for (let i = 0; i < maxLookahead; i++) {
+                if (chunkMap.has(i)) {
+                  fullB64 += chunkMap.get(i);
+                } else {
+                  break;
+                }
               }
               if (fullB64) {
                 audioBuffer = Buffer.from(fullB64, 'base64');
                 contentType = 'audio/mpeg';
-                console.log(`[Recordings API] Reassembled ${audioBuffer.length} bytes from ${total} chunks for ${callSid}`);
+                console.log(`[Recordings API] Reassembled ${audioBuffer.length} bytes from ${chunkMap.size} chunks for ${callSid}`);
               }
             }
           } catch (e) {

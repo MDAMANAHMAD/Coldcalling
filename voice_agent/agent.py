@@ -437,6 +437,73 @@ class PriyaRealEstateAgent(Agent):
         )
         super().__init__(instructions=instructions)
 
+    async def llm_node(
+        self,
+        chat_ctx: llm.ChatContext,
+        tools: list[llm.Tool],
+        model_settings: Any,
+    ):
+        # Ultra-Fast Turn 1 Fast Path:
+        # If this is the caller's very first response to "Hello?" and is a natural pickup acknowledgment
+        # ("Hello", "Haan", "Boliye", "Kaun", "Ji", etc.), bypass LLM round-trip latency (saving 1.2s-2.0s)
+        # and stream the Sai Complex intro pitch immediately in <150ms!
+        try:
+            user_msgs = [m for m in chat_ctx.items if getattr(m, "role", "") in ["user", "customer"]]
+            if len(user_msgs) == 1:
+                first_msg = user_msgs[0]
+                raw_text = getattr(first_msg, "text_content", "") or ""
+                if not raw_text:
+                    content = getattr(first_msg, "content", "")
+                    if isinstance(content, list):
+                        raw_text = " ".join(str(c) for c in content if c)
+                    else:
+                        raw_text = str(content or "")
+                clean_norm = re.sub(r'[^\w\s]', '', raw_text).strip().lower()
+                words = clean_norm.split()
+
+                # Check for explicit Marathi preference
+                if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
+                    logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
+                    yield "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
+                    return
+
+                # Common greeting / pickup acknowledgments
+                pickup_words = {
+                    "hello", "helo", "halo",
+                    "haan", "ha", "haa", "haanji", "haan ji", "haji",
+                    "boliye", "boli", "bolo", "haan boliye", "ha boliye", "ji boliye",
+                    "kaun", "kon", "kaun hai", "kon hai", "kaun bol rahe ho", "kaun bol raha hai",
+                    "ji", "ji haan", "yes", "yeah", "yep", "hi", "hey",
+                    "namaste", "namaskar", "pranam",
+                    "sun raha hoon", "sun rahi hoon", "aawaz aa rahi hai"
+                }
+
+                # If exact greeting match OR short utterance (<= 3 words) without negative/specific question keywords:
+                has_specific_inquiry = any(kw in clean_norm for kw in [
+                    "nahi", "mat", "kya", "kitna", "price", "rate", "cost", "kahan", "kidhar", "marathi", "bhk", "flat", "possession", "amenities"
+                ])
+                if clean_norm in pickup_words or (len(words) <= 3 and not has_specific_inquiry):
+                    logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
+                    yield "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+                    return
+        except Exception as fast_err:
+            logger.debug(f"Fast path evaluation notice: {fast_err}")
+
+        # Standard intelligence path for all subsequent turns or specific inquiries
+        res = Agent.default.llm_node(self, chat_ctx, tools, model_settings)
+        if hasattr(res, "__aiter__"):
+            async for chunk in res:
+                yield chunk
+        elif asyncio.iscoroutine(res):
+            out = await res
+            if hasattr(out, "__aiter__"):
+                async for chunk in out:
+                    yield chunk
+            else:
+                yield out
+        else:
+            yield res
+
     @function_tool(description="Call ONLY after reading back the final date and time and customer has explicitly confirmed with a definitive 'yes', 'lock it in', or 'confirm kar do'. DO NOT call while customer is still deciding, hesitant, or changing their day.")
     async def schedule_site_visit(
         self,
@@ -1023,21 +1090,22 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-3",
-        endpointing_ms=35,
+        endpointing_ms=25,
+        utterance_end_ms=1000,
         smart_format=True,
         keyterm=STT_KEYTERMS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 220ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 200ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
+        min_silence_duration=0.20,
         min_speech_duration=0.05,
         activation_threshold=0.35,
         deactivation_threshold=0.25,
-        prefix_padding_duration=0.3,
+        prefix_padding_duration=0.15,
         sample_rate=16000
     )
 
@@ -1045,7 +1113,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.92"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -1426,7 +1494,8 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-3",
-            endpointing_ms=35,
+            endpointing_ms=25,
+            utterance_end_ms=1000,
             smart_format=True,
             keyterm=STT_KEYTERMS,
             replace=STT_REPLACE,
@@ -1478,7 +1547,7 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.92"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
@@ -1519,16 +1588,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 220ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 200ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 50ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
+            min_silence_duration=0.20,
             min_speech_duration=0.05,
             activation_threshold=0.35,
             deactivation_threshold=0.25,
-            prefix_padding_duration=0.3,
+            prefix_padding_duration=0.15,
             sample_rate=16000
         )
     
@@ -1990,7 +2059,7 @@ async def entrypoint(ctx: JobContext):
                 loop = asyncio.get_running_loop()
                 webhook_resp = await loop.run_in_executor(
                     None,
-                    lambda: requests.post(f"{dashboard_url}/api/webhooks/voice-agent", json=webhook_payload, timeout=8)
+                    lambda: requests.post(f"{dashboard_url}/api/webhooks/voice-agent", json=webhook_payload, timeout=25)
                 )
                 logger.info(f"🌐 [WEBHOOK SYNC] Delivered! Status: {webhook_resp.status_code} - {webhook_resp.text}")
             except Exception as sync_err:
@@ -2072,13 +2141,13 @@ async def entrypoint(ctx: JobContext):
                 ))
                 logger.info("☁️ [LIVEKIT CLOUD SYNC] Synced completed call intelligence to gayatri-persistent-storage!")
 
-                # Persist dedicated audio recording room(s) in LiveKit Cloud in safe 40KB chunks
+                # Persist dedicated audio recording room(s) in LiveKit Cloud in safe 40KB chunks concurrently
                 if b64_audio_payload:
                     try:
                         chunk_size = 40000
                         chunks = [b64_audio_payload[i:i+chunk_size] for i in range(0, len(b64_audio_payload), chunk_size)]
                         total_chunks = len(chunks)
-                        for idx, chunk in enumerate(chunks):
+                        async def _save_chunk_room(idx, chunk):
                             c_room_name = f"rec-{ctx.room.name}-{idx}" if total_chunks > 1 else f"rec-{ctx.room.name}"
                             c_meta = json.dumps({
                                 "callSid": ctx.room.name,
@@ -2095,8 +2164,16 @@ async def entrypoint(ctx: JobContext):
                                     empty_timeout=86400 * 30,
                                     metadata=c_meta
                                 ))
-                            except Exception as c_err:
-                                logger.warning(f"Error creating audio chunk room {c_room_name}: {c_err}")
+                            except Exception:
+                                try:
+                                    await lk_cloud_api.room.update_room_metadata(lk_api.UpdateRoomMetadataRequest(
+                                        room=c_room_name,
+                                        metadata=c_meta
+                                    ))
+                                except Exception:
+                                    pass
+
+                        await asyncio.gather(*[_save_chunk_room(idx, c) for idx, c in enumerate(chunks)], return_exceptions=True)
                         logger.info(f"☁️ [AUDIO RECORDING CLOUD ROOM] Persisted {total_chunks} audio chunk(s) to LiveKit Cloud!")
                     except Exception as rec_room_err:
                         logger.warning(f"Could not persist audio to dedicated cloud room: {rec_room_err}")

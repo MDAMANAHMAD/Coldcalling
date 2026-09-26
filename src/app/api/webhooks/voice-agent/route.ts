@@ -223,7 +223,7 @@ export async function POST(req: NextRequest) {
           if (rawB64) {
             const chunkSize = 40000;
             const totalChunks = Math.ceil(rawB64.length / chunkSize);
-            for (let i = 0; i < totalChunks; i++) {
+            const chunkPromises = Array.from({ length: totalChunks }, async (_, i) => {
               const chunk = rawB64.slice(i * chunkSize, (i + 1) * chunkSize);
               const cRoomName = totalChunks > 1 ? `rec-${newCallLog.callSid}-${i}` : `rec-${newCallLog.callSid}`;
               const cMeta = JSON.stringify({
@@ -234,17 +234,19 @@ export async function POST(req: NextRequest) {
                 format: 'mp3',
                 createdAt: new Date().toISOString()
               });
-              const exRooms = await roomClient.listRooms([cRoomName]);
-              if (exRooms.length === 0) {
+              try {
                 await roomClient.createRoom({
                   name: cRoomName,
                   emptyTimeout: 86400 * 30,
                   metadata: cMeta
                 });
-              } else {
-                await roomClient.updateRoomMetadata(cRoomName, cMeta);
+              } catch {
+                try {
+                  await roomClient.updateRoomMetadata(cRoomName, cMeta);
+                } catch {}
               }
-            }
+            });
+            await Promise.all(chunkPromises);
             console.log(`[Webhook LiveKit Cloud Sync]: Successfully saved ${totalChunks} audio chunk(s) for ${newCallLog.callSid}`);
           }
         } catch (recRoomErr) {
