@@ -62,18 +62,16 @@ export async function GET(
         const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
         const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
 
-        // 1. Check chunked recording rooms first: rec-{callSid}-0
-        const recRoom0 = `rec-${callSid}-0`;
-        const rooms0 = await roomClient.listRooms([recRoom0]);
-        if (rooms0.length > 0 && rooms0[0].metadata) {
+        // Fast Cloud Audio Retrieval: Single listRooms() query to fetch all rooms instantly
+        const allRooms = await roomClient.listRooms();
+        const prefix = `rec-${callSid}-`;
+        const chunkRooms = allRooms.filter(r => r.name.startsWith(prefix));
+
+        // 1. Check chunked recording rooms
+        if (chunkRooms.length > 0) {
           try {
-            const p0 = JSON.parse(rooms0[0].metadata);
-            const total = typeof p0.total === 'number' ? p0.total : 1;
-            const maxLookahead = Math.max(total, 30);
-            const chunkNames = Array.from({ length: maxLookahead }, (_, i) => `rec-${callSid}-${i}`);
-            const allChunkRooms = await roomClient.listRooms(chunkNames);
             const chunkMap = new Map<number, string>();
-            for (const cr of allChunkRooms) {
+            for (const cr of chunkRooms) {
               if (cr.metadata) {
                 try {
                   const cp = JSON.parse(cr.metadata);
@@ -85,7 +83,7 @@ export async function GET(
             }
             if (chunkMap.size > 0) {
               let fullB64 = '';
-              for (let i = 0; i < maxLookahead; i++) {
+              for (let i = 0; i < chunkMap.size; i++) {
                 if (chunkMap.has(i)) {
                   fullB64 += chunkMap.get(i);
                 } else {
@@ -105,18 +103,17 @@ export async function GET(
 
         // 2. Fallback: Check dedicated single recording room: rec-{callSid}
         if (!audioBuffer) {
-          const recRoomName = `rec-${callSid}`;
-          const recRooms = await roomClient.listRooms([recRoomName]);
-          if (recRooms.length > 0 && recRooms[0].metadata) {
+          const singleRoom = allRooms.find(r => r.name === `rec-${callSid}`);
+          if (singleRoom && singleRoom.metadata) {
             try {
-              const parsed = JSON.parse(recRooms[0].metadata);
+              const parsed = JSON.parse(singleRoom.metadata);
               if (parsed.audio) {
                 audioBuffer = Buffer.from(parsed.audio, 'base64');
                 if (parsed.format === 'ogg') contentType = 'audio/ogg';
-                console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room ${recRoomName}`);
+                console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room rec-${callSid}`);
               }
             } catch (e) {
-              console.warn(`[Recordings API] Failed parsing metadata in ${recRoomName}:`, e);
+              console.warn(`[Recordings API] Failed parsing metadata in rec-${callSid}:`, e);
             }
           }
         }
