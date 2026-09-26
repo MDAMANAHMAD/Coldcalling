@@ -146,9 +146,8 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\bcrore\b', 'crore'),
         ]
     else:
-        # Hindi / Hinglish default: Map BHK, Dombivli, and numbers to Devanagari tokens
-        # which Cartesia pronounces with natural, steady, native intonation (one BHK, two BHK, Dombivli)
-        # without letter-spelling stutter, boundary clicks, or pitch spikes.
+        # Hindi / Hinglish default: Keep all numbers in English (36 lakh, 72 lakh, 375 sqft, 760 sqft)
+        # as requested, while keeping Dombivli in natural Devanagari phonetics ('डोंबिवली') and BHK as 'बीएचके'.
         replacements = [
             (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
             (r'\b(2|two)\s*BHK\b', 'टू बीएचके'),
@@ -157,9 +156,14 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b1rk\b', 'वन आरके'),
             (r'\bBHK\b', 'बीएचके'),
             (r'\bRK\b', 'आरके'),
-            (r'\b36\s*lakh\b', 'छत्तीस लाख'),
-            (r'\b72\s*lakh\b', 'बहात्तर लाख'),
-            (r'\b76\s*0\b', '760'),
+            (r'\bchhattis\s*lakh\b', '36 lakh'),
+            (r'\bbahattar\s*lakh\b', '72 lakh'),
+            (r'\bchhattis\b', '36'),
+            (r'\bbahattar\b', '72'),
+            (r'छत्तीस\s*लाख', '36 lakh'),
+            (r'बहात्तर\s*लाख', '72 lakh'),
+            (r'छत्तीस', '36'),
+            (r'बहात्तर', '72'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
             (r'\b15\s*(-|to|se)\s*20\b', '15 se 20'),
             (r'\b11\s*(am|baje)\b', '11 baje'),
@@ -285,6 +289,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - NEVER speak with exaggerated pitch, celebratory joy, or robotic stiffness.
   - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
 - PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
+- STRICT NUMBER PRONUNCIATION: ALWAYS say numbers and pricing in English digits/words: "36 lakh", "72 lakh", "375 square feet", "760 square feet", "11 AM", "3 PM". Strictly NEVER say "chhattis" or "bahattar" which causes customer confusion! If customer asks whether 36 lakh is 36 or 37, explicitly confirm that 36 lakh means thirty-six lakh rupees, not 37.
 - NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
 - STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantly.
 
@@ -305,15 +310,15 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
   - STRICT PROHIBITION: NEVER ask "Kya main aapse baat kar sakti hoon?" or "Kya main aapse do minute baat kar sakti hoon?". NEVER ask permission to speak!
   - Immediately give the Sai Complex pitch directly:
-  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
 - **If caller confirms 1 BHK:**
-  - "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+  - "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
 - **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options'):**
-  - Hindi: "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain chhattis lakh rupaye all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
+  - Hindi: "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
   - English: "We do not have 1 RK configurations at Sai Complex; our homes start with spacious 1 BHK apartments of 375 square feet starting at 36 lakh rupees all-inclusive. Would you like to explore the 1 BHK option?"
   - Marathi: "साई कॉम्प्लेक्समध्ये १ आरके उपलब्ध नाही; आमच्याकडे तीनशे पंच्याहत्तर स्क्वेअर फूटचे प्रशस्त १ बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात. आपण १ बीएचके पर्याय पाहू इच्छिता का?"
 - **If caller confirms 2 BHK:**
-  - "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
+  - "Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
 - **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
   - DO NOT repeat the 1/2 BHK pitch!
   - Progress: "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes door. Yahan 1 BHK 36 lakh aur 2 BHK 72 lakh all-inclusive mein available hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
@@ -497,7 +502,7 @@ class PriyaRealEstateAgent(Agent):
                     ])
                     if clean_norm in pickup_words or (len(words) <= 3 and not has_specific_inquiry):
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain chhattis lakh rupaye onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+                        yield "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
                         return
 
                 # 2. Subsequent Turns Fast Path (Eliminating Turn 2, Turn 3, Turn 4 Latency Spikes)
@@ -523,21 +528,27 @@ class PriyaRealEstateAgent(Agent):
                     # Case C: 1 RK flat inquiry
                     if any(kw in clean_norm for kw in ["1 rk", "1rk", "one rk", "ek rk", "rk flat", "rk options", "rk available", "rk hai kya"]):
                         logger.info(f"⚡ [FAST-PATH 1RK] Instant 1RK explanation for '{raw_text}' (0ms LLM wait)!")
-                        yield "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain chhattis lakh rupaye all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
+                        yield "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
                         return
 
                     # Case D: 1 BHK confirmed / chosen
                     is_1bhk = any(kw in clean_norm for kw in ["1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk"]) or (clean_norm in ["one", "1", "ek", "onebhk"] and len(words) <= 2)
                     if is_1bhk and not any(kw in clean_norm for kw in ["2 bhk", "two bhk"]):
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
-                        yield "One BHK mein 375 square feet carpet area chhattis lakh rupaye all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+                        yield "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
                         return
 
                     # Case E: 2 BHK confirmed / chosen
                     is_2bhk = any(kw in clean_norm for kw in ["2 bhk", "2bhk", "two bhk", "do bhk", "second bhk"]) or (clean_norm in ["two", "2", "do", "twobhk"] and len(words) <= 2)
                     if is_2bhk and not any(kw in clean_norm for kw in ["1 bhk", "one bhk"]):
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
-                        yield "Two BHK mein aapko 760 square feet carpet area bahattar lakh rupaye all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Aap ready-to-move dekh rahe hain ya upcoming possession?"
+                        yield "Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Aap ready-to-move dekh rahe hain ya upcoming possession?"
+                        return
+
+                    # Case J: "Chhattis lakh" / 36 lakh clarification inquiry (e.g. 36 vs 37 lakh)
+                    if any(k in clean_norm for k in ["chhattis", "chattis", "36 lakh", "36lakh", "छत्तीस"]) and any(w in clean_norm for w in ["matlab", "meaning", "hota", "kya", "37", "puch", "kitna"]):
+                        logger.info(f"⚡ [FAST-PATH 36 LAKH CLARIFICATION] Instant clarification for '{raw_text}' (0ms LLM wait)!")
+                        yield "Ji haan, chhattis lakh ka matlab 36 lakh rupees hi hota hai, 37 lakh nahi. One BHK 36 lakh mein aur two BHK 72 lakh mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
                         return
 
                     # Case F: Confirmation of site visit time / booking
@@ -2835,52 +2846,15 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        greeting_prompts = [
-            ("Hello?", 2.5),
-            ("Hello? Kya aapko meri aawaaz aa rahi hai?", 3.0),
-            ("Hello ji, kya aap sun pa rahe hain?", 3.5),
-        ]
-
-        for attempt_num, (prompt_str, wait_sec) in enumerate(greeting_prompts, start=1):
-            if caller_has_spoken or _hangup_scheduled:
-                intro_finished = True
-                break
-
-            logger.info(f"🎙️ [CALL CONNECT GREETING] Attempt {attempt_num}/3: Saying '{prompt_str}'...")
-            try:
-                record_dialogue_turn("agent", prompt_str)
-                h_speech = session.say(prompt_str, allow_interruptions=True)
-                if h_speech:
-                    await h_speech.wait_for_playout()
-            except Exception as e:
-                logger.warning(f"Error speaking hello greeting attempt {attempt_num}: {e}")
-            finally:
-                pass
-
-            # Wait for caller to respond naturally
-            t_wait_hello = time.time()
-            while time.time() - t_wait_hello < wait_sec:
-                if caller_has_spoken or _hangup_scheduled:
-                    intro_finished = True
-                    break
-                await asyncio.sleep(0.05)
-
-    # 3. Only if caller remains completely silent after all 3 attempts (10+ seconds), terminate call gracefully
-    if not caller_has_spoken and not _hangup_scheduled:
-        logger.info("⏳ Caller silent after all 3 greeting attempts. Terminating call.")
-        farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, bye!"
+        logger.info("🎙️ [CALL CONNECT GREETING] Speaking single crisp 'Hello?' immediately to caller...")
         try:
-            t_user_stop = 0.0
-            record_dialogue_turn("agent", farewell_text)
-            sp = session.say(farewell_text, allow_interruptions=False)
-            if sp:
-                await sp.wait_for_playout()
+            record_dialogue_turn("agent", "Hello?")
+            session.say("Hello?", allow_interruptions=True)
         except Exception as e:
-            logger.warning(f"Error speaking silence farewell: {e}")
-        trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
-        return
+            logger.warning(f"Error speaking hello greeting: {e}")
+        intro_finished = True
 
-    # Silence Watchdog: 16s -> Prompt, 32s -> Auto Hangup
+    # Silence Watchdog: 8s -> Prompt, 16s -> Auto Hangup
     t_last_activity = time.time()
     has_prompted_silence = False
     intro_finished = True
@@ -2896,7 +2870,7 @@ async def entrypoint(ctx: JobContext):
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 16s of caller silence.")
+        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 8s of caller silence.")
         
         while not _hangup_scheduled:
             await asyncio.sleep(0.5)
@@ -2910,10 +2884,10 @@ async def entrypoint(ctx: JobContext):
 
             silence_duration = time.time() - t_last_activity
 
-            # Stage 1: Caller silent for 16 full seconds AFTER Gayatri finished speaking -> Prompt in active language
-            if silence_duration >= 16.0 and not has_prompted_silence:
+            # Stage 1: Caller silent for 8 full seconds -> Prompt in active language
+            if silence_duration >= 8.0 and not has_prompted_silence:
                 has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>16s after Gayatri speech). Prompting in language '{current_lang}'...")
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>8s after Gayatri speech). Prompting in language '{current_lang}'...")
                 if current_lang == "mr":
                     prompt_text = "हॅलो? माझा आवाज येतोय का?"
                 elif current_lang == "en":
@@ -2921,7 +2895,7 @@ async def entrypoint(ctx: JobContext):
                 else:
                     prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
-                    t_user_stop = 0.0  # CRITICAL: Prevent silence watchdog from logging a 16s turn latency spike!
+                    t_user_stop = 0.0  # CRITICAL: Prevent silence watchdog from logging a turn latency spike!
                     record_dialogue_turn("agent", prompt_text)
                     p_speech = session.say(prompt_text, allow_interruptions=True)
                     if p_speech:
@@ -2930,9 +2904,9 @@ async def entrypoint(ctx: JobContext):
                 except Exception as e:
                     logger.warning(f"Error speaking silence prompt: {e}")
 
-            # Stage 2: Caller silent for 32 seconds -> End call cleanly in active language
-            elif silence_duration >= 32.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>32s). Terminating call in language '{current_lang}'...")
+            # Stage 2: Caller silent for 16 seconds -> End call cleanly in active language
+            elif silence_duration >= 16.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>16s). Terminating call in language '{current_lang}'...")
                 if current_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
                 elif current_lang == "en":
