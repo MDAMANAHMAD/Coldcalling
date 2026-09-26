@@ -78,6 +78,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
 
     if is_marathi:
         replacements = [
+            (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
             (r'\b760\b', 'सातशे साठ'),
             (r'\b375\b', 'तीनशे पंच्याहत्तर'),
             (r'\b520\b', 'पाचशे वीस'),
@@ -145,16 +146,19 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\bcrore\b', 'crore'),
         ]
     else:
-        # Hindi / Hinglish default: Map BHK and acronyms to Devanagari tokens
-        # which Cartesia pronounces with natural, steady, native intonation (one BHK, two BHK)
-        # without letter-spelling stutter or pitch spikes.
+        # Hindi / Hinglish default: Map BHK, Dombivli, and numbers to Devanagari tokens
+        # which Cartesia pronounces with natural, steady, native intonation (one BHK, two BHK, Dombivli)
+        # without letter-spelling stutter, boundary clicks, or pitch spikes.
         replacements = [
+            (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
             (r'\b(2|two)\s*BHK\b', 'टू बीएचके'),
             (r'\b(1|one)\s*BHK\b', 'वन बीएचके'),
             (r'\b(1|one)\s*RK\b', 'वन आरके'),
             (r'\b1rk\b', 'वन आरके'),
             (r'\bBHK\b', 'बीएचके'),
             (r'\bRK\b', 'आरके'),
+            (r'\b36\s*lakh\b', 'छत्तीस लाख'),
+            (r'\b72\s*lakh\b', 'बहात्तर लाख'),
             (r'\b76\s*0\b', '760'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
             (r'\b15\s*(-|to|se)\s*20\b', '15 se 20'),
@@ -166,18 +170,21 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
     return text
 
 # Pluggable Phonetic Tokenizer for Cartesia
-# Seamlessly normalizes complete sentences with Blingfire without monkeypatching WebSocket streams
-from livekit.agents.tokenize import blingfire, SentenceTokenizer, SentenceStream
+# Normalizes complete sentences with natural clause chunking to eliminate micro-pauses & boundary clicks
+from livekit.agents.tokenize import basic, SentenceTokenizer, SentenceStream
 
 class PhoneticSentenceTokenizer(SentenceTokenizer):
     """
     Sentence tokenizer that transparently normalizes numbers and terms
     into natural speech on complete sentences for Cartesia neural TTS,
-    without buffering latency, voice breaks, or dropped chunks.
+    preventing fragmented micro-chunk flushes and eliminating vocoder clicks.
     """
-    def __init__(self, stream_context_len: int = 2):
+    def __init__(self, min_sentence_len: int = 16, stream_context_len: int = 8):
         super().__init__()
-        self._inner = blingfire.SentenceTokenizer(stream_context_len=stream_context_len)
+        self._inner = basic.SentenceTokenizer(
+            min_sentence_len=min_sentence_len,
+            stream_context_len=stream_context_len
+        )
 
     def tokenize(self, *, text: str, language: str | None = None):
         res = self._inner.tokenize(text=text, language=language)
@@ -1113,16 +1120,16 @@ def prewarm_fnc(proc: JobProcess):
     # 4. Pre-warm Cartesia/ElevenLabs TTS (loads client network config in background)
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
-    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
             voice=kusha_voice_id,
             language="hi",
-            sample_rate=24000,
+            sample_rate=48000,
             model=cartesia_model,
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
@@ -1548,10 +1555,10 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.96"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
-    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3").strip()
+    cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
         logger.info("⏱️ [TTS] Initializing TTS dynamically on connection...")
@@ -1562,7 +1569,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="hi",
-                sample_rate=24000,
+                sample_rate=48000,
                 model=cartesia_model,
                 speed=cartesia_speed,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
@@ -1589,13 +1596,13 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 200ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech, 220ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 50ms min speech, 0.35 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.20,
-            min_speech_duration=0.05,
+            min_silence_duration=0.22,
+            min_speech_duration=0.06,
             activation_threshold=0.35,
             deactivation_threshold=0.25,
             prefix_padding_duration=0.15,
@@ -1624,7 +1631,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.04,
+                "min_delay": 0.28,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -1633,7 +1640,7 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.20,
+                "min_duration": 0.22,
                 "resume_false_interruption": True,
                 "false_interruption_timeout": 1.2,
             }
@@ -1894,8 +1901,8 @@ async def entrypoint(ctx: JobContext):
                                 "ffmpeg", "-y",
                                 "-i", str(found_src),
                                 "-codec:a", "libmp3lame",
-                                "-b:a", "32k",
-                                "-ar", "24000",
+                                "-b:a", "96k",
+                                "-ar", "44100",
                                 "-ac", "1",
                                 str(dest_bookings_mp3)
                             ]
@@ -1919,10 +1926,10 @@ async def entrypoint(ctx: JobContext):
                             input_container = av.open(str(found_src))
                             output_container = av.open(str(dest_bookings_mp3), 'w', format='mp3')
                             in_stream = input_container.streams.audio[0]
-                            out_stream = output_container.add_stream('mp3', rate=24000)
-                            out_stream.bit_rate = 32000
+                            out_stream = output_container.add_stream('mp3', rate=44100)
+                            out_stream.bit_rate = 96000
                             out_stream.layout = 'mono'
-                            resampler = av.AudioResampler(format='s16p', layout='mono', rate=24000)
+                            resampler = av.AudioResampler(format='s16p', layout='mono', rate=44100)
                             for frame in input_container.decode(in_stream):
                                 for rf in resampler.resample(frame):
                                     for packet in out_stream.encode(rf):
