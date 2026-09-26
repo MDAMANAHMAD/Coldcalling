@@ -462,6 +462,15 @@ class PriyaRealEstateAgent(Agent):
         # Guarantees consistent 1.0s - 1.4s response latency across ALL turns of the standard real estate conversation,
         # completely eliminating LLM round-trip delays (saving 1.2s-2.4s) while maintaining full Gemini intelligence fallback.
         try:
+            # ── LANGUAGE GUARD ──────────────────────────────────────────────────
+            # If the caller has already switched to English or Marathi, skip ALL
+            # Hindi fast-path cases and fall through to the LLM (which has the
+            # per-turn language lock injected). Prevents hardcoded Hindi responses
+            # from firing mid-call after a language switch.
+            if ACTIVE_TTS_LANGUAGE in ("en", "mr"):
+                raise StopIteration("language_guard")
+            # ────────────────────────────────────────────────────────────────────
+
             user_msgs = [m for m in chat_ctx.items if getattr(m, "role", "") in ["user", "customer"]]
             if user_msgs:
                 last_msg = user_msgs[-1]
