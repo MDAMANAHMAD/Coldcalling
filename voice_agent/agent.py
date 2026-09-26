@@ -2871,70 +2871,59 @@ async def entrypoint(ctx: JobContext):
         logger.info("🎙️ [CALL CONNECTED] Ready! Gayatri listening for caller greeting/voice to deliver predefined intro...")
         intro_finished = True
 
-    # Silence Watchdog: 4s (Initial Hello) -> 10s (Voice Check) -> 16s (Auto Hangup)
+    # Silence Watchdog: 2s (Initial Hello) -> 5s Interval Prompts -> 15s (Auto Hangup)
     t_last_activity = time.time()
-    has_prompted_silence = False
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking, t_user_stop
+        nonlocal t_last_activity, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing!
         while not intro_finished and not _hangup_scheduled:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)
 
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro ready! Watchdog actively monitoring caller silence.")
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (2s initial hello, 5s intervals, 15s auto-terminate)...")
         
+        t_call_pickup = time.time()
+        last_prompt_time = t_call_pickup
+        initial_hello_done = False
+
         while not _hangup_scheduled:
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.2)
             if _hangup_scheduled:
                 break
                 
             # If agent is currently speaking or generating speech, reset caller silence timer
             if agent_is_speaking or (session.current_speech and not session.current_speech.done()):
                 t_last_activity = time.time()
+                last_prompt_time = time.time()
                 continue
 
-            silence_duration = time.time() - t_last_activity
+            now = time.time()
+            silence_duration = now - t_last_activity
 
-            # Stage 0: Caller answered but has not spoken at all for 4.0s -> Prompt with clean "Hello?"
-            if silence_duration >= 4.0 and not caller_has_spoken and not has_prompted_silence:
-                has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller connected but silent for {silence_duration:.1f}s. Prompting with 'Hello?'...")
-                try:
-                    t_user_stop = 0.0
-                    record_dialogue_turn("agent", "Hello?")
-                    session.say("Hello?", allow_interruptions=True)
-                    t_last_activity = time.time()
-                except Exception as e:
-                    logger.warning(f"Error speaking initial silence hello: {e}")
+            # 1. After 2.0s of picking up the call: If caller has not spoken yet, say "Hello?"
+            if not initial_hello_done and not caller_has_spoken:
+                if now - t_call_pickup >= 2.0:
+                    initial_hello_done = True
+                    last_prompt_time = now
+                    logger.info("🎙️ [INITIAL GREETING] 2.0s elapsed after pickup with caller silent. Saying 'Hello?'...")
+                    try:
+                        t_user_stop = 0.0
+                        record_dialogue_turn("agent", "Hello?")
+                        session.say("Hello?", allow_interruptions=True)
+                        t_last_activity = time.time()
+                    except Exception as e:
+                        logger.warning(f"Error speaking initial 2s hello: {e}")
+                continue
 
-            # Stage 1: Caller silent for 10.0 seconds -> Prompt in active language
-            elif silence_duration >= 10.0 and has_prompted_silence and silence_duration < 16.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s). Prompting in language '{current_lang}'...")
-                if current_lang == "mr":
-                    prompt_text = "हॅलो? माझा आवाज येतोय का?"
-                elif current_lang == "en":
-                    prompt_text = "Hello? Are you able to hear me?"
-                else:
-                    prompt_text = "Hello? Kya aap sun rahe hain?"
-                try:
-                    t_user_stop = 0.0  # CRITICAL: Prevent silence watchdog from logging a turn latency spike!
-                    record_dialogue_turn("agent", prompt_text)
-                    p_speech = session.say(prompt_text, allow_interruptions=True)
-                    if p_speech:
-                        await p_speech.wait_for_playout()
-                    t_last_activity = time.time()
-                except Exception as e:
-                    logger.warning(f"Error speaking silence prompt: {e}")
-
-            # Stage 2: Caller silent for 16 seconds -> End call cleanly in active language
-            elif silence_duration >= 16.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>16s). Terminating call in language '{current_lang}'...")
+            # 2. If caller stays silent for 15.0 seconds total without response -> Terminate call
+            if silence_duration >= 15.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{current_lang}'...")
                 if current_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
                 elif current_lang == "en":
@@ -2951,6 +2940,26 @@ async def entrypoint(ctx: JobContext):
                     logger.warning(f"Error speaking silence farewell: {e}")
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
+
+            # 3. Say hello in every 5 seconds interval of caller silence
+            if (now - last_prompt_time >= 5.0) and (silence_duration >= 5.0):
+                last_prompt_time = now
+                logger.info(f"⏳ [SILENCE PROMPT] 5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{current_lang}'...")
+                if current_lang == "mr":
+                    prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                elif current_lang == "en":
+                    prompt_text = "Hello? Are you able to hear me?"
+                else:
+                    if not caller_has_spoken:
+                        prompt_text = "Hello?"
+                    else:
+                        prompt_text = "Hello? Kya aap sun rahe hain?"
+                try:
+                    t_user_stop = 0.0
+                    record_dialogue_turn("agent", prompt_text)
+                    session.say(prompt_text, allow_interruptions=True)
+                except Exception as e:
+                    logger.warning(f"Error speaking 5s interval silence prompt: {e}")
 
     watchdog_task = asyncio.create_task(_silence_watchdog())
 
