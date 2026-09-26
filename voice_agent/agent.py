@@ -25,7 +25,7 @@ import subprocess
 import base64
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 import requests
 from dotenv import load_dotenv
 
@@ -59,6 +59,7 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     function_tool,
+    llm,
 )
 from livekit.plugins import deepgram, openai, elevenlabs, cartesia
 from livekit import rtc
@@ -2717,27 +2718,13 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 0.08s for WebRTC audio negotiation and SIP RTP streams to settle naturally
-    logger.info("⏳ Allowing 0.08s for audio bridge and SIP RTP connection to settle naturally...")
-    await asyncio.sleep(0.08)
+    # Allow 0.15s for WebRTC audio negotiation and SIP RTP streams to settle naturally
+    logger.info("⏳ Allowing 0.15s for audio bridge and SIP RTP connection to settle naturally...")
+    await asyncio.sleep(0.15)
 
-    # Human Call Pickup Flow:
-    # 1. Listen for up to 0.6s: If caller says "Hello?", "Haan boliye", etc., enter conversation directly!
-    logger.info("👂 [HUMAN PICKUP FLOW] Listening for caller greeting for up to 0.6s before prompting...")
-    t_listen_start = time.time()
-    while time.time() - t_listen_start < 0.6:
-        if caller_has_spoken or _hangup_scheduled:
-            logger.info("🎙️ [HUMAN PICKUP FLOW] Caller spoke first! Skipping initial prompt and entering conversation immediately.")
-            intro_finished = True
-            break
-        await asyncio.sleep(0.04)
-
-    # 2. Snappy Multi-Stage Natural Greeting Loop:
-    # If caller remains silent, prompt gently like a real human advisor instead of dead air!
-    # Attempt 1: "Hello?" -> wait 2.5s
-    # Attempt 2: "Hello? Kya aapko meri aawaaz aa rahi hai?" -> wait 3.0s
-    # Attempt 3: "Hello ji, kya aap sun pa rahe hain?" -> wait 3.5s
-    if not caller_has_spoken and not _hangup_scheduled:
+    # Snappy Multi-Stage Natural Greeting Loop:
+    # Guarantee Gayatri initiates the call immediately with "Hello?" so the caller never hears silence!
+    if not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
             session.tts.update_options(
