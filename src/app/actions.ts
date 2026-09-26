@@ -4,6 +4,7 @@ import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
+import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
 import fs from 'fs';
 import path from 'path';
 
@@ -111,13 +112,21 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
 
   return dbLogs.map(log => {
     const lead = (db.leads || []).find(l => l.id === log.leadId);
+    const pickedInfo = getCallPickedInfo(log);
+    let outcome = log.outcome || 'Inquiry Completed';
+    if (pickedInfo.status === 'not_picked' && (outcome === 'Calling...' || outcome === 'Ringing / Calling')) {
+      outcome = 'Not Picked Up';
+    }
     return {
       ...log,
+      outcome,
+      callPicked: pickedInfo.isPicked,
+      callPickedStatus: pickedInfo.status,
       userEmail: log.userEmail || 'test@gmail.com',
       leadName: log.customerName || (lead ? lead.name : 'Valued Customer'),
       leadPhone: log.customerPhone || lead?.phone || '',
     };
-  }).sort((a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime());
+  }).sort((a, b) => getCallTimestampMs(b) - getCallTimestampMs(a));
 }
 
 export async function deleteCallLog(id: string): Promise<boolean> {

@@ -4,6 +4,7 @@ import { Lead, CallLog, Meeting } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { getRoomServiceClient } from '@/lib/livekit';
+import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -323,13 +324,21 @@ export async function GET(req: NextRequest) {
 
     const logs = Array.from(mergedMap.values()).map(log => {
       const lead = (db.leads || []).find(l => l.id === log.leadId);
+      const pickedInfo = getCallPickedInfo(log);
+      let outcome = log.outcome || 'Inquiry Completed';
+      if (pickedInfo.status === 'not_picked' && (outcome === 'Calling...' || outcome === 'Ringing / Calling')) {
+        outcome = 'Not Picked Up';
+      }
       return {
         ...log,
+        outcome,
+        callPicked: pickedInfo.isPicked,
+        callPickedStatus: pickedInfo.status,
         userEmail: log.userEmail || 'test@gmail.com',
         leadName: log.customerName || (lead ? lead.name : 'Valued Customer'),
         leadPhone: log.customerPhone || lead?.phone || '',
       };
-    }).sort((a, b) => new Date(b.calledAt || 0).getTime() - new Date(a.calledAt || 0).getTime());
+    }).sort((a, b) => getCallTimestampMs(b) - getCallTimestampMs(a));
 
     return NextResponse.json({
       success: true,

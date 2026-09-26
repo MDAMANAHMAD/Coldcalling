@@ -7,6 +7,7 @@ import {
   deleteCallLog 
 } from '@/app/actions';
 import { CallLog } from '@/lib/types';
+import { getCallTimestampMs, getCallPickedInfo, formatCallDuration } from '@/lib/callUtils';
 import { 
   PhoneCall, 
   PhoneOutgoing, 
@@ -190,19 +191,20 @@ export default function ColdCallingHomePage() {
         }
       }
 
-      // Third, check if any in-flight calls timed out (> 2 mins)
+      // Third, check if any in-flight calls timed out (> 75 seconds)
       for (const [key, item] of map.entries()) {
         const isCallingState = item.outcome === 'Ringing / Calling' || item.outcome === 'Calling...';
         if (isCallingState) {
-          const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
-          if (callAgeMinutes > 2.0) {
-            item.outcome = 'Missed / Dropped';
+          const itemTime = getCallTimestampMs(item);
+          const callAgeSeconds = itemTime > 0 ? (nowMs - itemTime) / 1000 : 999;
+          if (callAgeSeconds > 75) {
+            item.outcome = 'Not Picked Up';
             item.durationSeconds = item.durationSeconds || 0;
             if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated')) {
-              item.transcript = '[Call disconnected before conversation started]';
+              item.transcript = '[Call was disconnected or unanswered before conversation started]';
             }
-            if (!item.aiSummary || item.aiSummary.includes('Calling')) {
-              item.aiSummary = 'Call was disconnected or unanswered before conversation started.';
+            if (!item.aiSummary || item.aiSummary.includes('Calling') || item.aiSummary.includes('ringing')) {
+              item.aiSummary = 'Customer did not answer or call was disconnected before conversation.';
             }
             map.set(key, item);
           }
@@ -210,7 +212,7 @@ export default function ColdCallingHomePage() {
       }
 
       const merged = Array.from(map.values()).sort(
-        (a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime()
+        (a, b) => getCallTimestampMs(b) - getCallTimestampMs(a)
       );
 
       // Persist the clean, validated call history to localStorage for instant offline warm-up
@@ -609,7 +611,22 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 6. Ringing / Calling
+    // 6. Not Picked Up / Missed (Customer didn't answer or hung up before pickup)
+    if (
+      outcome.includes('not picked') || 
+      outcome.includes('unanswered') || 
+      outcome.includes('missed') ||
+      (Number(call.durationSeconds || 0) === 0 && !outcome.includes('calling') && !outcome.includes('ringing'))
+    ) {
+      return {
+        label: 'Not Picked Up / Missed',
+        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+        dot: 'bg-rose-500',
+        icon: PhoneOff
+      };
+    }
+
+    // 7. Ringing / Calling
     if (outcome.includes('calling') || outcome.includes('ringing')) {
       return {
         label: 'Ringing / Calling',
@@ -619,7 +636,7 @@ export default function ColdCallingHomePage() {
       };
     }
 
-    // 7. Short / Dropped
+    // 8. Short / Dropped (Connected, but call ended after 1-2 quick greetings)
     if (outcome.includes('dropped') || outcome.includes('short')) {
       return {
         label: 'Short / Dropped',
@@ -1159,16 +1176,16 @@ export default function ColdCallingHomePage() {
             filteredCalls.map((call) => {
               const tag = getOutcomeTag(call);
               const TagIcon = tag.icon;
-              const dateStr = call.calledAt ? new Date(call.calledAt).toLocaleString(undefined, {
+              const pickedInfo = getCallPickedInfo(call);
+              const timeMs = getCallTimestampMs(call);
+              const dateStr = timeMs > 0 ? new Date(timeMs).toLocaleString(undefined, {
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
               }) : 'Recent';
 
-              const durationFormatted = call.durationSeconds > 0 
-                ? `${Math.floor(call.durationSeconds / 60)}m ${call.durationSeconds % 60}s`
-                : 'In Progress';
+              const durationFormatted = formatCallDuration(call);
 
               return (
                 <div
@@ -1196,6 +1213,12 @@ export default function ColdCallingHomePage() {
                           {call.userEmail || currentUser?.email || 'test@gmail.com'}
                         </span>
 
+                        {/* Picked Up Status Tag */}
+                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${pickedInfo.bg} ${pickedInfo.border} ${pickedInfo.textColor}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${pickedInfo.dot}`} />
+                          <span>{pickedInfo.label}</span>
+                        </span>
+
                         {/* Outcome Tag */}
                         <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${tag.bg}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
@@ -1213,8 +1236,8 @@ export default function ColdCallingHomePage() {
                           );
                         })()}
 
-                        {/* Audio Recording Badge */}
-                        {(call.recordingUrl || (call.callSid && !call.callSid.includes('probe') && call.outcome !== 'Calling...' && call.outcome !== 'Ringing / Calling')) && (
+                        {/* Audio Recording Badge: ONLY show if call was picked up with audio */}
+                        {pickedInfo.isPicked && Number(call.durationSeconds || 0) > 0 && (
                           <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
                             <Volume2 className="h-3 w-3" />
                             <span>Audio</span>
@@ -1286,8 +1309,13 @@ export default function ColdCallingHomePage() {
                     {(() => {
                       const tag = getOutcomeTag(selectedCall);
                       const sTag = getSentimentTag(selectedCall);
+                      const pTag = getCallPickedInfo(selectedCall);
                       return (
-                        <div className="flex items-center space-x-1.5">
+                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${pTag.bg} ${pTag.border} ${pTag.textColor}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${pTag.dot}`} />
+                            <span>{pTag.label}</span>
+                          </span>
                           <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tag.bg}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
                             <span>{tag.label}</span>
@@ -1301,7 +1329,7 @@ export default function ColdCallingHomePage() {
                     })()}
                   </div>
                   <p className="text-xs text-slate-400 font-medium">
-                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: {selectedCall.durationSeconds > 0 ? `${selectedCall.durationSeconds}s` : 'Active'} • Account: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</span>
+                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCallDuration(selectedCall)}</span> • Account: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</span>
                   </p>
                 </div>
 
@@ -1330,16 +1358,16 @@ export default function ColdCallingHomePage() {
               </div>
 
               {/* Call Audio Player */}
-              {(selectedCall.recordingUrl || (selectedCall.callSid && !selectedCall.callSid.includes('probe'))) && (() => {
+              {(() => {
+                const picked = getCallPickedInfo(selectedCall);
                 const audioUrl = selectedCall.recordingUrl || `/api/recordings/${selectedCall.callSid}.mp3`;
-                const isNoAudioCall = selectedCall.durationSeconds === 0 && (selectedCall.outcome?.includes('Calling') || selectedCall.outcome?.includes('Missed'));
 
-                if (isNoAudioCall) {
+                if (!picked.isPicked || Number(selectedCall.durationSeconds || 0) === 0) {
                   return (
                     <div className="px-6 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                       <span className="flex items-center space-x-2">
-                        <Volume2 className="h-4 w-4 opacity-50" />
-                        <span>No audio recording (call disconnected before conversation started).</span>
+                        <PhoneOff className="h-4 w-4 text-rose-500" />
+                        <span>No audio recording (Call was not picked up by the customer).</span>
                       </span>
                     </div>
                   );

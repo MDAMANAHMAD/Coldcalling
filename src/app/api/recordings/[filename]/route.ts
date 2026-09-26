@@ -61,9 +61,9 @@ export async function GET(
       try {
         const roomClient = getRoomServiceClient(30);
 
-        // Fast Cloud Audio Retrieval: Target only this call's specific chunk rooms first (~1.5s)
+        // Fast Cloud Audio Retrieval: Target this call's chunk rooms (up to 100 chunks / ~15 mins)
         const targetNames = [`rec-${callSid}`];
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 100; i++) {
           targetNames.push(`rec-${callSid}-${i}`);
         }
 
@@ -95,6 +95,7 @@ export async function GET(
             const chunkMap = new Map<number, string>();
             let singleAudio: string | null = null;
             let singleFormat: string = 'mp3';
+            let expectedTotal = 0;
 
             for (const cr of chunkRooms) {
               if (cr.metadata) {
@@ -102,6 +103,9 @@ export async function GET(
                   const cp = JSON.parse(cr.metadata);
                   if (typeof cp.chunk === 'number' && cp.audio) {
                     chunkMap.set(cp.chunk, cp.audio);
+                    if (typeof cp.total === 'number' && cp.total > expectedTotal) {
+                      expectedTotal = cp.total;
+                    }
                   } else if (cp.audio && !singleAudio) {
                     singleAudio = cp.audio;
                     if (cp.format) singleFormat = cp.format;
@@ -112,10 +116,12 @@ export async function GET(
 
             if (chunkMap.size > 0) {
               let fullB64 = '';
-              for (let i = 0; i < chunkMap.size; i++) {
+              const limit = expectedTotal > 0 ? expectedTotal : chunkMap.size;
+              for (let i = 0; i < limit; i++) {
                 if (chunkMap.has(i)) {
                   fullB64 += chunkMap.get(i);
                 } else {
+                  console.warn(`[Recordings API] Warning: chunk ${i} missing for ${callSid}, stopping at ${i}/${limit}`);
                   break;
                 }
               }

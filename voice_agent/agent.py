@@ -2012,7 +2012,7 @@ async def entrypoint(ctx: JobContext):
                         "transcript": formatted_transcript,
                         "aiSummary": ai_summary,
                         "sentiment": sentiment,
-                        "calledAt": datetime.utcnow().isoformat(),
+                        "calledAt": datetime.utcnow().isoformat() + "Z",
                         "outcome": call_outcome,
                         "detectedQuestions": detected_questions,
                         "customerPhone": customer_phone,
@@ -2053,7 +2053,7 @@ async def entrypoint(ctx: JobContext):
                     "outcome": call_outcome,
                     "sentiment": sentiment,
                     "detectedQuestions": detected_questions,
-                    "called_at": datetime.utcnow().isoformat()
+                    "called_at": datetime.utcnow().isoformat() + "Z"
                 }
                 if b64_audio_payload:
                     webhook_payload["audioBase64"] = b64_audio_payload
@@ -2107,7 +2107,7 @@ async def entrypoint(ctx: JobContext):
                     "transcript": formatted_transcript,
                     "aiSummary": ai_summary,
                     "sentiment": sentiment,
-                    "calledAt": datetime.utcnow().isoformat(),
+                    "calledAt": datetime.utcnow().isoformat() + "Z",
                     "outcome": call_outcome,
                     "detectedQuestions": detected_questions,
                     "customerPhone": customer_phone,
@@ -2158,7 +2158,7 @@ async def entrypoint(ctx: JobContext):
                                 "audio": chunk,
                                 "format": "mp3" if mp3_success else "ogg",
                                 "customerName": clean_display_name,
-                                "calledAt": datetime.utcnow().isoformat()
+                                "calledAt": datetime.utcnow().isoformat() + "Z"
                             })
                             try:
                                 await lk_cloud_api.room.create_room(lk_api.CreateRoomRequest(
