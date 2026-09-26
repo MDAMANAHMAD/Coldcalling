@@ -6,8 +6,8 @@ import AppLayout from "@/components/AppLayout";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Antigravity - Automated Business Operations Suite",
-  description: "Automated business operations platform covering Sales CRM, Founder Productivity, Support Ticketing and Invoice management.",
+  title: "Gayatri AI — Cold Calling",
+  description: "Gayatri AI Voice Agent for real estate cold calling. Dials customers, pitches Sai Complex Dombivli East, handles objections in Hindi, Marathi and English, and books site visits automatically.",
 };
 
 export default function RootLayout({

@@ -461,6 +461,14 @@ class PriyaRealEstateAgent(Agent):
         # Multi-Turn Ultra-Fast Deterministic Path:
         # Guarantees consistent 1.0s - 1.4s response latency across ALL turns of the standard real estate conversation,
         # completely eliminating LLM round-trip delays (saving 1.2s-2.4s) while maintaining full Gemini intelligence fallback.
+        def speak(text: str) -> str:
+            if self._on_speech_captured:
+                try:
+                    self._on_speech_captured(text)
+                except Exception as err:
+                    logger.debug(f"Error in on_speech_captured: {err}")
+            return text
+
         try:
             # ── LANGUAGE GUARD ──────────────────────────────────────────────────
             # If the caller has already switched to English or Marathi, skip ALL
@@ -488,13 +496,13 @@ class PriyaRealEstateAgent(Agent):
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
+                        yield speak("हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?")
                         return
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield "Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
+                        yield speak("Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?")
                         return
 
                 # 1. Turn 1 Fast Path (Greeting / Pickup Acknowledgments)
@@ -508,7 +516,7 @@ class PriyaRealEstateAgent(Agent):
                     ])
                     if not is_not_interested and not has_specific_inquiry:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+                        yield speak("Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?")
                         return
 
                 # 2. Subsequent Turns Fast Path (Eliminating Turn 2, Turn 3, Turn 4 Latency Spikes)
@@ -517,7 +525,7 @@ class PriyaRealEstateAgent(Agent):
                     not_interested_kws = ["not interested", "nahi chahiye", "nahi lena", "nahi dekhna", "wrong number", "mat karo", "mat lagao", "no interest", "koi interest nahi", "cut the call", "disconnect"]
                     if any(kw in clean_norm for kw in not_interested_kws):
                         logger.info(f"⚡ [FAST-PATH DECLINE] Instant decline for '{raw_text}' (0ms LLM wait)!")
-                        yield "Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye."
+                        yield speak("Koi baat nahi, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye.")
                         if self._hangup_fnc:
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                         return
@@ -526,7 +534,7 @@ class PriyaRealEstateAgent(Agent):
                     busy_kws = ["busy hoon", "busy hu", "baad mein", "bad me", "later", "driving", "meeting", "call me later", "call later", "baad mein phone"]
                     if any(kw in clean_norm for kw in busy_kws):
                         logger.info(f"⚡ [FAST-PATH BUSY] Instant busy response for '{raw_text}' (0ms LLM wait)!")
-                        yield "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
+                        yield speak("Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye.")
                         if self._hangup_fnc:
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                         return
@@ -534,27 +542,27 @@ class PriyaRealEstateAgent(Agent):
                     # Case C: 1 RK flat inquiry
                     if any(kw in clean_norm for kw in ["1 rk", "1rk", "one rk", "ek rk", "rk flat", "rk options", "rk available", "rk hai kya"]):
                         logger.info(f"⚡ [FAST-PATH 1RK] Instant 1RK explanation for '{raw_text}' (0ms LLM wait)!")
-                        yield "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
+                        yield speak("Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?")
                         return
 
                     # Case D: 1 BHK confirmed / chosen
                     is_1bhk = any(kw in clean_norm for kw in ["1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk"]) or (clean_norm in ["one", "1", "ek", "onebhk"] and len(words) <= 2)
                     if is_1bhk and not any(kw in clean_norm for kw in ["2 bhk", "two bhk"]):
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
-                        yield "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+                        yield speak("One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?")
                         return
 
                     # Case E: 2 BHK confirmed / chosen
                     is_2bhk = any(kw in clean_norm for kw in ["2 bhk", "2bhk", "two bhk", "do bhk", "second bhk"]) or (clean_norm in ["two", "2", "do", "twobhk"] and len(words) <= 2)
                     if is_2bhk and not any(kw in clean_norm for kw in ["1 bhk", "one bhk"]):
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
-                        yield "Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Aap ready-to-move dekh rahe hain ya upcoming possession?"
+                        yield speak("Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Aap ready-to-move dekh rahe hain ya upcoming possession?")
                         return
 
                     # Case J: "Chhattis lakh" / 36 lakh clarification inquiry (e.g. 36 vs 37 lakh)
                     if any(k in clean_norm for k in ["chhattis", "chattis", "36 lakh", "36lakh", "छत्तीस"]) and any(w in clean_norm for w in ["matlab", "meaning", "hota", "kya", "37", "puch", "kitna"]):
                         logger.info(f"⚡ [FAST-PATH 36 LAKH CLARIFICATION] Instant clarification for '{raw_text}' (0ms LLM wait)!")
-                        yield "Ji haan, chhattis lakh ka matlab 36 lakh rupees hi hota hai, 37 lakh nahi. One BHK 36 lakh mein aur two BHK 72 lakh mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
+                        yield speak("Ji haan, chhattis lakh ka matlab 36 lakh rupees hi hota hai, 37 lakh nahi. One BHK 36 lakh mein aur two BHK 72 lakh mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession?")
                         return
 
                     # Case F: Confirmation of site visit time / booking
@@ -577,7 +585,7 @@ class PriyaRealEstateAgent(Agent):
                                 preferred_time=pref_time,
                                 flat_type="2BHK"
                             ))
-                            yield f"Maine aapka {pref_day} ko {pref_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!"
+                            yield speak(f"Maine aapka {pref_day} ko {pref_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!")
                             return
 
                     # Case G: Saturday or Sunday selected
@@ -585,11 +593,11 @@ class PriyaRealEstateAgent(Agent):
                     is_sun = any(kw in clean_norm for kw in ["sunday", "ravivar", "raviwar", "sun", "weekend", "etvar"])
                     if is_sat and not is_sun:
                         logger.info(f"⚡ [FAST-PATH SATURDAY] Instant Saturday timing question for '{raw_text}' (0ms LLM wait)!")
-                        yield "Ji bilkul. Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?"
+                        yield speak("Ji bilkul. Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?")
                         return
                     elif is_sun and not is_sat:
                         logger.info(f"⚡ [FAST-PATH SUNDAY] Instant Sunday timing question for '{raw_text}' (0ms LLM wait)!")
-                        yield "Ji bilkul. Sunday ko subah 11 baje convenient rahega ya dopahar 3 baje?"
+                        yield speak("Ji bilkul. Sunday ko subah 11 baje convenient rahega ya dopahar 3 baje?")
                         return
 
                     # Case H1: Upcoming possession confirmed (handles 'upcoming position' STT mishearing, under construction, etc.)
@@ -607,31 +615,31 @@ class PriyaRealEstateAgent(Agent):
 
                     if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                         logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & site visit invite for '{raw_text}' (0ms LLM wait)!")
-                        yield "Upcoming possession mein aapko flexible payment plans aur attractive offers milte hain, aur possession timely handover ke sath ready ho raha hai. Is weekend project aur sample flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+                        yield speak("Upcoming possession mein aapko flexible payment plans aur attractive offers milte hain, aur possession timely handover ke sath ready ho raha hai. Is weekend project aur sample flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?")
                         return
 
                     if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                         logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & site visit invite for '{raw_text}' (0ms LLM wait)!")
-                        yield "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+                        yield speak("Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?")
                         return
 
                     # Case K: Amenities inquiry
                     if any(kw in clean_norm for kw in ["amenities", "amenity", "suvidha", "suvidhayein", "gym", "play area", "jogging track", "facilities"]):
                         logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
-                        yield "Humare flats mein spacious master bedroom, premium Jaquar fittings, Kajaria tiles, wide balcony ke sath-sath gym, children play area aur jogging track jaisi modern amenities milti hain. Kya aap is weekend actual flat dekhne ke liye Saturday ya Sunday site visit plan karna chahenge?"
+                        yield speak("Humare flats mein spacious master bedroom, premium Jaquar fittings, Kajaria tiles, wide balcony ke sath-sath gym, children play area aur jogging track jaisi modern amenities milti hain. Kya aap is weekend actual flat dekhne ke liye Saturday ya Sunday site visit plan karna chahenge?")
                         return
 
                     # Case L: Connectivity / Location inquiry
                     if any(kw in clean_norm for kw in ["connectivity", "location", "kahan hai", "kidhar hai", "station se", "palava", "nilje", "kalyan"]):
                         logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
-                        yield "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes aur Kalyan se fifteen minutes drive par. Yahan se Thane aur Navi Mumbai ki connectivity kaafi convenient hai. Kya aap is weekend site visit plan karna chahenge?"
+                        yield speak("Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes aur Kalyan se fifteen minutes drive par. Yahan se Thane aur Navi Mumbai ki connectivity kaafi convenient hai. Kya aap is weekend site visit plan karna chahenge?")
                         return
 
                     # Case I: WhatsApp brochure inquiry
                     if any(kw in clean_norm for kw in ["whatsapp", "brochure", "details bhejo", "details bhej do", "pdf bhej", "photo bhej"]):
                         logger.info(f"⚡ [FAST-PATH BROCHURE] Instant WhatsApp brochure dispatch for '{raw_text}' (0ms LLM wait)!")
                         asyncio.create_task(self.send_whatsapp_brochure(target_phone=self.customer_phone, target_name=self.customer_name))
-                        yield "Maine WhatsApp par Sai Complex ka brochure aur pricing share kar diya hai. Aap ready-to-move flat dekh rahe hain ya upcoming possession?"
+                        yield speak("Maine WhatsApp par Sai Complex ka brochure aur pricing share kar diya hai. Aap ready-to-move flat dekh rahe hain ya upcoming possession?")
                         return
 
         except Exception as fast_err:
@@ -668,19 +676,44 @@ class PriyaRealEstateAgent(Agent):
         except Exception as lang_lock_err:
             logger.debug(f"Language lock injection skipped: {lang_lock_err}")
 
+        collected_chunks = []
         res = Agent.default.llm_node(self, chat_ctx, tools, model_settings)
         if hasattr(res, "__aiter__"):
             async for chunk in res:
+                if isinstance(chunk, str):
+                    collected_chunks.append(chunk)
+                elif hasattr(chunk, "delta") and hasattr(chunk.delta, "content") and chunk.delta.content:
+                    collected_chunks.append(str(chunk.delta.content))
+                elif hasattr(chunk, "text") and chunk.text:
+                    collected_chunks.append(str(chunk.text))
                 yield chunk
         elif asyncio.iscoroutine(res):
             out = await res
             if hasattr(out, "__aiter__"):
                 async for chunk in out:
+                    if isinstance(chunk, str):
+                        collected_chunks.append(chunk)
+                    elif hasattr(chunk, "delta") and hasattr(chunk.delta, "content") and chunk.delta.content:
+                        collected_chunks.append(str(chunk.delta.content))
+                    elif hasattr(chunk, "text") and chunk.text:
+                        collected_chunks.append(str(chunk.text))
                     yield chunk
             else:
+                if isinstance(out, str):
+                    collected_chunks.append(out)
                 yield out
         else:
+            if isinstance(res, str):
+                collected_chunks.append(res)
             yield res
+
+        if collected_chunks and self._on_speech_captured:
+            full_speech = "".join(collected_chunks).strip()
+            if full_speech:
+                try:
+                    self._on_speech_captured(full_speech)
+                except Exception as cap_err:
+                    logger.debug(f"Captured speech callback error: {cap_err}")
 
     @function_tool(description="Call ONLY after reading back the final date and time and customer has explicitly confirmed with a definitive 'yes', 'lock it in', or 'confirm kar do'. DO NOT call while customer is still deciding, hesitant, or changing their day.")
     async def schedule_site_visit(
@@ -2477,12 +2510,21 @@ async def entrypoint(ctx: JobContext):
         now_time = round(time.time() - t_call_start, 1)
         norm_clean = re.sub(r'[^\w\s]', '', clean_text).strip().lower()
 
-        # Check last 3 turns: if exact or near-duplicate from the same speaker, skip
-        for prev in reversed(call_dialogue[-3:]):
-            if prev.get("role") == role:
-                prev_norm = re.sub(r'[^\w\s]', '', prev.get("text", "")).strip().lower()
-                if prev_norm == norm_clean or (len(norm_clean) > 8 and (norm_clean in prev_norm or prev_norm in norm_clean)):
+        # Deduplication: Only skip if the immediately preceding turn from the SAME speaker is an exact duplicate
+        if call_dialogue:
+            last_turn = call_dialogue[-1]
+            if last_turn.get("role") == role:
+                last_norm = re.sub(r'[^\w\s]', '', last_turn.get("text", "")).strip().lower()
+                if last_norm == norm_clean:
                     return
+                # If an interim STT result was recorded within 2.0s and this is the longer final sentence, upgrade it
+                if abs(now_time - last_turn.get("time", 0)) < 2.0:
+                    if len(norm_clean) > len(last_norm) and last_norm in norm_clean:
+                        last_turn["text"] = clean_text
+                        last_turn["time"] = now_time
+                        return
+                    elif norm_clean in last_norm:
+                        return
 
         call_dialogue.append({"role": role, "text": clean_text, "time": now_time})
         if role == "agent":

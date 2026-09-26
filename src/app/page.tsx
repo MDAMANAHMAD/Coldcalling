@@ -118,8 +118,13 @@ export default function ColdCallingHomePage() {
                 existingKeys.add(k);
               } else {
                 const exIdx = serverLogs.findIndex(l => (l.callSid || l.id) === k);
-                if (exIdx >= 0 && log.transcript && log.transcript.length > (serverLogs[exIdx].transcript || '').length) {
-                  serverLogs[exIdx] = { ...serverLogs[exIdx], ...log };
+                if (exIdx >= 0) {
+                  const currentTranscript = serverLogs[exIdx].transcript || '';
+                  const newTranscript = log.transcript || '';
+                  const isServerInProgress = serverLogs[exIdx].outcome === 'Calling...' || serverLogs[exIdx].outcome === 'Ringing / Calling' || currentTranscript.includes('[Call In Progress]');
+                  if (isServerInProgress || newTranscript.length >= currentTranscript.length) {
+                    serverLogs[exIdx] = { ...serverLogs[exIdx], ...log };
+                  }
                 }
               }
             }
