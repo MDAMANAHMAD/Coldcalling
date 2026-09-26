@@ -5,6 +5,8 @@ import { RoomServiceClient } from 'livekit-server-sdk';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function GET(
   req: NextRequest,
@@ -54,33 +56,64 @@ export async function GET(
     // Cloud Fallback: If not found on disk (e.g. running on Vercel), retrieve from LiveKit Cloud room
     if (!audioBuffer) {
       const callSid = safeFilename.replace(/\.(mp3|ogg|wav|m4a)$/i, '');
+      let lastCloudError = '';
       try {
         const rawHost = (process.env.LIVEKIT_URL || 'https://cold-calling-j7qhnkas.livekit.cloud').replace(/['"]/g, '').trim();
         let cleanHost = rawHost.replace(/^wss:\/\//i, 'https://').replace(/^ws:\/\//i, 'http://');
         if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
         const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
         const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-        const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+        const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret, { requestTimeout: 30 });
 
-        // Fast Cloud Audio Retrieval: Single listRooms() query to fetch all rooms instantly
-        const allRooms = await roomClient.listRooms();
-        const prefix = `rec-${callSid}-`;
-        const chunkRooms = allRooms.filter(r => r.name.startsWith(prefix));
+        // Fast Cloud Audio Retrieval: Target only this call's specific chunk rooms first (~1.5s)
+        const targetNames = [`rec-${callSid}`];
+        for (let i = 0; i < 25; i++) {
+          targetNames.push(`rec-${callSid}-${i}`);
+        }
+
+        let chunkRooms: any[] = [];
+        try {
+          chunkRooms = await roomClient.listRooms(targetNames);
+        } catch (targetedErr: any) {
+          console.warn(`[Recordings API] Targeted listRooms note for ${callSid}:`, targetedErr?.message);
+        }
+
+        // If targeted lookup didn't find rooms, fall back to listing all rooms
+        if (!chunkRooms || chunkRooms.length === 0) {
+          try {
+            const allRooms = await roomClient.listRooms();
+            const prefix = `rec-${callSid}-`;
+            chunkRooms = allRooms.filter(r => r.name.startsWith(prefix));
+            if (chunkRooms.length === 0) {
+              const singleRoom = allRooms.find(r => r.name === `rec-${callSid}`);
+              if (singleRoom) chunkRooms = [singleRoom];
+            }
+          } catch (allErr: any) {
+            console.warn(`[Recordings API] Full listRooms fallback note for ${callSid}:`, allErr?.message);
+          }
+        }
 
         // 1. Check chunked recording rooms
-        if (chunkRooms.length > 0) {
+        if (chunkRooms && chunkRooms.length > 0) {
           try {
             const chunkMap = new Map<number, string>();
+            let singleAudio: string | null = null;
+            let singleFormat: string = 'mp3';
+
             for (const cr of chunkRooms) {
               if (cr.metadata) {
                 try {
                   const cp = JSON.parse(cr.metadata);
                   if (typeof cp.chunk === 'number' && cp.audio) {
                     chunkMap.set(cp.chunk, cp.audio);
+                  } else if (cp.audio && !singleAudio) {
+                    singleAudio = cp.audio;
+                    if (cp.format) singleFormat = cp.format;
                   }
                 } catch {}
               }
             }
+
             if (chunkMap.size > 0) {
               let fullB64 = '';
               for (let i = 0; i < chunkMap.size; i++) {
@@ -95,34 +128,21 @@ export async function GET(
                 contentType = 'audio/mpeg';
                 console.log(`[Recordings API] Reassembled ${audioBuffer.length} bytes from ${chunkMap.size} chunks for ${callSid}`);
               }
+            } else if (singleAudio) {
+              audioBuffer = Buffer.from(singleAudio, 'base64');
+              if (singleFormat === 'ogg') contentType = 'audio/ogg';
+              console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from single chunk room`);
             }
-          } catch (e) {
-            console.warn(`[Recordings API] Failed reassembling chunked recording for ${callSid}:`, e);
-          }
-        }
-
-        // 2. Fallback: Check dedicated single recording room: rec-{callSid}
-        if (!audioBuffer) {
-          const singleRoom = allRooms.find(r => r.name === `rec-${callSid}`);
-          if (singleRoom && singleRoom.metadata) {
-            try {
-              const parsed = JSON.parse(singleRoom.metadata);
-              if (parsed.audio) {
-                audioBuffer = Buffer.from(parsed.audio, 'base64');
-                if (parsed.format === 'ogg') contentType = 'audio/ogg';
-                console.log(`[Recordings API] Retrieved ${audioBuffer.length} bytes for ${callSid} from cloud room rec-${callSid}`);
-              }
-            } catch (e) {
-              console.warn(`[Recordings API] Failed parsing metadata in rec-${callSid}:`, e);
-            }
+          } catch (e: any) {
+            console.warn(`[Recordings API] Failed reassembling chunked recording for ${callSid}:`, e?.message);
           }
         }
 
         // 2. Fallback: check gayatri-persistent-storage room for matching callSid with data URL
         if (!audioBuffer) {
-          const storageRooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-          if (storageRooms.length > 0 && storageRooms[0].metadata) {
-            try {
+          try {
+            const storageRooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+            if (storageRooms.length > 0 && storageRooms[0].metadata) {
               const parsed = JSON.parse(storageRooms[0].metadata);
               const logs = Array.isArray(parsed.callLogs) ? parsed.callLogs : [];
               const match = logs.find((l: any) => l.callSid === callSid || l.id === callSid);
@@ -136,9 +156,9 @@ export async function GET(
                   }
                 }
               }
-            } catch (e) {
-              console.warn('[Recordings API] Failed reading gayatri-persistent-storage:', e);
             }
+          } catch (e: any) {
+            console.warn('[Recordings API] Failed reading gayatri-persistent-storage:', e?.message);
           }
         }
 

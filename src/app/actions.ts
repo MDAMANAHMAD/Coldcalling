@@ -93,7 +93,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     if (!cleanHost.includes('://')) cleanHost = `https://${cleanHost}`;
     const apiKey = (process.env.LIVEKIT_API_KEY || 'APIAkEXqBNfS2LP').replace(/['"]/g, '').trim();
     const apiSecret = (process.env.LIVEKIT_API_SECRET || 'dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT').replace(/['"]/g, '').trim();
-    const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret);
+    const roomClient = new RoomServiceClient(cleanHost, apiKey, apiSecret, { requestTimeout: 30 });
     const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
     if (rooms.length > 0 && rooms[0].metadata) {
       const parsed = JSON.parse(rooms[0].metadata);

@@ -4,6 +4,7 @@ import { getDb, saveDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const VERIFIED_HOST = 'https://cold-calling-j7qhnkas.livekit.cloud';
 const VERIFIED_KEY = 'APIAkEXqBNfS2LP';
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
       // Sync newly placed call to LiveKit Cloud 'gayatri-persistent-storage' room metadata
       // so it shows up IMMEDIATELY across all connected devices (mobile, laptop, tablet)
       try {
-        const roomClient = new RoomServiceClient(host, apiKey, apiSecret);
+        const roomClient = new RoomServiceClient(host, apiKey, apiSecret, { requestTimeout: 30 });
         const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
         let cloudMeta: any = {};
         if (rooms.length > 0 && rooms[0].metadata) {

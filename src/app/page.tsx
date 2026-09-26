@@ -128,16 +128,19 @@ export default function ColdCallingHomePage() {
         console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
       }
 
-      // 2. Read permanently preserved call history from browser storage (clean up probes)
+      // 2. Read preserved call history from browser storage (purging corrupted fake templates)
       let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
       try {
-        const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
+        const stored = localStorage.getItem('gayatri_permanent_history');
         if (stored) {
           permanentHistory = JSON.parse(stored).filter((item: any) => {
             if (!item) return false;
             const name = (item.customerName || item.leadName || '').toLowerCase();
             const sid = (item.callSid || item.id || '').toLowerCase();
             if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
+            // Purge any corrupted dummy entries containing the fake fallback template
+            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Complex Dombivli East se. Humare paas premium one BHK'))) return false;
+            if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
             return true;
           });
         }
@@ -145,104 +148,62 @@ export default function ColdCallingHomePage() {
         console.warn('Could not read permanent call history:', err);
       }
 
-      // 3. Merge server and local history into a clean, deduplicated map
+      // 3. Merge server and local history: SERVER LOGS ARE THE SINGLE SOURCE OF TRUTH
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
 
-      // Seed with permanent local history first
-      for (const item of permanentHistory) {
-        if (!item || item.callSid === 'gayatri-persistent-storage') continue;
-        const name = (item.customerName || item.leadName || '').toLowerCase();
-        const sid = (item.callSid || item.id || '').toLowerCase();
-        if (sid.includes('probe') || name.includes('probe')) continue;
-        const key = item.callSid || item.id;
-        map.set(key, item);
-      }
-
-      // Update / augment with authoritative server logs (complete transcripts & recordings)
+      // First, seed with all authoritative server logs (LiveKit Cloud persistent storage)
       const nowMs = Date.now();
       for (const item of serverLogs) {
         if (!item || item.callSid === 'gayatri-persistent-storage') continue;
         const name = (item.customerName || item.leadName || '').toLowerCase();
         const sid = (item.callSid || item.id || '').toLowerCase();
         if (sid.includes('probe') || name.includes('probe')) continue;
+        // Purge dummy corrupted records from server logs as well
+        if (item.transcript && item.transcript.includes('Haan boliye')) continue;
+        if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) continue;
 
-        // Search for existing entry in map by callSid, id, or matching room name
-        let existingKey: string | undefined;
-        let existingItem: (CallLog & { leadName: string; leadPhone?: string }) | undefined;
-
-        for (const [k, v] of map.entries()) {
-          if (
-            (item.callSid && v.callSid && item.callSid === v.callSid) ||
-            k === item.id ||
-            (item.callSid && k === item.callSid) ||
-            (item.id && v.id && item.id === v.id)
-          ) {
-            existingKey = k;
-            existingItem = v;
-            break;
-          }
+        const key = item.callSid || item.id;
+        if (!item.recordingUrl && item.callSid && !item.callSid.includes('probe')) {
+          item.recordingUrl = `/api/recordings/${item.callSid}.mp3`;
         }
+        map.set(key, item);
+      }
 
-        if (existingKey && existingItem) {
-          // Remove old key so we never have duplicate rows (e.g. placeholder + completed)
-          map.delete(existingKey);
-          const finalKey = item.callSid || existingItem.callSid || item.id;
+      // Second, augment with local items that are in-flight or not yet reached the server
+      for (const localItem of permanentHistory) {
+        if (!localItem || localItem.callSid === 'gayatri-persistent-storage') continue;
+        const key = localItem.callSid || localItem.id;
+        const existing = map.get(key);
 
-          const isPlaceholder = !existingItem.transcript ||
-            existingItem.transcript.includes('[Call initiated from Web Dashboard]') ||
-            existingItem.transcript.includes('[Call In Progress]') ||
-            existingItem.transcript.includes('Haan boliye') ||
-            existingItem.outcome === 'Calling...' || existingItem.outcome === 'Ringing / Calling';
-
-          const mergedItem = (isPlaceholder || (item.transcript && item.transcript.length >= (existingItem.transcript || '').length))
-            ? { ...existingItem, ...item }
-            : { ...item, ...existingItem };
-
-          // Preserve recording URL from whichever source has it (prefer data: URL over relative endpoint)
-          if (item.recordingUrl?.startsWith('data:')) {
-            mergedItem.recordingUrl = item.recordingUrl;
-          } else if (existingItem.recordingUrl?.startsWith('data:')) {
-            mergedItem.recordingUrl = existingItem.recordingUrl;
-          } else if (item.recordingUrl) {
-            mergedItem.recordingUrl = item.recordingUrl;
-          } else if (existingItem.recordingUrl) {
-            mergedItem.recordingUrl = existingItem.recordingUrl;
-          } else if (item.callSid && !item.callSid.includes('probe')) {
-            mergedItem.recordingUrl = `/api/recordings/${item.callSid}.mp3`;
+        if (existing) {
+          // Server log is authoritative for transcript, outcome, duration, and summary.
+          // Preserve local data:audio/ URL only if the server does not provide one.
+          if (localItem.recordingUrl?.startsWith('data:') && !existing.recordingUrl?.startsWith('data:')) {
+            existing.recordingUrl = localItem.recordingUrl;
           }
-
-          map.set(finalKey, mergedItem);
         } else {
-          const key = item.callSid || item.id;
-          if (!item.recordingUrl && item.callSid && !item.callSid.includes('probe')) {
-            item.recordingUrl = `/api/recordings/${item.callSid}.mp3`;
+          // If this is a very recent in-flight call placed on this device (< 3 mins), keep it
+          const ageMinutes = (nowMs - new Date(localItem.calledAt).getTime()) / 60000;
+          if (ageMinutes < 3.0 && (localItem.outcome === 'Calling...' || localItem.outcome === 'Ringing / Calling')) {
+            map.set(key, localItem);
           }
-          map.set(key, item);
         }
       }
 
-      // Check if any in-progress calls timed out (>1.0 min) or need completion resolution
+      // Third, check if any in-flight calls timed out (> 2 mins)
       for (const [key, item] of map.entries()) {
-        const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
         const isCallingState = item.outcome === 'Ringing / Calling' || item.outcome === 'Calling...';
-        if (isCallingState && callAgeMinutes > 1.0) {
-          // Check if there is a completed server log for this specific callSid
-          const completedMatch = serverLogs.find(s => 
-            s.callSid !== 'gayatri-persistent-storage' &&
-            s.outcome !== 'Ringing / Calling' &&
-            s.outcome !== 'Calling...' &&
-            Boolean(s.callSid && item.callSid && s.callSid === item.callSid)
-          );
-          if (completedMatch) {
-            map.set(key, { ...item, ...completedMatch });
-          } else if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated from Web Dashboard]')) {
-            item.outcome = 'Inquiry Completed';
-            item.durationSeconds = item.durationSeconds || 60;
-            const callerName = item.customerName || item.leadName || 'Raj';
-            item.transcript = `[0.0s] Gayatri: Hello.\n[2.0s] ${callerName}: Haan boliye.\n[5.0s] Gayatri: Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Humare paas premium one BHK aur two BHK flats available hain. Saari details WhatsApp par bhej di gayi hain. Aapka din shubh ho, bye.`;
-            item.aiSummary = `Call completed with ${callerName}. Conversation recorded and filed.`;
-            item.customerName = callerName;
-            item.leadName = callerName;
+        if (isCallingState) {
+          const callAgeMinutes = (nowMs - new Date(item.calledAt).getTime()) / 60000;
+          if (callAgeMinutes > 2.0) {
+            item.outcome = 'Missed / Dropped';
+            item.durationSeconds = item.durationSeconds || 0;
+            if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated')) {
+              item.transcript = '[Call disconnected before conversation started]';
+            }
+            if (!item.aiSummary || item.aiSummary.includes('Calling')) {
+              item.aiSummary = 'Call was disconnected or unanswered before conversation started.';
+            }
             map.set(key, item);
           }
         }
@@ -252,9 +213,10 @@ export default function ColdCallingHomePage() {
         (a, b) => new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime()
       );
 
-      // Persist the entire merged call history so it NEVER disappears across reloads or serverless restarts
+      // Persist the clean, validated call history to localStorage for instant offline warm-up
       try {
         localStorage.setItem('gayatri_permanent_history', JSON.stringify(merged));
+        localStorage.removeItem('gayatri_live_call_logs'); // clean up legacy key
       } catch (err) {
         console.warn('Could not persist permanent call history:', err);
       }
@@ -1370,6 +1332,19 @@ export default function ColdCallingHomePage() {
               {/* Call Audio Player */}
               {(selectedCall.recordingUrl || (selectedCall.callSid && !selectedCall.callSid.includes('probe'))) && (() => {
                 const audioUrl = selectedCall.recordingUrl || `/api/recordings/${selectedCall.callSid}.mp3`;
+                const isNoAudioCall = selectedCall.durationSeconds === 0 && (selectedCall.outcome?.includes('Calling') || selectedCall.outcome?.includes('Missed'));
+
+                if (isNoAudioCall) {
+                  return (
+                    <div className="px-6 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center space-x-2">
+                        <Volume2 className="h-4 w-4 opacity-50" />
+                        <span>No audio recording (call disconnected before conversation started).</span>
+                      </span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="px-6 py-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 dark:from-slate-800/80 dark:to-blue-950/40 border-b border-blue-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center space-x-2.5">
@@ -1383,21 +1358,11 @@ export default function ColdCallingHomePage() {
                     </div>
                     <div className="flex-1 max-w-sm flex items-center gap-2">
                       <audio 
+                        key={audioUrl}
                         controls 
                         className="w-full h-8 rounded-lg accent-blue-600" 
                         src={audioUrl} 
                         preload="metadata"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          target.style.display = 'none';
-                          const parent = target.parentElement;
-                          if (parent && !parent.querySelector('.rec-fallback-msg')) {
-                            const note = document.createElement('span');
-                            note.className = 'rec-fallback-msg text-[11px] text-slate-400 italic';
-                            note.innerText = 'Audio recording processing on server...';
-                            parent.insertBefore(note, target);
-                          }
-                        }}
                       >
                         Your browser does not support audio playback.
                       </audio>
