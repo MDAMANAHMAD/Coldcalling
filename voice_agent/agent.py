@@ -322,8 +322,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
   - DO NOT repeat the 1/2 BHK pitch!
   - Progress: "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes door. Yahan 1 BHK 36 lakh aur 2 BHK 72 lakh all-inclusive mein available hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
-- **If caller asks about possession ('ready to move' or 'upcoming'):**
+- **If caller asks for Ready-to-move ('ready to move', 'immediate', 'ready'):**
   - "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+- **If caller asks for Upcoming Possession / Under Construction ('upcoming', 'position', 'possession', 'under construction'):**
+  - "Upcoming possession mein aapko flexible payment plans aur attractive offers milte hain, aur possession timely handover ke sath ready ho raha hai. Is weekend project aur sample flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
 - **If caller specifies day ('Saturday' or 'Sunday'):**
   - "Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?" (Move straight to time, never repeat the day question!)
 - **When caller confirms time:**
@@ -487,22 +489,17 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                 # 1. Turn 1 Fast Path (Greeting / Pickup Acknowledgments)
+                # Instantly initiates predefined sales intro on ANY greeting, voice, or pickup response (<0.8s)
                 if len(user_msgs) == 1:
-                    pickup_words = {
-                        "hello", "helo", "halo",
-                        "haan", "ha", "haa", "haanji", "haan ji", "haji",
-                        "boliye", "boli", "bolo", "haan boliye", "ha boliye", "ji boliye",
-                        "kaun", "kon", "kaun hai", "kon hai", "kaun bol rahe ho", "kaun bol raha hai",
-                        "ji", "ji haan", "yes", "yeah", "yep", "hi", "hey",
-                        "namaste", "namaskar", "pranam",
-                        "sun raha hoon", "sun rahi hoon", "aawaz aa rahi hai"
-                    }
-                    has_specific_inquiry = any(kw in clean_norm for kw in [
-                        "nahi", "mat", "kya", "kitna", "price", "rate", "cost", "kahan", "kidhar", "marathi", "bhk", "flat", "possession", "amenities"
+                    is_not_interested = any(kw in clean_norm for kw in [
+                        "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut"
                     ])
-                    if clean_norm in pickup_words or (len(words) <= 3 and not has_specific_inquiry):
+                    has_specific_inquiry = any(kw in clean_norm for kw in [
+                        "kitna", "price", "rate", "cost", "amenities", "amenity", "kahan", "kidhar", "location"
+                    ])
+                    if not is_not_interested and not has_specific_inquiry:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+                        yield "Hello! Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
                         return
 
                 # 2. Subsequent Turns Fast Path (Eliminating Turn 2, Turn 3, Turn 4 Latency Spikes)
@@ -586,14 +583,39 @@ class PriyaRealEstateAgent(Agent):
                         yield "Ji bilkul. Sunday ko subah 11 baje convenient rahega ya dopahar 3 baje?"
                         return
 
-                    # Case H: Ready to move / upcoming possession confirmed
-                    is_possession = any(kw in clean_norm for kw in [
-                        "ready to move", "ready-to-move", "ready tomove", "ready", "immediate", "turant",
-                        "possession", "upcoming", "under construction", "construction"
-                    ]) or any(p in clean_norm for p in ["chalega ready", "upcoming chalega", "dono chalega"])
-                    if is_possession and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
-                        logger.info(f"⚡ [FAST-PATH POSSESSION] Instant possession response & site visit invite for '{raw_text}' (0ms LLM wait)!")
+                    # Case H1: Upcoming possession confirmed (handles 'upcoming position' STT mishearing, under construction, etc.)
+                    is_upcoming = any(kw in clean_norm for kw in [
+                        "upcoming", "position", "possession", "under construction", "construction", "future", "chalega upcoming", "upcoming chalega"
+                    ]) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant"])
+
+                    # Case H2: Ready to move confirmed
+                    is_ready = any(kw in clean_norm for kw in [
+                        "ready to move", "ready-to-move", "ready tomove", "ready", "immediate", "turant", "ready chalega", "chalega ready"
+                    ]) and not any(kw in clean_norm for kw in ["upcoming", "under construction"])
+
+                    # Case H3: Both / Either
+                    is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
+
+                    if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
+                        logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & site visit invite for '{raw_text}' (0ms LLM wait)!")
+                        yield "Upcoming possession mein aapko flexible payment plans aur attractive offers milte hain, aur possession timely handover ke sath ready ho raha hai. Is weekend project aur sample flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+                        return
+
+                    if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
+                        logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & site visit invite for '{raw_text}' (0ms LLM wait)!")
                         yield "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+                        return
+
+                    # Case K: Amenities inquiry
+                    if any(kw in clean_norm for kw in ["amenities", "amenity", "suvidha", "suvidhayein", "gym", "play area", "jogging track", "facilities"]):
+                        logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
+                        yield "Humare flats mein spacious master bedroom, premium Jaquar fittings, Kajaria tiles, wide balcony ke sath-sath gym, children play area aur jogging track jaisi modern amenities milti hain. Kya aap is weekend actual flat dekhne ke liye Saturday ya Sunday site visit plan karna chahenge?"
+                        return
+
+                    # Case L: Connectivity / Location inquiry
+                    if any(kw in clean_norm for kw in ["connectivity", "location", "kahan hai", "kidhar hai", "station se", "palava", "nilje", "kalyan"]):
+                        logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
+                        yield "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes aur Kalyan se fifteen minutes drive par. Yahan se Thane aur Navi Mumbai ki connectivity kaafi convenient hai. Kya aap is weekend site visit plan karna chahenge?"
                         return
 
                     # Case I: WhatsApp brochure inquiry
@@ -2846,31 +2868,26 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        logger.info("🎙️ [CALL CONNECT GREETING] Speaking single crisp 'Hello?' immediately to caller...")
-        try:
-            record_dialogue_turn("agent", "Hello?")
-            session.say("Hello?", allow_interruptions=True)
-        except Exception as e:
-            logger.warning(f"Error speaking hello greeting: {e}")
+        logger.info("🎙️ [CALL CONNECTED] Ready! Gayatri listening for caller greeting/voice to deliver predefined intro...")
         intro_finished = True
 
-    # Silence Watchdog: 8s -> Prompt, 16s -> Auto Hangup
+    # Silence Watchdog: 4s (Initial Hello) -> 10s (Voice Check) -> 16s (Auto Hangup)
     t_last_activity = time.time()
     has_prompted_silence = False
     intro_finished = True
 
     async def _silence_watchdog():
         nonlocal t_last_activity, has_prompted_silence, _hangup_scheduled, agent_is_speaking, t_user_stop
-        logger.info("🛡️ [SILENCE WATCHDOG] Task active. Waiting for Gayatri to finish intro before counting silence...")
+        logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
-        # 1. Block and DO NOT count ANY silence while call is ringing or while Gayatri is speaking the intro!
+        # 1. Block and DO NOT count ANY silence while call is ringing!
         while not intro_finished and not _hangup_scheduled:
             await asyncio.sleep(0.2)
 
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro finished! Watchdog is now actively counting 8s of caller silence.")
+        logger.info("🛡️ [SILENCE WATCHDOG] Gayatri intro ready! Watchdog actively monitoring caller silence.")
         
         while not _hangup_scheduled:
             await asyncio.sleep(0.5)
@@ -2884,10 +2901,21 @@ async def entrypoint(ctx: JobContext):
 
             silence_duration = time.time() - t_last_activity
 
-            # Stage 1: Caller silent for 8 full seconds -> Prompt in active language
-            if silence_duration >= 8.0 and not has_prompted_silence:
+            # Stage 0: Caller answered but has not spoken at all for 4.0s -> Prompt with clean "Hello?"
+            if silence_duration >= 4.0 and not caller_has_spoken and not has_prompted_silence:
                 has_prompted_silence = True
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>8s after Gayatri speech). Prompting in language '{current_lang}'...")
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller connected but silent for {silence_duration:.1f}s. Prompting with 'Hello?'...")
+                try:
+                    t_user_stop = 0.0
+                    record_dialogue_turn("agent", "Hello?")
+                    session.say("Hello?", allow_interruptions=True)
+                    t_last_activity = time.time()
+                except Exception as e:
+                    logger.warning(f"Error speaking initial silence hello: {e}")
+
+            # Stage 1: Caller silent for 10.0 seconds -> Prompt in active language
+            elif silence_duration >= 10.0 and has_prompted_silence and silence_duration < 16.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>10s). Prompting in language '{current_lang}'...")
                 if current_lang == "mr":
                     prompt_text = "हॅलो? माझा आवाज येतोय का?"
                 elif current_lang == "en":
