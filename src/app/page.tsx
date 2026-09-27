@@ -34,13 +34,15 @@ import {
   List,
   Play,
   Square,
-  FileText
+  FileText,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
 
 export default function ColdCallingHomePage() {
   const [callLogs, setCallLogs] = useState<(CallLog & { leadName: string; leadPhone?: string })[]>([]);
-  const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0 });
+  const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0, futurePlan: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -93,6 +95,30 @@ export default function ColdCallingHomePage() {
       console.warn('Failed reading user from localStorage', e);
     }
   }, []);
+
+  // PDF Export Dropdown State
+  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
+  const pdfDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(event.target as Node)) {
+        setPdfMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleDownloadPdf = (category: PdfReportCategory) => {
+    setPdfMenuOpen(false);
+    exportLeadsToPdf({
+      category,
+      calls: callLogs,
+      getOutcomeTag,
+      userEmail: currentUser?.email || 'test@gmail.com',
+    });
+  };
 
   const loadData = async () => {
     try {
@@ -248,6 +274,7 @@ export default function ColdCallingHomePage() {
       let siteVisits = 0;
       let interested = 0;
       let notInterested = 0;
+      let futurePlan = 0;
 
       for (const call of merged) {
         const tag = getOutcomeTag(call).label;
@@ -257,6 +284,8 @@ export default function ColdCallingHomePage() {
           interested++;
         } else if (tag === 'Not Interested') {
           notInterested++;
+        } else if (tag === 'Future Plan / Need Afterwards') {
+          futurePlan++;
         }
       }
 
@@ -264,7 +293,8 @@ export default function ColdCallingHomePage() {
         totalCalls,
         siteVisits,
         interested,
-        notInterested
+        notInterested,
+        futurePlan
       });
     } catch (err) {
       console.error('Failed to load call logs:', err);
@@ -1062,47 +1092,83 @@ export default function ColdCallingHomePage() {
       {/* 2. KPI METRICS CARDS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
           <div>
             <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Calls Talked</p>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.totalCalls}</h3>
             <span className="text-[10px] text-slate-400 font-medium">Logged conversations</span>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            <PhoneCall className="h-5 w-5" />
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => handleDownloadPdf('All')}
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Download All Call Logs PDF"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <PhoneCall className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
           <div>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Interested Clients</p>
             <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{stats.interested}</h3>
             <span className="text-[10px] text-slate-400 font-medium">High positive intent</span>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-            <CheckCircle2 className="h-5 w-5" />
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => handleDownloadPdf('Interested')}
+              className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors"
+              title="Download Interested Leads PDF"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            <div className="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
           <div>
             <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Site Visits Booked</p>
             <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{stats.siteVisits}</h3>
             <span className="text-[10px] text-slate-400 font-medium">Weekend appointments</span>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            <Calendar className="h-5 w-5" />
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => handleDownloadPdf('Site Visit')}
+              className="p-2 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors"
+              title="Download Site Visits PDF"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Calendar className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
           <div>
             <p className="text-[11px] text-rose-500 font-bold uppercase tracking-wider">Not Interested</p>
             <h3 className="text-2xl font-black text-rose-500 mt-1">{stats.notInterested}</h3>
             <span className="text-[10px] text-slate-400 font-medium">Opted out / DNC</span>
           </div>
-          <div className="h-11 w-11 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
-            <XCircle className="h-5 w-5" />
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => handleDownloadPdf('Not Interested')}
+              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors"
+              title="Download Not Interested PDF"
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            <div className="h-11 w-11 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+              <XCircle className="h-5 w-5" />
+            </div>
           </div>
         </div>
 
@@ -1151,6 +1217,97 @@ export default function ColdCallingHomePage() {
                   {tab}
                 </button>
               ))}
+            </div>
+
+            {/* Export PDF Dropdown */}
+            <div className="relative" ref={pdfDropdownRef}>
+              <button
+                onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
+                title="Download Categorized PDF Reports"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Export PDF</span>
+                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${pdfMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {pdfMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-30 py-2 text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="px-3.5 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Download Category Report</span>
+                    <span className="text-blue-600 dark:text-blue-400 font-bold">PDF</span>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      onClick={() => handleDownloadPdf('Interested')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <span>Interested Clients</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/60 dark:border-emerald-800/60">
+                        {stats.interested}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadPdf('Site Visit')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        <span>Site Visits Scheduled</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
+                        {stats.siteVisits}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadPdf('Future Plan')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" />
+                        <span>Future Plan / Follow-up</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold border border-amber-200/60 dark:border-amber-800/60">
+                        {stats.futurePlan || 0}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownloadPdf('Not Interested')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/80 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <span className="h-2 w-2 rounded-full bg-rose-500" />
+                        <span>Not Interested / DNC</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold border border-rose-200/60 dark:border-rose-800/60">
+                        {stats.notInterested}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="pt-1">
+                    <button
+                      onClick={() => handleDownloadPdf('All')}
+                      className="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between font-bold transition-colors cursor-pointer"
+                    >
+                      <span className="flex items-center space-x-2">
+                        <List className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Complete All Call Logs</span>
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border border-slate-200/60 dark:border-slate-700/60">
+                        {callLogs.length}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Refresh Button */}
