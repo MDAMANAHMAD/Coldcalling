@@ -41,6 +41,165 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
 
+// Helper to determine status tag styling and label with strict precedence
+export const getOutcomeTag = (call: CallLog) => {
+  const outcome = (call.outcome || '').toLowerCase();
+  const summary = (call.aiSummary || '').toLowerCase();
+  const transcript = (call.transcript || '').toLowerCase();
+
+  // 1. Not Interested (Top priority: Check if customer expressed disinterest or declined)
+  const isNotInterested = 
+    outcome.includes('not interested') || 
+    summary.includes('not interested') ||
+    summary.includes('declined') ||
+    summary.includes('rejected') ||
+    summary.includes('nahi chahiye') ||
+    call.sentiment === 'negative';
+
+  if (isNotInterested) {
+    return {
+      label: 'Not Interested',
+      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      dot: 'bg-rose-500',
+      icon: XCircle
+    };
+  }
+
+  // 2. Future Plan / Need Afterwards (Busy, call later, after 2-3 months, next year)
+  const isFuturePlan = 
+    outcome.includes('future plan') ||
+    outcome.includes('need afterwards') ||
+    outcome.includes('afterwards') ||
+    summary.includes('call later') ||
+    summary.includes('after 2') ||
+    summary.includes('after 3') ||
+    summary.includes('next year') ||
+    summary.includes('baad mein') ||
+    summary.includes('follow up later');
+
+  if (isFuturePlan) {
+    return {
+      label: 'Future Plan / Need Afterwards',
+      bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      dot: 'bg-amber-500',
+      icon: Clock
+    };
+  }
+
+  // 3. Location Mismatch (Kalyan)
+  if (outcome.includes('location mismatch') || outcome.includes('kalyan') || summary.includes('kalyan')) {
+    return {
+      label: 'Location Mismatch',
+      bg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+      dot: 'bg-purple-500',
+      icon: AlertCircle
+    };
+  }
+
+  // 4. Site Visit Scheduled (Must be an actual confirmation)
+  const isSiteVisit = 
+    outcome.includes('site visit scheduled') || 
+    (outcome.includes('site visit') && !outcome.includes('not') && !outcome.includes('dropped')) ||
+    summary.includes('confirmed site visit') ||
+    summary.includes('scheduled site visit') ||
+    summary.includes('site visit confirmed') ||
+    transcript.includes('site visit confirm');
+
+  if (isSiteVisit) {
+    return {
+      label: 'Site Visit Scheduled',
+      bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+      dot: 'bg-blue-500',
+      icon: Calendar
+    };
+  }
+
+  // 5. Interested (Customer interested in flats, pricing, WhatsApp details)
+  const isInterested = 
+    outcome === 'interested' || 
+    (outcome.includes('interested') && !outcome.includes('not')) ||
+    summary.includes('showed interest') ||
+    summary.includes('expressed interest') ||
+    (call.sentiment === 'positive' && !outcome.includes('not'));
+
+  if (isInterested) {
+    return {
+      label: 'Interested',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      dot: 'bg-emerald-500',
+      icon: CheckCircle2
+    };
+  }
+
+  // 6. Not Picked Up / Missed (Customer didn't answer or hung up before pickup)
+  if (
+    outcome.includes('not picked') || 
+    outcome.includes('unanswered') || 
+    outcome.includes('missed') ||
+    (Number(call.durationSeconds || 0) === 0 && !outcome.includes('calling') && !outcome.includes('ringing'))
+  ) {
+    return {
+      label: 'Not Picked Up / Missed',
+      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      dot: 'bg-rose-500',
+      icon: PhoneOff
+    };
+  }
+
+  // 7. Ringing / Calling
+  if (outcome.includes('calling') || outcome.includes('ringing')) {
+    return {
+      label: 'Ringing / Calling',
+      bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      dot: 'bg-amber-500 animate-pulse',
+      icon: Clock
+    };
+  }
+
+  // 8. Short / Dropped (Connected, but call ended after 1-2 quick greetings)
+  if (outcome.includes('dropped') || outcome.includes('short')) {
+    return {
+      label: 'Short / Dropped',
+      bg: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+      dot: 'bg-slate-400',
+      icon: Clock
+    };
+  }
+
+  return {
+    label: 'Inquiry Completed',
+    bg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    dot: 'bg-slate-400',
+    icon: CheckCircle2
+  };
+};
+
+export const getSentimentTag = (call: CallLog) => {
+  const sentiment = (call.sentiment || '').toLowerCase();
+  if (sentiment === 'positive') {
+    return {
+      label: 'Positive',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      dot: 'bg-emerald-500',
+      emoji: '😊'
+    };
+  }
+  if (sentiment === 'negative') {
+    return {
+      label: 'Negative',
+      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
+      dot: 'bg-rose-500',
+      emoji: '😟'
+    };
+  }
+  return {
+    label: 'Neutral',
+    bg: 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+    dot: 'bg-slate-400',
+    emoji: '😐'
+  };
+};
+
 export default function ColdCallingHomePage() {
   const [callLogs, setCallLogs] = useState<(CallLog & { leadName: string; leadPhone?: string })[]>([]);
   const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0, futurePlan: 0 });
@@ -667,165 +826,6 @@ export default function ColdCallingHomePage() {
     setCallLogs(prev => prev.filter(c => c.id !== id));
     await deleteCallLog(id);
     await loadData();
-  };
-
-  // Helper to determine status tag styling and label with strict precedence
-  const getOutcomeTag = (call: CallLog) => {
-    const outcome = (call.outcome || '').toLowerCase();
-    const summary = (call.aiSummary || '').toLowerCase();
-    const transcript = (call.transcript || '').toLowerCase();
-
-    // 1. Not Interested (Top priority: Check if customer expressed disinterest or declined)
-    const isNotInterested = 
-      outcome.includes('not interested') || 
-      summary.includes('not interested') ||
-      summary.includes('declined') ||
-      summary.includes('rejected') ||
-      summary.includes('nahi chahiye') ||
-      call.sentiment === 'negative';
-
-    if (isNotInterested) {
-      return {
-        label: 'Not Interested',
-        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-        dot: 'bg-rose-500',
-        icon: XCircle
-      };
-    }
-
-    // 2. Future Plan / Need Afterwards (Busy, call later, after 2-3 months, next year)
-    const isFuturePlan = 
-      outcome.includes('future plan') ||
-      outcome.includes('need afterwards') ||
-      outcome.includes('afterwards') ||
-      summary.includes('call later') ||
-      summary.includes('after 2') ||
-      summary.includes('after 3') ||
-      summary.includes('next year') ||
-      summary.includes('baad mein') ||
-      summary.includes('follow up later');
-
-    if (isFuturePlan) {
-      return {
-        label: 'Future Plan / Need Afterwards',
-        bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-        dot: 'bg-amber-500',
-        icon: Clock
-      };
-    }
-
-    // 3. Location Mismatch (Kalyan)
-    if (outcome.includes('location mismatch') || outcome.includes('kalyan') || summary.includes('kalyan')) {
-      return {
-        label: 'Location Mismatch',
-        bg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-        dot: 'bg-purple-500',
-        icon: AlertCircle
-      };
-    }
-
-    // 4. Site Visit Scheduled (Must be an actual confirmation)
-    const isSiteVisit = 
-      outcome.includes('site visit scheduled') || 
-      (outcome.includes('site visit') && !outcome.includes('not') && !outcome.includes('dropped')) ||
-      summary.includes('confirmed site visit') ||
-      summary.includes('scheduled site visit') ||
-      summary.includes('site visit confirmed') ||
-      transcript.includes('site visit confirm');
-
-    if (isSiteVisit) {
-      return {
-        label: 'Site Visit Scheduled',
-        bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-        dot: 'bg-blue-500',
-        icon: Calendar
-      };
-    }
-
-    // 5. Interested (Customer interested in flats, pricing, WhatsApp details)
-    const isInterested = 
-      outcome === 'interested' || 
-      (outcome.includes('interested') && !outcome.includes('not')) ||
-      summary.includes('showed interest') ||
-      summary.includes('expressed interest') ||
-      (call.sentiment === 'positive' && !outcome.includes('not'));
-
-    if (isInterested) {
-      return {
-        label: 'Interested',
-        bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-        dot: 'bg-emerald-500',
-        icon: CheckCircle2
-      };
-    }
-
-    // 6. Not Picked Up / Missed (Customer didn't answer or hung up before pickup)
-    if (
-      outcome.includes('not picked') || 
-      outcome.includes('unanswered') || 
-      outcome.includes('missed') ||
-      (Number(call.durationSeconds || 0) === 0 && !outcome.includes('calling') && !outcome.includes('ringing'))
-    ) {
-      return {
-        label: 'Not Picked Up / Missed',
-        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-        dot: 'bg-rose-500',
-        icon: PhoneOff
-      };
-    }
-
-    // 7. Ringing / Calling
-    if (outcome.includes('calling') || outcome.includes('ringing')) {
-      return {
-        label: 'Ringing / Calling',
-        bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-        dot: 'bg-amber-500 animate-pulse',
-        icon: Clock
-      };
-    }
-
-    // 8. Short / Dropped (Connected, but call ended after 1-2 quick greetings)
-    if (outcome.includes('dropped') || outcome.includes('short')) {
-      return {
-        label: 'Short / Dropped',
-        bg: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-        dot: 'bg-slate-400',
-        icon: Clock
-      };
-    }
-
-    return {
-      label: 'Inquiry Completed',
-      bg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-      dot: 'bg-slate-400',
-      icon: CheckCircle2
-    };
-  };
-
-  const getSentimentTag = (call: CallLog) => {
-    const sentiment = (call.sentiment || '').toLowerCase();
-    if (sentiment === 'positive') {
-      return {
-        label: 'Positive',
-        bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-        dot: 'bg-emerald-500',
-        emoji: '😊'
-      };
-    }
-    if (sentiment === 'negative') {
-      return {
-        label: 'Negative',
-        bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-        dot: 'bg-rose-500',
-        emoji: '😟'
-      };
-    }
-    return {
-      label: 'Neutral',
-      bg: 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-      dot: 'bg-slate-400',
-      emoji: '😐'
-    };
   };
 
   // Filtered call logs
