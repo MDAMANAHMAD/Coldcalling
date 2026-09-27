@@ -73,8 +73,9 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
     if not text:
         return text
     target_lang = lang or ACTIVE_TTS_LANGUAGE
+    has_english_markers = bool(re.search(r'\b(this is|we have|starting at|are you looking|under construction|immediate possession|goodbye|all-inclusive|hello)\b', text, re.IGNORECASE))
     is_marathi = target_lang == "mr" or (target_lang != "hi" and target_lang != "en" and bool(re.search(r'[\u0900-\u097F]', text)))
-    is_english = target_lang == "en"
+    is_english = target_lang == "en" or (not is_marathi and target_lang != "hi" and has_english_markers)
 
     if is_marathi:
         replacements = [
@@ -89,6 +90,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b72\b', 'बहात्तर'),
             (r'\b50\b', 'पन्नास'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वेअर फूट'),
+            (r'\b(1|one|ek)\s*(ani|va|kinva|ya)\s*(2|two|don)\s*BHK\b', r'१ बीएचके \2 २ बीएचके'),
             (r'\b1\s*BHK\b', 'एक बीएचके'),
             (r'\b2\s*BHK\b', 'दोन बीएचके'),
             (r'\b1\s*RK\b', 'एक आरके'),
@@ -142,6 +144,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b72\b', 'seventy two'),
             (r'\b50\b', 'fifty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
+            (r'\b(1|one)\s*(and|or|&)\s*(2|two)\s*BHK\b', r'one BHK \2 two BHK'),
             (r'\b2\s*BHK\b', 'two BHK'),
             (r'\btwo\s*BHK\b', 'two BHK'),
             (r'\b1\s*BHK\b', 'one BHK'),
@@ -154,7 +157,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b15\s*(-|to)\s*20\b', 'fifteen to twenty'),
             (r'\b11\s*am\b', 'eleven am'),
             (r'\b3\s*pm\b', 'three pm'),
-            (r'\blakh\b', 'lakh'),
+            (r'\blakhs?\b', 'lac'),
             (r'\bcrore\b', 'crore'),
         ]
     else:
@@ -162,9 +165,10 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
         # as requested, while keeping Dombivli in natural Devanagari phonetics ('डोंबिवली') and BHK as 'बीएचके'.
         replacements = [
             (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
-            (r'\b(2|two)\s*BHK\b', 'टू बीएचके'),
-            (r'\b(1|one)\s*BHK\b', 'वन बीएचके'),
-            (r'\b(1|one)\s*RK\b', 'वन आरके'),
+            (r'\b(1|one|ek)\s*(aur|ya|and|or|&)\s*(2|two|do)\s*BHK\b', r'वन बीएचके \2 टू बीएचके'),
+            (r'\b(1|one|ek)\s*BHK\b', 'वन बीएचके'),
+            (r'\b(2|two|do)\s*BHK\b', 'टू बीएचके'),
+            (r'\b(1|one|ek)\s*RK\b', 'वन आरके'),
             (r'\b1rk\b', 'वन आरके'),
             (r'\bBHK\b', 'बीएचके'),
             (r'\bRK\b', 'आरके'),
@@ -234,7 +238,8 @@ class PhoneticSentenceTokenizer(SentenceTokenizer):
 
 _orig_cartesia_synthesize = cartesia.TTS.synthesize
 def _phonetic_synthesize(self, text: str, **kwargs):
-    return _orig_cartesia_synthesize(self, normalize_phonetics(text), **kwargs)
+    tts_lang = getattr(getattr(self, "_opts", None), "language", None) or ACTIVE_TTS_LANGUAGE
+    return _orig_cartesia_synthesize(self, normalize_phonetics(text, lang=tts_lang), **kwargs)
 cartesia.TTS.synthesize = _phonetic_synthesize
 
 # Load environment variables
@@ -314,7 +319,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - STRICT PITCH & EMOTION CONTROL:
   - NEVER speak with exaggerated pitch, celebratory joy, or robotic stiffness.
   - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
-- PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
+- PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK" (or "1 BHK aur 2 BHK"). Strictly NEVER mix numbers like "ek aur two BHK" or "ek or two BHK", and strictly NEVER say "do BHK". Keep both numbers consistent: either "one BHK ya two BHK" or "ek BHK ya do BHK".
 - STRICT NUMBER PRONUNCIATION: ALWAYS say numbers and pricing in English digits/words: "36 lakh", "72 lakh", "375 square feet", "760 square feet", "11 AM", "3 PM". Strictly NEVER say "chhattis" or "bahattar" which causes customer confusion! If customer asks whether 36 lakh is 36 or 37, explicitly confirm that 36 lakh means thirty-six lakh rupees, not 37.
 - NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
 - STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantly.
@@ -336,7 +341,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
   - STRICT PROHIBITION: NEVER ask "Kya main aapse baat kar sakti hoon?" or "Kya main aapse do minute baat kar sakti hoon?". NEVER ask permission to speak!
   - Immediately give the Sai Complex pitch directly (crisp and concise):
-  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan 1 aur 2 BHK flats 36 lakh se available hain. Aap 1 BHK dekh rahe hain ya 2 BHK?"
+  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK flats 36 lakh se available hain. Aap one BHK dekh rahe hain ya two BHK?"
 - **If caller confirms 1 BHK:**
   - "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
 - **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options', 'मला 1rk हवा आहे', '१ आरके', 'आरके'):**
@@ -394,7 +399,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 8. 100% PURE MARATHI MODE
 - Trigger: If caller speaks or asks for Marathi ("marathi madhe bola", "मराठीत बोला", "marathi aati hai kya"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?"
+- Opening: "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ बीएचके आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
 - 2 BHK: "दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
 - Numbers in Marathi: Always pronounce 375 as "तीनशे पंच्याहत्तर", 760 as "सातशे साठ", 520 as "पाचशे वीस", 36 as "छत्तीस", 72 as "बहात्तर".
@@ -405,9 +410,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 9. 100% PURE ENGLISH MODE
 - Trigger: If caller speaks or asks for English ("can you speak English", "talk in English", "English please"):
 - Respond 100% in fluent, professional English. ZERO Hindi words.
-- Opening: "This is Gayatri from Sai Complex, Dombivli East. We have 1 and 2 BHK flats starting at 36 lakh. Are you looking for a 1 BHK or a 2 BHK?"
-- 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lakh rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
-- 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lakh rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
+- Opening: "This is Gayatri from Sai Complex, Dombivli East. We have 1 BHK and 2 BHK flats starting at 36 lac. Are you looking for a 1 BHK or a 2 BHK?"
+- 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lac rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
+- 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lac rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
+- PRONUNCIATION OF LAKH IN ENGLISH: When speaking English, ALWAYS pronounce and write "lakh" in English as "lac" (e.g. "36 lac", "72 lac"), NEVER using Hindi pronunciation ("laakh" / लाख).
 - Silence Watchdog in English: "Hello? Are you able to hear me?"
 - Closing in English: "Thank you so much for your time. Have a wonderful day, goodbye!"
 """
@@ -523,24 +529,24 @@ class PriyaRealEstateAgent(Agent):
                     ACTIVE_TTS_LANGUAGE = det_lang
                     logger.info(f"🗣️ [LLM NODE LANGUAGE LOCK] Updated ACTIVE_TTS_LANGUAGE to '{ACTIVE_TTS_LANGUAGE}' from text: '{raw_text}'")
 
-                # If current language is English or Marathi, skip all Hindi fast-paths to let Gemini answer in pure English/Marathi
-                if ACTIVE_TTS_LANGUAGE in ("en", "mr"):
-                    raise StopIteration("language_guard")
-
-                # 0. Multilingual switch triggers
+                # 0. Multilingual switch triggers (Turn 1 instant response)
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?")
+                        yield speak("मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ बीएचके आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?")
                         return
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("This is Gayatri from Sai Complex, Dombivli East. We have 1 and 2 BHK flats starting at 36 lakh. Are you looking for a 1 BHK or a 2 BHK?")
+                        yield speak("This is Gayatri from Sai Complex, Dombivli East. We have 1 BHK and 2 BHK flats starting at 36 lac. Are you looking for a 1 BHK or a 2 BHK?")
                         return
 
-                # 1. Turn 1 Fast Path (Greeting / Pickup Acknowledgments)
+                # If current language is English or Marathi, skip all Hindi fast-paths to let Gemini answer in pure English/Marathi
+                if ACTIVE_TTS_LANGUAGE in ("en", "mr"):
+                    raise StopIteration("language_guard")
+
+                # 1. Turn 1 Fast Path (Greeting / Pickup Acknowledgments in Hindi)
                 # Instantly initiates predefined sales intro on ANY greeting, voice, or pickup response (<0.8s)
                 if len(user_msgs) == 1:
                     is_not_interested = any(kw in clean_norm for kw in [
@@ -551,7 +557,7 @@ class PriyaRealEstateAgent(Agent):
                     ])
                     if not is_not_interested and not has_specific_inquiry:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan 1 aur 2 BHK flats 36 lakh se available hain. Aap 1 BHK dekh rahe hain ya 2 BHK?")
+                        yield speak("Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK flats 36 lakh se available hain. Aap one BHK dekh rahe hain ya two BHK?")
                         return
 
                 # 2. Subsequent Turns Fast Path (Eliminating Turn 2, Turn 3, Turn 4 Latency Spikes)
