@@ -2005,6 +2005,91 @@ async def entrypoint(ctx: JobContext):
             logger.warning(f"Error extracting TTS metrics: {e}")
 
     call_finalized = False
+    recording_started = False
+    recording_closed = False
+    _rec_start_lock = asyncio.Lock()
+    _rec_close_lock = asyncio.Lock()
+
+    async def start_recording_on_pickup(reason: str = "pickup"):
+        nonlocal recording_started
+        if recording_started or call_finalized:
+            return
+        async with _rec_start_lock:
+            if recording_started or call_finalized:
+                return
+            try:
+                persistent_rec_file = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
+                persistent_rec_file.parent.mkdir(parents=True, exist_ok=True)
+
+                if getattr(session, "_recorder_io", None) is None:
+                    from livekit.agents.voice.recorder_io import RecorderIO
+                    session._recorder_io = RecorderIO(agent_session=session)
+                    if hasattr(session, "input") and hasattr(session.input, "audio") and session.input.audio:
+                        session.input.audio = session._recorder_io.record_input(session.input.audio)
+                    if hasattr(session, "output") and hasattr(session.output, "audio") and session.output.audio:
+                        session.output.audio = session._recorder_io.record_output(session.output.audio)
+
+                if hasattr(session, "_recorder_io") and session._recorder_io:
+                    if not session._recorder_io.recording:
+                        await session._recorder_io.start(output_path=persistent_rec_file)
+                        recording_started = True
+                        logger.info(f"🎙️ [AUDIO RECORDING STARTED] Caller answered / picked up! (Reason: {reason}) Streaming audio to: {persistent_rec_file}")
+                    else:
+                        recording_started = True
+            except Exception as start_rec_err:
+                logger.error(f"Error starting recording on pickup: {start_rec_err}")
+
+    async def flush_and_close_recording():
+        nonlocal recording_closed, recording_started
+        if recording_closed:
+            return
+        async with _rec_close_lock:
+            if recording_closed:
+                return
+            recording_closed = True
+            logger.info("🎙️ [AUDIO RECORDING FLUSH] Ensuring all speech and trailing audio frames are completely saved...")
+
+            try:
+                # 1. If agent is currently speaking, wait for current speech playout to finish
+                speech = getattr(session, "current_speech", None)
+                if speech and not speech.done():
+                    try:
+                        logger.info("🎙️ [AUDIO RECORDING FLUSH] Waiting for final agent speech playout...")
+                        await asyncio.wait_for(speech.wait_for_playout(), timeout=3.0)
+                    except Exception as sp_err:
+                        logger.debug(f"Playout wait note: {sp_err}")
+
+                # 2. Allow 0.3s for WebRTC audio pipeline and buffers to drain
+                await asyncio.sleep(0.3)
+
+                rec_io = getattr(session, "_recorder_io", None)
+                if rec_io and getattr(rec_io, "recording", False):
+                    # 3. Force flush any pending output frames that were captured but not yet pushed
+                    out_rec = getattr(rec_io, "_out_record", None)
+                    if out_rec and getattr(out_rec, "has_pending_data", False):
+                        logger.info("🎙️ [AUDIO RECORDING FLUSH] Pushing all pending output speech frames into encoder queue...")
+                        try:
+                            out_rec.on_playback_finished(playback_position=100000.0, interrupted=False)
+                        except Exception as out_err:
+                            logger.debug(f"out_rec on_playback_finished note: {out_err}")
+
+                    # 4. Flush any trailing input audio frames from caller
+                    in_rec = getattr(rec_io, "_in_record", None)
+                    if in_rec and hasattr(in_rec, "take_buf"):
+                        try:
+                            trailing_in = in_rec.take_buf()
+                            if trailing_in:
+                                rec_io._in_q.put_nowait(trailing_in)
+                                rec_io._out_q.put_nowait([])
+                        except Exception as in_err:
+                            logger.debug(f"in_rec trailing buffer note: {in_err}")
+
+                    # 5. Cleanly aclose RecorderIO and wait for encode thread to finish muxing
+                    logger.info("🎙️ [AUDIO RECORDING FLUSH] Closing RecorderIO encoder...")
+                    await asyncio.wait_for(rec_io.aclose(), timeout=5.0)
+                    logger.info("✅ [AUDIO RECORDING FLUSH] RecorderIO cleanly closed! File muxed.")
+            except Exception as close_err:
+                logger.warning(f"RecorderIO flush error: {close_err}")
 
     async def _finalize_and_save_call(trigger_reason: str):
         nonlocal call_finalized, customer_name, customer_phone, user_account_email, agent
@@ -2144,13 +2229,9 @@ async def entrypoint(ctx: JobContext):
             # --- AUDIO RECORDING PERSISTENCE ---
             recording_url = ""
             try:
-                # 1. If session has RecorderIO active, cleanly aclose to flush all audio frames
-                if hasattr(session, "_recorder_io") and session._recorder_io:
-                    logger.info("🎙️ [AUDIO RECORDING] Flushing RecorderIO stream to disk...")
-                    try:
-                        await asyncio.wait_for(session._recorder_io.aclose(), timeout=5.0)
-                    except Exception as close_rec_err:
-                        logger.debug(f"RecorderIO aclose note: {close_rec_err}")
+                # 1. Cleanly flush all audio frames and close RecorderIO before reading file
+                await flush_and_close_recording()
+                await asyncio.sleep(0.3)
 
                 # 2. Check source recording file from multiple persistent and session paths
                 found_src = None
@@ -2531,7 +2612,8 @@ async def entrypoint(ctx: JobContext):
     ctx.add_shutdown_callback(_on_shutdown)
 
     async def _handle_caller_hungup(p_ident: str):
-        logger.info(f"📞 Caller {p_ident} hung up phone! Finalizing transcript and intelligence...")
+        logger.info(f"📞 Caller {p_ident} hung up phone! Finalizing transcript, intelligence, and audio recording...")
+        await flush_and_close_recording()
         await _finalize_and_save_call("caller_hungup")
         logger.info("📞 Call transcript and intelligence finalized. Now safely disconnecting room.")
         try:
@@ -2578,6 +2660,7 @@ async def entrypoint(ctx: JobContext):
                 caller_has_spoken = True
                 t_last_activity = time.time()
                 has_prompted_silence = False
+                asyncio.create_task(start_recording_on_pickup("caller_speaking"))
             elif ev.old_state == "speaking" and ev.new_state == "listening":
                 t_user_stop = time.perf_counter()
                 intro_finished = True
@@ -2659,6 +2742,7 @@ async def entrypoint(ctx: JobContext):
         caller_has_spoken = True
         t_last_activity = time.time()
         has_prompted_silence = False
+        asyncio.create_task(start_recording_on_pickup("caller_transcript"))
         if ev.transcript:
             if t_user_stop > 0:
                 transcribed_after = (time.perf_counter() - t_user_stop) * 1000
@@ -2794,13 +2878,8 @@ async def entrypoint(ctx: JobContext):
             logger.info(f"⏳ [CALL TERMINATION] Waiting {grace:.1f}s audio buffer grace period before releasing carrier line...")
             await asyncio.sleep(grace)
 
-            # 4. Flush RecorderIO stream to disk before releasing carrier line (<100ms)
-            if hasattr(session, "_recorder_io") and session._recorder_io:
-                logger.info("🎙️ [AUDIO RECORDING] Flushing RecorderIO stream to disk...")
-                try:
-                    await asyncio.wait_for(session._recorder_io.aclose(), timeout=1.5)
-                except Exception as close_rec_err:
-                    logger.debug(f"RecorderIO aclose note: {close_rec_err}")
+            # 4. Flush RecorderIO stream to disk completely before releasing carrier line
+            await flush_and_close_recording()
 
             # 5. Release caller's phone line IMMEDIATELY (< 2.0s strict requirement)
             logger.info("📞 [CALL TERMINATION] Sending active carrier SIP BYE to disconnect caller line...")
@@ -2941,11 +3020,20 @@ async def entrypoint(ctx: JobContext):
                 if caller_participant and p.identity == caller_participant.identity:
                     logger.info(f"📞 Caller answered! Participant is now ACTIVE: {p.identity}")
                     caller_active.set()
+                    asyncio.create_task(start_recording_on_pickup("caller_participant_active"))
 
             try:
                 await asyncio.wait_for(caller_active.wait(), timeout=45.0)
             except asyncio.TimeoutError:
                 logger.warning("Timeout waiting for caller participant to become active. Proceeding.")
+        else:
+            asyncio.create_task(start_recording_on_pickup("caller_already_active"))
+
+    @ctx.room.on("participant_active")
+    def _on_any_participant_active(p):
+        if p.identity.startswith("sip-") or not p.identity.startswith("agent-"):
+            logger.info(f"📞 Caller answered (participant_active event): {p.identity}")
+            asyncio.create_task(start_recording_on_pickup("room_participant_active"))
 
     # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
@@ -3003,6 +3091,7 @@ async def entrypoint(ctx: JobContext):
         raw_text = spoken_text.strip()
         if not raw_text:
             return
+        asyncio.create_task(start_recording_on_pickup("agent_speech"))
         record_dialogue_turn("agent", raw_text)
 
         text = raw_text.lower()
@@ -3028,18 +3117,12 @@ async def entrypoint(ctx: JobContext):
     if hasattr(ctx, "_primary_agent_session"):
         ctx._primary_agent_session = None
 
-    # Start session with dual-channel stereo recording (Caller on input, Gayatri AI on output)
+    # Start session with record=False so recording does NOT capture ringing audio
     t_session_start = time.perf_counter()
-    logger.info("⏱️ [RECORDING & PERF] Calling session.start(record={'audio': True})...")
-    try:
-        await session.start(agent=agent, room=ctx.room, record={"audio": True})
-    except Exception as rec_err:
-        logger.warning(f"Warning starting recording: {rec_err}. Falling back to record=False")
-        await session.start(agent=agent, room=ctx.room, record=False)
+    logger.info("⏱️ [CALL SETUP] Starting session with record=False (recording triggers strictly on caller pickup)...")
+    await session.start(agent=agent, room=ctx.room, record=False)
 
-    # Guarantee persistent audio recording stream directly to bookings/recordings/{ctx.room.name}.ogg
-    persistent_rec_file = Path("bookings/recordings") / f"{ctx.room.name}.ogg"
-    persistent_rec_file.parent.mkdir(parents=True, exist_ok=True)
+    # Pre-wrap audio input and output with RecorderIO so it is ready to record the moment caller picks up
     try:
         if getattr(session, "_recorder_io", None) is None:
             from livekit.agents.voice.recorder_io import RecorderIO
@@ -3048,12 +3131,14 @@ async def entrypoint(ctx: JobContext):
                 session.input.audio = session._recorder_io.record_input(session.input.audio)
             if hasattr(session, "output") and hasattr(session.output, "audio") and session.output.audio:
                 session.output.audio = session._recorder_io.record_output(session.output.audio)
-
-        if hasattr(session, "_recorder_io") and session._recorder_io and not session._recorder_io.recording:
-            await session._recorder_io.start(output_path=persistent_rec_file)
-            logger.info(f"🎙️ [AUDIO RECORDING DIRECT] Persistent recording stream active at: {persistent_rec_file}")
+            logger.info("🎙️ [RECORDER INITIALIZED] RecorderIO attached to audio input/output (recording starts on pickup).")
     except Exception as rec_setup_err:
-        logger.warning(f"RecorderIO direct initialization note: {rec_setup_err}")
+        logger.warning(f"RecorderIO setup note: {rec_setup_err}")
+
+    # If caller is already active at this moment, start recording immediately
+    if caller_participant and hasattr(caller_participant, "state"):
+        if caller_participant.state == rtc.ParticipantState.PARTICIPANT_STATE_ACTIVE:
+            asyncio.create_task(start_recording_on_pickup("caller_active_on_session_start"))
     
     t_session_ready = (time.perf_counter() - t_session_start) * 1000
     t_total_ready = (time.perf_counter() - t_start) * 1000
@@ -3123,6 +3208,7 @@ async def entrypoint(ctx: JobContext):
                     logger.info("🎙️ [INITIAL GREETING] 2.0s elapsed after pickup with caller silent. Saying 'Hello?'...")
                     try:
                         t_user_stop = 0.0
+                        asyncio.create_task(start_recording_on_pickup("silence_initial_hello"))
                         record_dialogue_turn("agent", "Hello?")
                         session.say("Hello?", allow_interruptions=True)
                         t_last_activity = time.time()
@@ -3141,6 +3227,7 @@ async def entrypoint(ctx: JobContext):
                     farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
                 try:
                     t_user_stop = 0.0  # Reset so farewell is never tracked as turn latency spike
+                    asyncio.create_task(start_recording_on_pickup("silence_farewell"))
                     record_dialogue_turn("agent", farewell_text)
                     speech_handle = session.say(farewell_text, allow_interruptions=False)
                     if speech_handle:
@@ -3165,6 +3252,7 @@ async def entrypoint(ctx: JobContext):
                         prompt_text = "Hello? Kya aap sun rahe hain?"
                 try:
                     t_user_stop = 0.0
+                    asyncio.create_task(start_recording_on_pickup("silence_prompt"))
                     record_dialogue_turn("agent", prompt_text)
                     session.say(prompt_text, allow_interruptions=True)
                 except Exception as e:
