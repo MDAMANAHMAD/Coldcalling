@@ -36,7 +36,9 @@ import {
   Square,
   FileText,
   ChevronDown,
-  BarChart3
+  BarChart3,
+  Save,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
@@ -209,6 +211,7 @@ export default function ColdCallingHomePage() {
   // Dynamic Voice Speed State & Persistence
   const [voiceSpeed, setVoiceSpeed] = useState<number>(0.94);
   const [isSavingSpeed, setIsSavingSpeed] = useState<boolean>(false);
+  const [speedSavedSuccess, setSpeedSavedSuccess] = useState<boolean>(false);
 
   // Analytics Period Filter State
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
@@ -317,6 +320,29 @@ export default function ColdCallingHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voiceSpeed: rounded }),
       });
+      setSpeedSavedSuccess(true);
+      setTimeout(() => setSpeedSavedSuccess(false), 2500);
+    } catch (e) {
+      console.warn('Could not save voice speed to server:', e);
+    } finally {
+      setIsSavingSpeed(false);
+    }
+  };
+
+  const handleSaveVoiceSpeed = async () => {
+    const rounded = Math.round(voiceSpeed * 100) / 100;
+    try {
+      setIsSavingSpeed(true);
+      try {
+        localStorage.setItem('gayatri_voice_speed', String(rounded));
+      } catch {}
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceSpeed: rounded }),
+      });
+      setSpeedSavedSuccess(true);
+      setTimeout(() => setSpeedSavedSuccess(false), 3000);
     } catch (e) {
       console.warn('Could not save voice speed to server:', e);
     } finally {
@@ -1039,9 +1065,13 @@ export default function ColdCallingHomePage() {
               <span className="text-xs text-slate-400">
                 {voiceSpeed < 0.90 ? '(Relaxed & Clear)' : voiceSpeed <= 0.96 ? '(Natural Indian Rhythm — Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
               </span>
-              {isSavingSpeed && (
-                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saved to Cloud</span>
-              )}
+              {speedSavedSuccess ? (
+                <span className="text-[11px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30 animate-in fade-in">
+                  <Check className="h-3.5 w-3.5 text-emerald-400" /> Saved & Locked
+                </span>
+              ) : isSavingSpeed ? (
+                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saving to Cloud...</span>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -1077,6 +1107,38 @@ export default function ColdCallingHomePage() {
                     {p.label}
                   </button>
                 ))}
+
+                {/* Explicit Save Button for Voice Speed */}
+                <button
+                  type="button"
+                  onClick={handleSaveVoiceSpeed}
+                  disabled={isSavingSpeed}
+                  className={`flex items-center space-x-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm ml-1 ${
+                    speedSavedSuccess
+                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40 ring-1 ring-emerald-300 scale-105'
+                      : isSavingSpeed
+                      ? 'bg-emerald-600/70 text-emerald-100 cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/30 shadow-emerald-500/20 hover:shadow-emerald-500/30 active:scale-95'
+                  }`}
+                  title="Save voice speed until changed"
+                >
+                  {speedSavedSuccess ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Saved!</span>
+                    </>
+                  ) : isSavingSpeed ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-3.5 w-3.5" />
+                      <span>Save Speed</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>

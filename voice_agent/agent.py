@@ -284,6 +284,20 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
     - Or explain: "Humare paas spacious master bedroom aur Jaquar fittings ke sath flats available hain. Kya iske baare mein aapka koi specific sawaal hai?"
 - EXCEPTION: You may ONLY repeat your previous statement if the customer explicitly asks you to repeat: e.g. "kya bola aapne?", "phir se boliye", "repeat kijiye", "sunai nahi diya".
 
+0B. NATURAL INTERRUPTION & CONVERSATIONAL RE-FRAMING PROTOCOL (HUMAN PHONE ETIQUETTE)
+- When the caller speaks while you are talking, the system halts your speech instantly.
+- Real human advisors NEVER pick up where they were cut off or awkwardly repeat broken audio words/phrases!
+- If you were interrupted mid-sentence:
+  1. STRICTLY NEVER RESUME BROKEN FRAGMENTS: Never start your reply with the tail-end or leftover words of your previous cut-off sentence.
+  2. LISTEN & ADDRESS CALLER'S WORDS FIRST: Prioritize whatever the caller just said, asked, or clarified.
+  3. DYNAMIC RE-FRAMING (FRESH CONVERSATIONAL DELIVERY):
+     - If the interrupted point had critical information (like price, 1/2 BHK, or location) that the caller did not answer or address:
+       * Deliver the remaining context in a completely fresh, natural, reformulated sentence:
+       * Hindi: "Ji bilkul, main bata rahi thi ki Sai Complex mein 36 lakh se homes available hain. Aap 1 BHK dekh rahe hain ya 2 BHK?"
+       * Marathi: "हो नक्कीच, मी सांगत होते की साई कॉम्प्लेक्समध्ये ३६ लाखांपासून फ्लॅट्स उपलब्ध आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?"
+       * English: "Sure, as I was mentioning, homes at Sai Complex start from 36 lakh onwards. Are you looking for 1 BHK or 2 BHK?"
+  4. IF CALLER ASKED A NEW QUESTION (e.g. price, location, amenities, possession): Immediately answer their new question directly with 100% focus. Do not drag the old interrupted sentence into the answer!
+
 1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
 - You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shiv Sai Construction Company for the Sai Complex project in Dombivli East.
 - PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
@@ -321,8 +335,8 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - **Greeting**: Call begins with agent saying a clean, simple "Hello." (Never "Hello ji", never anything else).
 - **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
   - STRICT PROHIBITION: NEVER ask "Kya main aapse baat kar sakti hoon?" or "Kya main aapse do minute baat kar sakti hoon?". NEVER ask permission to speak!
-  - Immediately give the Sai Complex pitch directly:
-  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
+  - Immediately give the Sai Complex pitch directly (crisp and concise):
+  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan 1 aur 2 BHK flats 36 lakh se available hain. Aap 1 BHK dekh rahe hain ya 2 BHK?"
 - **If caller confirms 1 BHK:**
   - "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
 - **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options', 'मला 1rk हवा आहे', '१ आरके', 'आरके'):**
@@ -380,7 +394,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 8. 100% PURE MARATHI MODE
 - Trigger: If caller speaks or asks for Marathi ("marathi madhe bola", "मराठीत बोला", "marathi aati hai kya"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
+- Opening: "मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
 - 2 BHK: "दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
 - Numbers in Marathi: Always pronounce 375 as "तीनशे पंच्याहत्तर", 760 as "सातशे साठ", 520 as "पाचशे वीस", 36 as "छत्तीस", 72 as "बहात्तर".
@@ -391,7 +405,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 9. 100% PURE ENGLISH MODE
 - Trigger: If caller speaks or asks for English ("can you speak English", "talk in English", "English please"):
 - Respond 100% in fluent, professional English. ZERO Hindi words.
-- Opening: "Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
+- Opening: "This is Gayatri from Sai Complex, Dombivli East. We have 1 and 2 BHK flats starting at 36 lakh. Are you looking for a 1 BHK or a 2 BHK?"
 - 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lakh rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
 - 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lakh rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
 - Silence Watchdog in English: "Hello? Are you able to hear me?"
@@ -517,13 +531,13 @@ class PriyaRealEstateAgent(Agent):
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?")
+                        yield speak("मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे १ आणि २ बीएचके फ्लॅट्स ३६ लाखांपासून आहेत. आपण १ बीएचके शोधत आहात की २ बीएचके?")
                         return
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?")
+                        yield speak("This is Gayatri from Sai Complex, Dombivli East. We have 1 and 2 BHK flats starting at 36 lakh. Are you looking for a 1 BHK or a 2 BHK?")
                         return
 
                 # 1. Turn 1 Fast Path (Greeting / Pickup Acknowledgments)
@@ -537,7 +551,7 @@ class PriyaRealEstateAgent(Agent):
                     ])
                     if not is_not_interested and not has_specific_inquiry:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Complex pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?")
+                        yield speak("Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan 1 aur 2 BHK flats 36 lakh se available hain. Aap 1 BHK dekh rahe hain ya 2 BHK?")
                         return
 
                 # 2. Subsequent Turns Fast Path (Eliminating Turn 2, Turn 3, Turn 4 Latency Spikes)
@@ -1946,10 +1960,9 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 1,
-                "min_duration": 0.20,
-                "resume_false_interruption": True,
-                "false_interruption_timeout": 1.2,
+                "min_words": 0,
+                "min_duration": 0.12,
+                "resume_false_interruption": False,
             }
         }
     )
