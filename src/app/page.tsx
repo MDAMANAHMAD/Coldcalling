@@ -932,116 +932,119 @@ export default function ColdCallingHomePage() {
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="max-w-xl space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+        <div className="relative z-10 space-y-6">
+          {/* Top Row: Description on Left, Dial Form on Right */}
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+            <div className="max-w-xl space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+                </div>
+                <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
+                  <User className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Account: <strong className="text-white">{currentUser?.email || 'test@gmail.com'}</strong></span>
+                </div>
               </div>
-              <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
-                <User className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Account: <strong className="text-white">{currentUser?.email || 'test@gmail.com'}</strong></span>
-              </div>
+              <h2 className="text-xl sm:text-2xl font-black tracking-tight">
+                1-Click Outbound Voice AI Call
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
+                Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
+              </p>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              1-Click Outbound Voice AI Call
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-              Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
-            </p>
+
+            {/* Dialing Form */}
+            <form onSubmit={handleOutboundCall} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10 backdrop-blur-md shadow-xl">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
+                  Customer Name
+                </label>
+                <input
+                  type="text"
+                  value={dialName}
+                  onChange={(e) => setDialName(e.target.value)}
+                  placeholder="e.g. Raj"
+                  className="w-full sm:w-36 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
+                  Phone Number (E.164)
+                </label>
+                <input
+                  type="text"
+                  value={dialPhone}
+                  onChange={(e) => setDialPhone(e.target.value)}
+                  placeholder="+918693081506"
+                  className="w-full sm:w-48 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isDialing || isTerminating}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isDialing ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Dialing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PhoneOutgoing className="h-4 w-4" />
+                      <span>Call Phone Now</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleTerminateAllCalls}
+                  disabled={isTerminating}
+                  title="Immediately hang up and terminate all active carrier phone calls"
+                  className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isTerminating ? (
+                    <>
+                      <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Ending Calls...</span>
+                    </>
+                  ) : (
+                    <>
+                      <PhoneOff className="h-4 w-4" />
+                      <span>Terminate All Calls</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
 
-          {/* Dialing Form */}
-          <form onSubmit={handleOutboundCall} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white/5 p-2 sm:p-3 rounded-2xl border border-white/10 backdrop-blur-md">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
-                Customer Name
-              </label>
-              <input
-                type="text"
-                value={dialName}
-                onChange={(e) => setDialName(e.target.value)}
-                placeholder="e.g. Raj"
-                className="w-full sm:w-36 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
-                Phone Number (E.164)
-              </label>
-              <input
-                type="text"
-                value={dialPhone}
-                onChange={(e) => setDialPhone(e.target.value)}
-                placeholder="+918693081506"
-                className="w-full sm:w-48 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
-                required
-              />
-            </div>
-
-            <div className="sm:self-end flex flex-col sm:flex-row items-center gap-2">
-              <button
-                type="submit"
-                disabled={isDialing || isTerminating}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isDialing ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Dialing...</span>
-                  </>
-                ) : (
-                  <>
-                    <PhoneOutgoing className="h-4 w-4" />
-                    <span>Call Phone Now</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleTerminateAllCalls}
-                disabled={isTerminating}
-                title="Immediately hang up and terminate all active carrier phone calls"
-                className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {isTerminating ? (
-                  <>
-                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Ending Calls...</span>
-                  </>
-                ) : (
-                  <>
-                    <PhoneOff className="h-4 w-4" />
-                    <span>Terminate All Calls</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
-
-          {/* Voice Speed Controls */}
-          <div className="mt-3.5 pt-3.5 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2 text-slate-300 font-medium">
-              <div className="flex items-center space-x-1.5">
+          {/* Full-Width Voice Speed Control Bar */}
+          <div className="pt-4 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs bg-white/[0.03] p-3.5 rounded-2xl border border-white/5">
+            <div className="flex flex-wrap items-center gap-3 text-slate-300 font-medium">
+              <div className="flex items-center space-x-2 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 text-emerald-300">
                 <Volume2 className="h-4 w-4 text-emerald-400" />
-                <span className="text-white font-semibold">Gayatri Voice Speed:</span>
+                <span className="font-bold">Gayatri Voice Speed:</span>
+                <span className="font-mono font-black text-white px-2 py-0.5 rounded bg-emerald-500/30 text-xs">
+                  {voiceSpeed.toFixed(2)}x
+                </span>
               </div>
-              <span className="font-mono font-bold text-white px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-xs">
-                {voiceSpeed.toFixed(2)}x
-              </span>
-              <span className="text-[11px] text-slate-400">
-                {voiceSpeed < 0.90 ? '(Relaxed)' : voiceSpeed <= 0.96 ? '(Natural - Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
+              <span className="text-xs text-slate-400">
+                {voiceSpeed < 0.90 ? '(Relaxed & Clear)' : voiceSpeed <= 0.96 ? '(Natural Indian Rhythm — Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
               </span>
               {isSavingSpeed && (
-                <span className="text-[10px] text-teal-300 animate-pulse font-medium">Saved</span>
+                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saved to Cloud</span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-3">
               <input
                 type="range"
                 min="0.80"
@@ -1049,10 +1052,10 @@ export default function ColdCallingHomePage() {
                 step="0.02"
                 value={voiceSpeed}
                 onChange={(e) => handleUpdateVoiceSpeed(parseFloat(e.target.value))}
-                className="w-28 sm:w-36 accent-emerald-400 cursor-pointer"
+                className="w-36 accent-emerald-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
                 title="Adjust Gayatri speaking speed (0.80x to 1.20x)"
               />
-              <div className="flex items-center space-x-1">
+              <div className="flex items-center space-x-1.5">
                 {[
                   { speed: 0.85, label: '0.85x' },
                   { speed: 0.90, label: '0.90x' },
@@ -1065,9 +1068,9 @@ export default function ColdCallingHomePage() {
                     key={p.speed}
                     type="button"
                     onClick={() => handleUpdateVoiceSpeed(p.speed)}
-                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                       Math.abs(voiceSpeed - p.speed) < 0.01
-                        ? 'bg-emerald-500 text-white shadow-sm'
+                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
                         : 'bg-white/10 hover:bg-white/20 text-slate-300'
                     }`}
                   >
