@@ -120,6 +120,18 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
         ]
     elif is_english:
         replacements = [
+            (r'\bgayatri\b', 'गायत्री'),
+            (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
+            (r'\bthane\b', 'ठाणे'),
+            (r'\bkalyan\b', 'कल्याण'),
+            (r'\bsai complex\b', 'साई कॉम्प्लेक्स'),
+            (r'\bpalava\b', 'पलावा'),
+            (r'\bnilje\b', 'निलजे'),
+            (r'\b(shil road|shil phata)\b', 'शील रोड'),
+            (r'\bshiv sai\b', 'शिव साई'),
+            (r'\blodha\b', 'लोढा'),
+            (r'\baman\b', 'अमन'),
+            (r'\braj\b', 'राज'),
             (r'\b760\b', 'seven hundred sixty'),
             (r'\b375\b', 'three hundred seventy five'),
             (r'\b520\b', 'five hundred twenty'),
@@ -313,23 +325,30 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
 - **If caller confirms 1 BHK:**
   - "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
-- **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options'):**
-  - Hindi: "Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?"
-  - English: "We do not have 1 RK configurations at Sai Complex; our homes start with spacious 1 BHK apartments of 375 square feet starting at 36 lakh rupees all-inclusive. Would you like to explore the 1 BHK option?"
-  - Marathi: "साई कॉम्प्लेक्समध्ये १ आरके उपलब्ध नाही; आमच्याकडे तीनशे पंच्याहत्तर स्क्वेअर फूटचे प्रशस्त १ बीएचके फ्लॅट्स छत्तीस लाख रुपयांपासून सुरू होतात. आपण १ बीएचके पर्याय पाहू इच्छिता का?"
+- **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options', 'मला 1rk हवा आहे', '१ आरके', 'आरके'):**
+  - Marathi: "मी समजू शकते की आपण १ आरके किंवा बजेट होम शोधत आहात. साई कॉम्प्लेक्समध्ये घरे १ आणि २ बीएचकेची आहेत, पण आमचा कॉम्पॅक्ट १ बीएचके ३७५ स्क्वेअर फूट फ्लॅट केवळ ३६ लाख रुपयांमध्ये सर्व करांसह उपलब्ध आहे, ज्याचा ईएमआय जवळजवळ १ आरके एवढाच येतो. आपण हा १ बीएचके पर्याय पाहू इच्छिता का?"
+  - Hindi: "Main samajh sakti hoon ki aap 1 RK ya budget home dekh rahe hain. Sai Complex mein humare paas compact 1 BHK 375 square feet carpet area sirf 36 lakh rupees all-inclusive mein milta hai, jiska EMI lagbhag 1 RK jaisa hi convenient rehta hai. Kya aap iska layout dekhna chahenge?"
+  - English: "I understand you are looking for a 1 RK or budget residence. At Sai Complex, our homes start with compact, highly affordable 1 BHK apartments of 375 square feet starting at just 36 lakh rupees all-inclusive, with low EMIs very close to a 1 RK. Would you like to explore this 1 BHK option?"
 - **If caller confirms 2 BHK:**
   - "Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
 - **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
   - DO NOT repeat the 1/2 BHK pitch!
   - Progress: "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes door. Yahan 1 BHK 36 lakh aur 2 BHK 72 lakh all-inclusive mein available hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
 - **If caller asks for Ready-to-move ('ready to move', 'immediate', 'ready'):**
-  - "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
+  - "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Actual flat dekhne ke liye kaun sa din aapke liye convenient rahega?"
 - **If caller asks for Upcoming Possession / Under Construction ('upcoming', 'position', 'possession', 'under construction'):**
-  - "Upcoming possession mein aapko flexible payment plans aur attractive offers milte hain, aur possession timely handover ke sath ready ho raha hai. Is weekend project aur sample flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?"
-- **If caller specifies day ('Saturday' or 'Sunday'):**
-  - "Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?" (Move straight to time, never repeat the day question!)
+  - "Upcoming possession mein flexible payment plans aur attractive offers milte hain, timely handover ke sath. Project dekhne ke liye kaun sa din aapke liye convenient rahega?"
+- **If caller specifies ANY day (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, or Kal / Tomorrow / Weekday / Weekend):**
+  - Immediately respect and acknowledge their chosen day (DO NOT force weekend!):
+  - Hindi: "Bilkul, {chosen_day} ko subah 11 baje convenient rahega ya shaam ko 4 ya 6 baje?"
+  - Marathi: "नक्कीच, {chosen_day} रोजी सकाळी ११ वाजता सोयीचे ठरेल की संध्याकाळी?"
+  - English: "Certainly, what time on {chosen_day} would be convenient for you — morning at 11 AM or evening around 4 to 6 PM?"
 - **When caller confirms time:**
-  - Invoke schedule_site_visit(...) and say: "Maine aapka visit schedule kar diya hai. Saari details WhatsApp par bhej rahi hoon. Aapka din shubh ho, bye."
+  - Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
+  - AND AT THE END, CLEARLY CONFIRM DAY AND TIME:
+  - Hindi: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
+  - Marathi: "मी आपली {preferred_day} रोजी {preferred_time} वाजताची साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
+  - English: "I have confirmed your site visit for {preferred_day} at {preferred_time}. I am sending all the location details to you on WhatsApp right now. Thank you so much for your time, goodbye!"
 - **When customer is busy / asks to call later / future plan (STRICTLY in current language):**
   - Hindi: "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
   - Marathi: "काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार."
@@ -340,10 +359,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - English: "Understood, thank you for your time. Have a wonderful day, goodbye!"
 
 5. SITE VISIT CONFIRMATION & CLOSING
-- If customer wants to visit: "Saturday convenient rahega ya Sunday, aur subah ya dopahar kis time comfortable rahega?"
-- When user gives final explicit confirmation:
+- If customer expresses interest in visiting: "Actual flat dekhne ke liye kaun sa din aapke liye convenient rahega, aur kis time comfortable rahega?"
+- When user confirms:
   Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
-  and say: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
+  and confirm day and time clearly at the end.
 
 6. MANDATORY CALL CLOSING RULE
 - Hindi calls: Conclude with: "Aapka din shubh ho, bye."
@@ -470,15 +489,6 @@ class PriyaRealEstateAgent(Agent):
             return text
 
         try:
-            # ── LANGUAGE GUARD ──────────────────────────────────────────────────
-            # If the caller has already switched to English or Marathi, skip ALL
-            # Hindi fast-path cases and fall through to the LLM (which has the
-            # per-turn language lock injected). Prevents hardcoded Hindi responses
-            # from firing mid-call after a language switch.
-            if ACTIVE_TTS_LANGUAGE in ("en", "mr"):
-                raise StopIteration("language_guard")
-            # ────────────────────────────────────────────────────────────────────
-
             user_msgs = [m for m in chat_ctx.items if getattr(m, "role", "") in ["user", "customer"]]
             if user_msgs:
                 last_msg = user_msgs[-1]
@@ -491,6 +501,17 @@ class PriyaRealEstateAgent(Agent):
                         raw_text = str(content or "")
                 clean_norm = re.sub(r'[^\w\s]', '', raw_text).strip().lower()
                 words = clean_norm.split()
+
+                # Synchronize language state immediately
+                global ACTIVE_TTS_LANGUAGE
+                det_lang = resolve_language(raw_text, ACTIVE_TTS_LANGUAGE)
+                if det_lang != ACTIVE_TTS_LANGUAGE:
+                    ACTIVE_TTS_LANGUAGE = det_lang
+                    logger.info(f"🗣️ [LLM NODE LANGUAGE LOCK] Updated ACTIVE_TTS_LANGUAGE to '{ACTIVE_TTS_LANGUAGE}' from text: '{raw_text}'")
+
+                # If current language is English or Marathi, skip all Hindi fast-paths to let Gemini answer in pure English/Marathi
+                if ACTIVE_TTS_LANGUAGE in ("en", "mr"):
+                    raise StopIteration("language_guard")
 
                 # 0. Multilingual switch triggers
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
@@ -539,10 +560,15 @@ class PriyaRealEstateAgent(Agent):
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                         return
 
-                    # Case C: 1 RK flat inquiry
-                    if any(kw in clean_norm for kw in ["1 rk", "1rk", "one rk", "ek rk", "rk flat", "rk options", "rk available", "rk hai kya"]):
+                    # Case C: 1 RK flat inquiry (empathetic consultative pitch)
+                    rk_kws = [
+                        "1 rk", "1rk", "one rk", "ek rk", "rk flat", "rk options", "rk available", "rk hai kya",
+                        "१ आरके", "आरके", "वन आरके", "एक आरके", "1 r.k", "1-rk", "one-rk",
+                        "rk chahie", "rk chahiye", "rk pahije", "rk hawa ahe", "rk hawa", "rk pahije ka"
+                    ]
+                    if any(kw in clean_norm for kw in rk_kws):
                         logger.info(f"⚡ [FAST-PATH 1RK] Instant 1RK explanation for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein. Kya aap 1 BHK option dekhna chahenge?")
+                        yield speak("Sai Complex mein 1 RK available nahi hai; hamare homes spacious 1 BHK apartments of 375 square feet se start hote hain 36 lakh rupees all-inclusive mein, jiska EMI lagbhag 1 RK jitna hi aata hai. Kya aap 1 BHK option dekhna chahenge?")
                         return
 
                     # Case D: 1 BHK confirmed / chosen
@@ -565,9 +591,27 @@ class PriyaRealEstateAgent(Agent):
                         yield speak("Ji haan, chhattis lakh ka matlab 36 lakh rupees hi hota hai, 37 lakh nahi. One BHK 36 lakh mein aur two BHK 72 lakh mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession?")
                         return
 
+                    # Case G: Site visit day selected (any day: Mon-Sun, kal, parso, weekend)
+                    days_dict = {
+                        "monday": "Monday", "somvar": "Monday", "somwar": "Monday", "सोमवार": "Monday",
+                        "tuesday": "Tuesday", "mangalvar": "Tuesday", "mangalwar": "Tuesday", "मंगळवार": "Tuesday",
+                        "wednesday": "Wednesday", "budhvar": "Wednesday", "budhwar": "Wednesday", "बुधवार": "Wednesday",
+                        "thursday": "Thursday", "guruvar": "Thursday", "guruwar": "Thursday", "गुरुवार": "Thursday",
+                        "friday": "Friday", "shukravar": "Friday", "shukrawar": "Friday", "शुक्रवार": "Friday",
+                        "saturday": "Saturday", "shanivar": "Saturday", "shaniwar": "Saturday", "शनिवार": "Saturday", "sat": "Saturday",
+                        "sunday": "Sunday", "ravivar": "Sunday", "raviwar": "Sunday", "रविवार": "Sunday", "sun": "Sunday", "etvar": "Sunday",
+                        "kal": "Kal (Tomorrow)", "tomorrow": "Tomorrow", "parso": "Parso", "weekend": "Weekend"
+                    }
+                    detected_day = None
+                    for kw, d_name in days_dict.items():
+                        if re.search(r'\b' + re.escape(kw) + r'\b', clean_norm):
+                            detected_day = d_name
+                            break
+
                     # Case F: Confirmation of site visit time / booking
-                    time_kws = ["11 baje", "11 am", "11am", "3 baje", "3 pm", "3pm", "subah 11", "dopahar 3", "confirm", "confirm kar do", "book kar do", "lock kar do"]
+                    time_kws = ["11 baje", "11 am", "11am", "3 baje", "3 pm", "3pm", "subah 11", "dopahar 3", "confirm", "confirm kar do", "book kar do", "lock kar do", "theek hai"]
                     is_time_confirmed = any(kw in clean_norm for kw in time_kws) or (("11" in clean_norm or "3" in clean_norm) and any(w in clean_norm for w in ["baje", "am", "pm", "subah", "dopahar", "morning", "afternoon", "theek", "chalega", "aayenge"]))
+
                     if is_time_confirmed:
                         prior_agent_speech = ""
                         for prev in reversed(chat_ctx.items[:-1]):
@@ -575,29 +619,31 @@ class PriyaRealEstateAgent(Agent):
                                 prior_agent_speech = getattr(prev, "text_content", "") or str(getattr(prev, "content", ""))
                                 break
                         prior_norm = prior_agent_speech.lower()
-                        if any(k in prior_norm for k in ["site visit", "saturday", "sunday", "11 baje", "3 baje", "convenient", "shanivar", "ravivar"]):
-                            pref_day = "Sunday" if ("sunday" in prior_norm or "sunday" in clean_norm or "ravivar" in clean_norm) else "Saturday"
-                            pref_time = "11 AM" if ("11" in clean_norm or "subah" in clean_norm or "morning" in clean_norm) else "3 PM"
-                            logger.info(f"⚡ [FAST-PATH CONFIRMATION] Instant site visit booking ({pref_day} at {pref_time}) for '{raw_text}' (0ms LLM wait)!")
-                            asyncio.create_task(self.schedule_site_visit(
-                                customer_name=self.customer_name,
-                                preferred_day=pref_day,
-                                preferred_time=pref_time,
-                                flat_type="2BHK"
-                            ))
-                            yield speak(f"Maine aapka {pref_day} ko {pref_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!")
-                            return
+                        
+                        # Find the day mentioned in the conversation
+                        chosen_day = detected_day
+                        if not chosen_day:
+                            for kw, d_name in days_dict.items():
+                                if re.search(r'\b' + re.escape(kw) + r'\b', prior_norm):
+                                    chosen_day = d_name
+                                    break
+                        if not chosen_day:
+                            chosen_day = "Saturday"
 
-                    # Case G: Saturday or Sunday selected
-                    is_sat = any(kw in clean_norm for kw in ["saturday", "shanivar", "shaniwar", "sat"])
-                    is_sun = any(kw in clean_norm for kw in ["sunday", "ravivar", "raviwar", "sun", "weekend", "etvar"])
-                    if is_sat and not is_sun:
-                        logger.info(f"⚡ [FAST-PATH SATURDAY] Instant Saturday timing question for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Ji bilkul. Saturday ko subah 11 baje convenient rahega ya dopahar 3 baje?")
+                        pref_time = "11 AM" if ("11" in clean_norm or "subah" in clean_norm or "morning" in clean_norm) else "3 PM"
+                        logger.info(f"⚡ [FAST-PATH CONFIRMATION] Instant site visit booking ({chosen_day} at {pref_time}) for '{raw_text}' (0ms LLM wait)!")
+                        asyncio.create_task(self.schedule_site_visit(
+                            customer_name=self.customer_name,
+                            preferred_day=chosen_day,
+                            preferred_time=pref_time,
+                            flat_type="1BHK/2BHK"
+                        ))
+                        yield speak(f"Maine aapka {chosen_day} ko {pref_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!")
                         return
-                    elif is_sun and not is_sat:
-                        logger.info(f"⚡ [FAST-PATH SUNDAY] Instant Sunday timing question for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Ji bilkul. Sunday ko subah 11 baje convenient rahega ya dopahar 3 baje?")
+
+                    if detected_day and not is_time_confirmed:
+                        logger.info(f"⚡ [FAST-PATH DAY SELECTED: {detected_day}] Instant day timing question for '{raw_text}' (0ms LLM wait)!")
+                        yield speak(f"Ji bilkul, {detected_day} ko subah 11 baje convenient rahega ya dopahar 3 baje?")
                         return
 
                     # Case H1: Upcoming possession confirmed (handles 'upcoming position' STT mishearing, under construction, etc.)
@@ -1192,8 +1238,13 @@ STT_KEYWORDS = [
     ("Airoli", 2.0),
     ("Sai Complex", 2.0),
     ("Shil Road", 2.0),
-    ("1 RK", 2.5),
-    ("one RK", 2.5),
+    ("1 RK", 3.0),
+    ("one RK", 3.0),
+    ("१ आरके", 3.0),
+    ("आरके", 2.5),
+    ("वन आरके", 2.5),
+    ("एक आरके", 2.5),
+    ("मराठी", 2.5),
     ("1 BHK", 2.5),
     ("2 BHK", 2.5),
     ("one BHK", 2.0),
@@ -1226,10 +1277,19 @@ STT_REPLACE = {
     "dombivali": "Dombivli",
     "dombiwali": "Dombivli",
     "nilje station": "Nilje station",
+    "१ आरके": "1 RK",
+    "१आरके": "1 RK",
+    "वन आरके": "1 RK",
+    "एक आरके": "1 RK",
+    "आरके": "1 RK",
+    "1 आरके": "1 RK",
     "I RK": "1 RK",
     "i rk": "1 RK",
     "1rk": "1 RK",
     "one rk": "1 RK",
+    "1 r.k": "1 RK",
+    "1-rk": "1 RK",
+    "one-rk": "1 RK",
     "2BHK": "2 BHK",
     "1BHK": "1 BHK",
     "2bhk": "2 BHK",
@@ -1762,7 +1822,46 @@ async def entrypoint(ctx: JobContext):
     
     # Initialize TTS dynamically here instead of prewarm_fnc to save concurrency connections
     tts = ctx.proc.userdata.get("tts")
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+
+    # Dynamic Voice Speed resolution: Priority:
+    # 1. room metadata (voice_speed / voiceSpeed)
+    # 2. db.json / settings.json
+    # 3. os.getenv("CARTESIA_SPEED", "0.94")
+    cartesia_speed = 0.94
+    custom_speed = None
+    if ctx.room.metadata:
+        try:
+            m = json.loads(ctx.room.metadata)
+            if m.get("voice_speed") is not None:
+                custom_speed = float(m["voice_speed"])
+            elif m.get("voiceSpeed") is not None:
+                custom_speed = float(m["voiceSpeed"])
+        except Exception:
+            pass
+
+    if custom_speed is None:
+        for fpath in ["db.json", os.path.join(os.path.dirname(__file__), "..", "db.json"), "settings.json"]:
+            if os.path.exists(fpath):
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, dict):
+                            s = data.get("voice_speed") or data.get("voiceSpeed") or (data.get("settings", {}).get("voiceSpeed"))
+                            if s is not None:
+                                custom_speed = float(s)
+                                break
+                except Exception:
+                    pass
+
+    if custom_speed is not None and 0.5 <= custom_speed <= 1.8:
+        cartesia_speed = custom_speed
+    else:
+        try:
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+        except Exception:
+            cartesia_speed = 0.94
+    logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
+
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
@@ -2834,6 +2933,16 @@ async def entrypoint(ctx: JobContext):
         if hasattr(p, "metadata") and p.metadata:
             try:
                 meta_p = json.loads(p.metadata)
+                if meta_p.get("voice_speed") or meta_p.get("voiceSpeed"):
+                    try:
+                        p_speed = float(meta_p.get("voice_speed") or meta_p.get("voiceSpeed"))
+                        if 0.5 <= p_speed <= 1.8:
+                            cartesia_speed = p_speed
+                            if session.tts and hasattr(session.tts, "update_options"):
+                                session.tts.update_options(speed=cartesia_speed)
+                                logger.info(f"🎙️ [DYNAMIC SPEED] Updated Cartesia TTS speed to {cartesia_speed} from participant metadata")
+                    except Exception as sp_err:
+                        logger.warning(f"Error parsing participant voice_speed: {sp_err}")
                 if meta_p.get("user_email"):
                     user_account_email = meta_p.get("user_email").strip().lower()
                     logger.info(f"📧 Bound call to user account from participant metadata: {user_account_email}")

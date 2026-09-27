@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   getCallLogsWithLeads, 
   getColdCallingStats,
@@ -35,7 +35,8 @@ import {
   Play,
   Square,
   FileText,
-  ChevronDown
+  ChevronDown,
+  BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
@@ -45,6 +46,13 @@ export default function ColdCallingHomePage() {
   const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0, futurePlan: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Dynamic Voice Speed State & Persistence
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(0.94);
+  const [isSavingSpeed, setIsSavingSpeed] = useState<boolean>(false);
+
+  // Analytics Period Filter State
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
 
   // 1-Click Dialing Form State
   const [dialName, setDialName] = useState('Raj');
@@ -110,11 +118,114 @@ export default function ColdCallingHomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Load persisted voice speed on mount
+  useEffect(() => {
+    try {
+      const localSpeed = localStorage.getItem('gayatri_voice_speed');
+      if (localSpeed) {
+        const val = parseFloat(localSpeed);
+        if (!isNaN(val) && val >= 0.6 && val <= 1.6) {
+          setVoiceSpeed(val);
+        }
+      }
+    } catch {}
+
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && data.settings?.voiceSpeed) {
+          const sp = Number(data.settings.voiceSpeed);
+          if (!isNaN(sp) && sp >= 0.6 && sp <= 1.6) {
+            setVoiceSpeed(sp);
+            try { localStorage.setItem('gayatri_voice_speed', String(sp)); } catch {}
+          }
+        }
+      })
+      .catch(err => console.debug('Could not fetch voice settings:', err));
+  }, []);
+
+  const handleUpdateVoiceSpeed = async (newSpeed: number) => {
+    const rounded = Math.round(newSpeed * 100) / 100;
+    setVoiceSpeed(rounded);
+    try {
+      localStorage.setItem('gayatri_voice_speed', String(rounded));
+    } catch {}
+
+    try {
+      setIsSavingSpeed(true);
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceSpeed: rounded }),
+      });
+    } catch (e) {
+      console.warn('Could not save voice speed to server:', e);
+    } finally {
+      setIsSavingSpeed(false);
+    }
+  };
+
+  // Analytics Period Filtering
+  const filteredCallsForAnalytics = useMemo(() => {
+    if (analyticsPeriod === 'all') return callLogs;
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    
+    // Start of week (Monday)
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday).getTime();
+    
+    // Start of month
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    
+    // Start of year
+    const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
+
+    return callLogs.filter(c => {
+      const callMs = getCallTimestampMs(c);
+      if (analyticsPeriod === 'today') return callMs >= todayStart;
+      if (analyticsPeriod === 'week') return callMs >= weekStart;
+      if (analyticsPeriod === 'month') return callMs >= monthStart;
+      if (analyticsPeriod === 'year') return callMs >= yearStart;
+      return true;
+    });
+  }, [callLogs, analyticsPeriod]);
+
+  const periodStats = useMemo(() => {
+    const totalCalls = filteredCallsForAnalytics.length;
+    let siteVisits = 0;
+    let interested = 0;
+    let notInterested = 0;
+    let futurePlan = 0;
+
+    for (const call of filteredCallsForAnalytics) {
+      const tag = getOutcomeTag(call).label;
+      if (tag === 'Site Visit Scheduled') {
+        siteVisits++;
+      } else if (tag === 'Interested') {
+        interested++;
+      } else if (tag === 'Not Interested') {
+        notInterested++;
+      } else if (tag === 'Future Plan / Need Afterwards') {
+        futurePlan++;
+      }
+    }
+
+    return {
+      totalCalls,
+      siteVisits,
+      interested,
+      notInterested,
+      futurePlan
+    };
+  }, [filteredCallsForAnalytics]);
+
   const handleDownloadPdf = (category: PdfReportCategory) => {
     setPdfMenuOpen(false);
     exportLeadsToPdf({
       category,
-      calls: callLogs,
+      calls: filteredCallsForAnalytics,
       getOutcomeTag,
       userEmail: currentUser?.email || 'test@gmail.com',
     });
@@ -337,7 +448,8 @@ export default function ColdCallingHomePage() {
         body: JSON.stringify({
           phoneNumber: safeTargetPhone,
           customerName: callerName,
-          userEmail: currentUser?.email || 'test@gmail.com'
+          userEmail: currentUser?.email || 'test@gmail.com',
+          voiceSpeed: voiceSpeed
         })
       });
 
@@ -494,7 +606,8 @@ export default function ColdCallingHomePage() {
           body: JSON.stringify({
             phoneNumber: contact.phone,
             customerName: contact.name,
-            userEmail: currentUser?.email || 'test@gmail.com'
+            userEmail: currentUser?.email || 'test@gmail.com',
+            voiceSpeed: voiceSpeed
           })
         });
         const data = await res.json();
@@ -909,6 +1022,61 @@ export default function ColdCallingHomePage() {
               </button>
             </div>
           </form>
+
+          {/* Voice Speed Controls */}
+          <div className="mt-3.5 pt-3.5 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-slate-300 font-medium">
+              <div className="flex items-center space-x-1.5">
+                <Volume2 className="h-4 w-4 text-emerald-400" />
+                <span className="text-white font-semibold">Gayatri Voice Speed:</span>
+              </div>
+              <span className="font-mono font-bold text-white px-2 py-0.5 rounded-md bg-white/10 border border-white/10 text-xs">
+                {voiceSpeed.toFixed(2)}x
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {voiceSpeed < 0.90 ? '(Relaxed)' : voiceSpeed <= 0.96 ? '(Natural - Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
+              </span>
+              {isSavingSpeed && (
+                <span className="text-[10px] text-teal-300 animate-pulse font-medium">Saved</span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="range"
+                min="0.80"
+                max="1.20"
+                step="0.02"
+                value={voiceSpeed}
+                onChange={(e) => handleUpdateVoiceSpeed(parseFloat(e.target.value))}
+                className="w-28 sm:w-36 accent-emerald-400 cursor-pointer"
+                title="Adjust Gayatri speaking speed (0.80x to 1.20x)"
+              />
+              <div className="flex items-center space-x-1">
+                {[
+                  { speed: 0.85, label: '0.85x' },
+                  { speed: 0.90, label: '0.90x' },
+                  { speed: 0.94, label: '0.94x' },
+                  { speed: 1.00, label: '1.0x' },
+                  { speed: 1.05, label: '1.05x' },
+                  { speed: 1.10, label: '1.1x' },
+                ].map(p => (
+                  <button
+                    key={p.speed}
+                    type="button"
+                    onClick={() => handleUpdateVoiceSpeed(p.speed)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-colors cursor-pointer ${
+                      Math.abs(voiceSpeed - p.speed) < 0.01
+                        ? 'bg-emerald-500 text-white shadow-sm'
+                        : 'bg-white/10 hover:bg-white/20 text-slate-300'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Real-Time Call Feedback */}
@@ -1089,89 +1257,150 @@ export default function ColdCallingHomePage() {
         )}
       </div>
 
-      {/* 2. KPI METRICS CARDS */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+      {/* 2. ANALYTICS & KPI METRICS */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
           <div>
-            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Total Calls Talked</p>
-            <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.totalCalls}</h3>
-            <span className="text-[10px] text-slate-400 font-medium">Logged conversations</span>
+            <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center space-x-2">
+              <BarChart3 className="h-4 w-4 text-blue-600" />
+              <span>Real-Time Call Analytics</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 font-medium">
+              Showing metrics for: <strong className="text-slate-700 dark:text-slate-200 capitalize">{analyticsPeriod === 'all' ? 'All Time' : analyticsPeriod === 'today' ? 'Today (Day-wise)' : analyticsPeriod === 'week' ? 'This Week' : analyticsPeriod === 'month' ? 'This Month' : 'This Year'}</strong> ({filteredCallsForAnalytics.length} total calls)
+            </p>
           </div>
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => handleDownloadPdf('All')}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Download All Call Logs PDF"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <PhoneCall className="h-5 w-5" />
-            </div>
+
+          {/* Time Period Filter Pills */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            {[
+              { id: 'today', label: 'Today' },
+              { id: 'week', label: 'This Week' },
+              { id: 'month', label: 'This Month' },
+              { id: 'year', label: 'Yearly' },
+              { id: 'all', label: 'All Time' },
+            ].map(p => {
+              const active = analyticsPeriod === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setAnalyticsPeriod(p.id as any)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    active
+                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-          <div>
-            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Interested Clients</p>
-            <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{stats.interested}</h3>
-            <span className="text-[10px] text-slate-400 font-medium">High positive intent</span>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => handleDownloadPdf('Interested')}
-              className="p-2 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors"
-              title="Download Interested Leads PDF"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <div className="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="h-5 w-5" />
+        {/* 5 KPI METRICS CARDS */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+            <div>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Calls</p>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{periodStats.totalCalls}</h3>
+              <span className="text-[10px] text-slate-400 font-medium">Logged calls</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleDownloadPdf('All')}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                title="Download All Call Logs PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <PhoneCall className="h-4.5 w-4.5" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-          <div>
-            <p className="text-[11px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Site Visits Booked</p>
-            <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{stats.siteVisits}</h3>
-            <span className="text-[10px] text-slate-400 font-medium">Weekend appointments</span>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => handleDownloadPdf('Site Visit')}
-              className="p-2 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors"
-              title="Download Site Visits PDF"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Calendar className="h-5 w-5" />
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+            <div>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Interested</p>
+              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{periodStats.interested}</h3>
+              <span className="text-[10px] text-slate-400 font-medium">High positive intent</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleDownloadPdf('Interested')}
+                className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors"
+                title="Download Interested Leads PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <CheckCircle2 className="h-4.5 w-4.5" />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-          <div>
-            <p className="text-[11px] text-rose-500 font-bold uppercase tracking-wider">Not Interested</p>
-            <h3 className="text-2xl font-black text-rose-500 mt-1">{stats.notInterested}</h3>
-            <span className="text-[10px] text-slate-400 font-medium">Opted out / DNC</span>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <button
-              onClick={() => handleDownloadPdf('Not Interested')}
-              className="p-2 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors"
-              title="Download Not Interested PDF"
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <div className="h-11 w-11 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
-              <XCircle className="h-5 w-5" />
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+            <div>
+              <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Site Visits</p>
+              <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{periodStats.siteVisits}</h3>
+              <span className="text-[10px] text-slate-400 font-medium">Appointments</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleDownloadPdf('Site Visit')}
+                className="p-1.5 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors"
+                title="Download Site Visits PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <Calendar className="h-4.5 w-4.5" />
+              </div>
             </div>
           </div>
-        </div>
 
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+            <div>
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider">Future Plan</p>
+              <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{periodStats.futurePlan}</h3>
+              <span className="text-[10px] text-slate-400 font-medium">Follow-up needed</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleDownloadPdf('Future Plan')}
+                className="p-1.5 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/60 transition-colors"
+                title="Download Future Plan Leads PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Clock className="h-4.5 w-4.5" />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
+            <div>
+              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">Not Interested</p>
+              <h3 className="text-2xl font-black text-rose-500 mt-1">{periodStats.notInterested}</h3>
+              <span className="text-[10px] text-slate-400 font-medium">Opted out / DNC</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={() => handleDownloadPdf('Not Interested')}
+                className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors"
+                title="Download Not Interested PDF"
+              >
+                <Download className="h-3.5 w-3.5" />
+              </button>
+              <div className="h-10 w-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+                <XCircle className="h-4.5 w-4.5" />
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}

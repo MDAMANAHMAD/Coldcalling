@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     const phoneNumber = body.phoneNumber || '+918693081506';
     const customerName = body.customerName || 'Aman';
     const userEmail = (body.userEmail || 'test@gmail.com').trim().toLowerCase();
+    const voiceSpeed = Number(body.voiceSpeed ?? body.voice_speed) || 0.94;
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
@@ -38,14 +39,15 @@ export async function POST(req: NextRequest) {
 
     const { client: sipClient, trunkId } = getSipClient();
 
-    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} with trunk ${trunkId} for user: ${userEmail}`);
+    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} with trunk ${trunkId} for user: ${userEmail} (speed=${voiceSpeed})`);
 
     const metadata = JSON.stringify({
       customer_name: customerName,
       phone: safePhone,
       phone_number: safePhone,
       user_email: userEmail,
-      initiated_from: 'web_dashboard'
+      initiated_from: 'web_dashboard',
+      voice_speed: voiceSpeed,
     });
 
     const participant = await sipClient.createSipParticipant(
