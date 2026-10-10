@@ -49,10 +49,10 @@ export default function LoginPage() {
             <PhoneCall className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            Gayatri AI
+            Qualivo
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            AI Real Estate Telephony & Cold Calling Platform
+            AI Real Estate Telephony & Voice Agent Platform
           </p>
         </div>
 

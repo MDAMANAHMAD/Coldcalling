@@ -65,11 +65,11 @@ export default function Header() {
           <PhoneCall className="h-5 w-5" />
         </div>
         <div>
-          <h1 className="font-extrabold text-sm md:text-base text-slate-900 dark:text-white leading-tight">
-            Gayatri AI <span className="text-blue-600 font-black">Cold Calling</span>
+          <h1 className="font-extrabold text-sm md:text-base text-slate-900 dark:text-white leading-tight flex items-center gap-1.5">
+            Qualivo <span className="text-blue-600 dark:text-blue-400 font-black">AI Telephony</span>
           </h1>
           <p className="text-[10px] text-slate-400 font-medium">
-            Live Telephony & Property Appointment Intelligence
+            Gayatri Voice Intelligence & Real Estate Appointment Platform
           </p>
         </div>
       </div>

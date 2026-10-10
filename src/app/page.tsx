@@ -38,7 +38,12 @@ import {
   ChevronDown,
   BarChart3,
   Save,
-  Check
+  Check,
+  Wallet,
+  ExternalLink,
+  ShieldCheck,
+  AlertTriangle,
+  Edit3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
@@ -279,6 +284,81 @@ export default function ColdCallingHomePage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // ── Qualivo Active Subscriptions & Recharge State ──
+  interface SubscriptionItem {
+    id: string;
+    name: string;
+    provider: string;
+    role: string;
+    allocatedBalance: number;
+    currency: string;
+    unit: string;
+    rateDescription: string;
+    rechargeUrl: string;
+    rechargeNote: string;
+    consumed: number;
+    remaining: number;
+    status: string;
+    isLow: boolean;
+  }
+
+  const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
+  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [newSubBalance, setNewSubBalance] = useState<string>('');
+  const [subUpdating, setSubUpdating] = useState(false);
+  const [activeUsageStats, setActiveUsageStats] = useState<{
+    totalCalls: number;
+    totalMinutes: number;
+    estimatedChars: number;
+    estimatedTokens: number;
+  }>({ totalCalls: 0, totalMinutes: 0, estimatedChars: 0, estimatedTokens: 0 });
+
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      setLoadingSubscriptions(true);
+      const res = await fetch('/api/subscriptions');
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.subscriptions)) {
+        setSubscriptions(data.subscriptions);
+        if (data.activeUsageStats) {
+          setActiveUsageStats(data.activeUsageStats);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load subscriptions:', e);
+    } finally {
+      setLoadingSubscriptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
+
+  const handleSaveSubBalance = async (serviceId: string) => {
+    const val = parseFloat(newSubBalance);
+    if (isNaN(val) || val < 0) return;
+    setSubUpdating(true);
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId, newBalance: val }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        await fetchSubscriptions();
+        setEditingSubId(null);
+        setNewSubBalance('');
+      }
+    } catch (e) {
+      console.error('Failed to update subscription balance:', e);
+    } finally {
+      setSubUpdating(false);
+    }
+  };
 
   // Load persisted voice speed on mount
   useEffect(() => {
@@ -965,7 +1045,7 @@ export default function ColdCallingHomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Gayatri AI • Kusha Cloned Voice Engine</span>
+                  <span>Qualivo • Gayatri Voice AI</span>
                 </div>
                 <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
                   <User className="h-3.5 w-3.5 text-emerald-400" />
@@ -973,10 +1053,10 @@ export default function ColdCallingHomePage() {
                 </div>
               </div>
               <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                1-Click Outbound Voice AI Call
+                Qualivo 1-Click Outbound Voice AI Call
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
+                Instantly dial any customer phone number. Qualivo AI Voice Agent (Gayatri) introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
               </p>
             </div>
 
@@ -1468,7 +1548,219 @@ export default function ColdCallingHomePage() {
         </div>
       </div>
 
-      {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}
+      {/* 3. QUALIVO ACTIVE SERVICE SUBSCRIPTIONS & RECHARGE STATUS */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-sm space-y-6">
+        
+        {/* Header Bar */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                <Wallet className="h-5 w-5" />
+              </div>
+              <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+                <span>Qualivo Active Subscriptions & Recharge Status</span>
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-bold border border-blue-500/20">
+                Project: Qualivo
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
+              Live recharge balances & usage monitoring for <strong>primary services in active use</strong>. Fallback providers (ElevenLabs, Groq, Fireworks) are excluded.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={fetchSubscriptions}
+              disabled={loadingSubscriptions}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer shadow-sm"
+              title="Refresh Recharge Status"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loadingSubscriptions ? 'animate-spin text-blue-600' : ''}`} />
+              <span>Refresh Status</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 5 Active Services Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {subscriptions.map((item) => {
+            const pct = item.allocatedBalance > 0 
+              ? Math.max(0, Math.min(100, Math.round((item.remaining / item.allocatedBalance) * 100))) 
+              : 100;
+            const isEditing = editingSubId === item.id;
+
+            return (
+              <div
+                key={item.id}
+                className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between ${
+                  item.isLow
+                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm shadow-rose-500/5'
+                    : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-600'
+                }`}
+              >
+                <div className="space-y-3">
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        {item.provider}
+                      </span>
+                      <h4 className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight mt-0.5">
+                        {item.name}
+                      </h4>
+                    </div>
+
+                    <span
+                      className={`px-2 py-0.5 text-[10px] font-black rounded-full border ${
+                        item.isLow
+                          ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse'
+                          : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                      }`}
+                    >
+                      {item.isLow ? '⚠️ Needs Recharge' : '✓ Active & Healthy'}
+                    </span>
+                  </div>
+
+                  {/* Role description */}
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    {item.role}
+                  </p>
+
+                  {/* Balance Display */}
+                  <div className="pt-2">
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                        Remaining:
+                      </span>
+                      <div className="text-right">
+                        <span className="text-lg font-black text-slate-900 dark:text-white font-mono">
+                          {item.unit}{item.remaining}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-medium ml-1">
+                          / {item.unit}{item.allocatedBalance}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          item.isLow
+                            ? 'bg-rose-500'
+                            : pct > 50
+                            ? 'bg-emerald-500'
+                            : 'bg-amber-500'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 font-medium">
+                      <span>Consumed: {item.unit}{item.consumed}</span>
+                      <span>{pct}% balance left</span>
+                    </div>
+                  </div>
+
+                  {/* Rate / Note */}
+                  <div className="text-[10px] bg-white dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 space-y-0.5">
+                    <p><strong className="text-slate-700 dark:text-slate-300">Rate:</strong> {item.rateDescription}</p>
+                    <p className="italic text-slate-400">ℹ️ {item.rechargeNote}</p>
+                  </div>
+                </div>
+
+                {/* Actions & Inline Edit */}
+                <div className="pt-4 border-t border-slate-200/60 dark:border-slate-700/60 mt-3 space-y-2">
+                  {isEditing ? (
+                    <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-blue-400 dark:border-blue-600 space-y-2">
+                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                        Update Allocated Balance ({item.unit}):
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          step="any"
+                          value={newSubBalance}
+                          onChange={(e) => setNewSubBalance(e.target.value)}
+                          placeholder={`E.g. ${item.allocatedBalance}`}
+                          className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveSubBalance(item.id)}
+                          disabled={subUpdating}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer transition-all"
+                        >
+                          {subUpdating ? '...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditingSubId(null); setNewSubBalance(''); }}
+                          className="px-2 py-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingSubId(item.id);
+                          setNewSubBalance(String(item.allocatedBalance));
+                        }}
+                        className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                        <span>Update Balance</span>
+                      </button>
+
+                      <a
+                        href={item.rechargeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
+                          item.isLow
+                            ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-600/30'
+                            : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-600/20'
+                        }`}
+                      >
+                        <span>Recharge</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Excluded Fallback Services Banner & Aggregate Metrics */}
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <span>Standby Fallback Services (Zero Active Billing)</span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <strong>ElevenLabs Flash</strong> (Backup TTS) • <strong>Groq LPU Llama 3.3</strong> (Backup LLM) • <strong>Fireworks AI</strong> (Backup LLM) remain on standby. No credits consumed during standard operations.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+            <span>Calls Placed: <strong className="text-blue-600 dark:text-blue-400">{activeUsageStats.totalCalls}</strong></span>
+            <span>•</span>
+            <span>Talk Time: <strong className="text-emerald-600 dark:text-emerald-400">{activeUsageStats.totalMinutes}m</strong></span>
+            <span>•</span>
+            <span>Spoken Chars: <strong className="text-purple-600 dark:text-purple-400">{activeUsageStats.estimatedChars.toLocaleString()}</strong></span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 4. QUALIVO CALL LOGS & INTELLIGENCE TABLE */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         
         {/* Table Header Controls */}
@@ -1476,7 +1768,7 @@ export default function ColdCallingHomePage() {
           <div>
             <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center space-x-2">
               <PhoneCall className="h-5 w-5 text-blue-600" />
-              <span>Gayatri AI Call Logs & Transcripts</span>
+              <span>Qualivo Call Logs & Transcripts</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5 font-medium">
               Every customer conversation recorded, transcribed, and tagged with lead sentiment.
@@ -1620,7 +1912,7 @@ export default function ColdCallingHomePage() {
           {loading ? (
             <div className="py-16 text-center text-xs text-slate-400">
               <div className="h-6 w-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
-              Loading Gayatri call logs...
+              Loading Qualivo call logs...
             </div>
           ) : filteredCalls.length === 0 ? (
             <div className="py-16 text-center text-xs text-slate-400 space-y-2">

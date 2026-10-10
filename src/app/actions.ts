@@ -196,7 +196,7 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         participantMetadata: metadata,
-        playRingtone: true,
+        playRingtone: false, // Do not generate synthetic ringtone into room audio
         hidePhoneNumber: false,
         waitUntilAnswered: false, // Non-blocking dispatch
       }
