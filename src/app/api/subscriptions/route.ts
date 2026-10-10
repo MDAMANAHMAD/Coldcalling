@@ -4,19 +4,20 @@ import { getDb, saveDb } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Base default recharge balances if not customized by user yet
+// Base default recharge balances reflecting live account state
 const DEFAULT_SUBSCRIPTIONS = {
   vobiz: {
     id: 'vobiz',
     name: 'Vobiz Telephony (SIP Trunk)',
     provider: 'Vobiz AI',
     role: 'Carrier line for outbound calls & caller ID (+918071580297)',
-    allocatedBalance: 500.0, // INR
+    allocatedBalance: 500.0, // Standard wallet target (INR)
+    currentBalance: -488.0, // Live carrier balance: -₹488 (overdrawn/suspended)
     currency: 'INR',
     unit: '₹',
     rateDescription: '₹0.40 / minute outbound call billing',
     rechargeUrl: 'https://vobiz.ai',
-    rechargeNote: 'Prepaid wallet recharge required for carrier SIP dialer',
+    rechargeNote: 'Live Vobiz carrier balance is -₹488.00. Recharge wallet at vobiz.ai to resume outbound calls.',
     minThreshold: 50.0,
   },
   cartesia: {
@@ -25,11 +26,12 @@ const DEFAULT_SUBSCRIPTIONS = {
     provider: 'Cartesia AI',
     role: 'Gayatri Kusha Cloned Voice (sonic-3.5 Real-Time TTS)',
     allocatedBalance: 25.0, // USD
+    currentBalance: 25.0,
     currency: 'USD',
     unit: '$',
     rateDescription: '~$0.075 / 1,000 characters synthesized',
     rechargeUrl: 'https://play.cartesia.ai',
-    rechargeNote: 'Prepaid character credits / monthly tier renewal',
+    rechargeNote: 'Prepaid character credits on Kusha voice model',
     minThreshold: 3.0,
   },
   deepgram: {
@@ -38,6 +40,7 @@ const DEFAULT_SUBSCRIPTIONS = {
     provider: 'Deepgram (Nova-3)',
     role: 'Real-time conversational Hindi & English speech recognition',
     allocatedBalance: 20.0, // USD
+    currentBalance: 20.0,
     currency: 'USD',
     unit: '$',
     rateDescription: '$0.0043 / audio minute stream',
@@ -51,6 +54,7 @@ const DEFAULT_SUBSCRIPTIONS = {
     provider: 'LiveKit Cloud',
     role: 'Cloud WebRTC audio server & SIP gateway bridge (cold-calling-j7qhnkas)',
     allocatedBalance: 50.0, // GB free monthly
+    currentBalance: 50.0,
     currency: 'GB',
     unit: 'GB',
     rateDescription: 'Includes 50 GB free monthly bandwidth & agent minutes',
@@ -64,6 +68,7 @@ const DEFAULT_SUBSCRIPTIONS = {
     provider: 'Google AI Studio',
     role: 'Ultra-low latency conversation logic (gemini-3.5-flash-lite)',
     allocatedBalance: 100.0, // % quota
+    currentBalance: 100.0,
     currency: '%',
     unit: '%',
     rateDescription: '$0.075 / 1M input tokens, $0.30 / 1M output tokens',
@@ -100,47 +105,59 @@ export async function GET() {
 
     const savedSubscriptions = (db as any).subscriptions || {};
 
+    // Helper to evaluate live balance & status
+    const calculateServiceState = (
+      config: typeof DEFAULT_SUBSCRIPTIONS['vobiz'],
+      consumed: number
+    ) => {
+      const saved = savedSubscriptions[config.id];
+      // Live balance: either user-saved balance or default (e.g. -488 for Vobiz)
+      const rawBalance = saved?.currentBalance ?? saved?.allocatedBalance ?? config.currentBalance;
+      const allocated = saved?.allocatedBalance ?? config.allocatedBalance;
+      const remaining = Math.round(rawBalance * 100) / 100;
+
+      let status = 'Active & Healthy';
+      let isLow = false;
+      let isNegative = false;
+
+      if (remaining < 0) {
+        status = `🚨 Suspended (${config.unit}${remaining})`;
+        isLow = true;
+        isNegative = true;
+      } else if (remaining === 0) {
+        status = '⚠️ Depleted (Recharge Required)';
+        isLow = true;
+      } else if (remaining <= config.minThreshold) {
+        status = '⚠️ Low Balance';
+        isLow = true;
+      }
+
+      // Percentage calculation (clamped 0 to 100%, 0% if negative)
+      const pct = remaining <= 0 
+        ? 0 
+        : allocated > 0 
+        ? Math.min(100, Math.round((remaining / allocated) * 100)) 
+        : 100;
+
+      return {
+        ...config,
+        allocatedBalance: allocated,
+        currentBalance: rawBalance,
+        consumed,
+        remaining,
+        percentRemaining: pct,
+        status,
+        isLow,
+        isNegative,
+      };
+    };
+
     const items = [
-      {
-        ...DEFAULT_SUBSCRIPTIONS.vobiz,
-        allocatedBalance: savedSubscriptions.vobiz?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.vobiz.allocatedBalance,
-        consumed: consumedVobizInr,
-        remaining: Math.max(0, Math.round(((savedSubscriptions.vobiz?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.vobiz.allocatedBalance) - consumedVobizInr) * 100) / 100),
-        status: ((savedSubscriptions.vobiz?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.vobiz.allocatedBalance) - consumedVobizInr) <= DEFAULT_SUBSCRIPTIONS.vobiz.minThreshold ? 'Needs Recharge' : 'Active & Healthy',
-        isLow: ((savedSubscriptions.vobiz?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.vobiz.allocatedBalance) - consumedVobizInr) <= DEFAULT_SUBSCRIPTIONS.vobiz.minThreshold,
-      },
-      {
-        ...DEFAULT_SUBSCRIPTIONS.cartesia,
-        allocatedBalance: savedSubscriptions.cartesia?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.cartesia.allocatedBalance,
-        consumed: consumedCartesiaUsd,
-        remaining: Math.max(0, Math.round(((savedSubscriptions.cartesia?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.cartesia.allocatedBalance) - consumedCartesiaUsd) * 100) / 100),
-        status: ((savedSubscriptions.cartesia?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.cartesia.allocatedBalance) - consumedCartesiaUsd) <= DEFAULT_SUBSCRIPTIONS.cartesia.minThreshold ? 'Needs Recharge' : 'Active & Healthy',
-        isLow: ((savedSubscriptions.cartesia?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.cartesia.allocatedBalance) - consumedCartesiaUsd) <= DEFAULT_SUBSCRIPTIONS.cartesia.minThreshold,
-      },
-      {
-        ...DEFAULT_SUBSCRIPTIONS.deepgram,
-        allocatedBalance: savedSubscriptions.deepgram?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.deepgram.allocatedBalance,
-        consumed: consumedDeepgramUsd,
-        remaining: Math.max(0, Math.round(((savedSubscriptions.deepgram?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.deepgram.allocatedBalance) - consumedDeepgramUsd) * 100) / 100),
-        status: ((savedSubscriptions.deepgram?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.deepgram.allocatedBalance) - consumedDeepgramUsd) <= DEFAULT_SUBSCRIPTIONS.deepgram.minThreshold ? 'Needs Recharge' : 'Active & Healthy',
-        isLow: ((savedSubscriptions.deepgram?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.deepgram.allocatedBalance) - consumedDeepgramUsd) <= DEFAULT_SUBSCRIPTIONS.deepgram.minThreshold,
-      },
-      {
-        ...DEFAULT_SUBSCRIPTIONS.livekit,
-        allocatedBalance: savedSubscriptions.livekit?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.livekit.allocatedBalance,
-        consumed: consumedLivekitGb,
-        remaining: Math.max(0, Math.round(((savedSubscriptions.livekit?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.livekit.allocatedBalance) - consumedLivekitGb) * 100) / 100),
-        status: 'Active & Healthy',
-        isLow: false,
-      },
-      {
-        ...DEFAULT_SUBSCRIPTIONS.gemini,
-        allocatedBalance: savedSubscriptions.gemini?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.gemini.allocatedBalance,
-        consumed: consumedGeminiPercent,
-        remaining: Math.max(0, Math.round(((savedSubscriptions.gemini?.allocatedBalance ?? DEFAULT_SUBSCRIPTIONS.gemini.allocatedBalance) - consumedGeminiPercent) * 10) / 10),
-        status: 'Active & Healthy',
-        isLow: false,
-      },
+      calculateServiceState(DEFAULT_SUBSCRIPTIONS.vobiz, consumedVobizInr),
+      calculateServiceState(DEFAULT_SUBSCRIPTIONS.cartesia, consumedCartesiaUsd),
+      calculateServiceState(DEFAULT_SUBSCRIPTIONS.deepgram, consumedDeepgramUsd),
+      calculateServiceState(DEFAULT_SUBSCRIPTIONS.livekit, consumedLivekitGb),
+      calculateServiceState(DEFAULT_SUBSCRIPTIONS.gemini, consumedGeminiPercent),
     ];
 
     const needsRechargeCount = items.filter(i => i.isLow).length;
@@ -174,11 +191,11 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { serviceId, newBalance } = body;
+    const { serviceId, newBalance, allocatedBalance } = body;
 
-    if (!serviceId || typeof newBalance !== 'number' || newBalance < 0) {
+    if (!serviceId || typeof newBalance !== 'number' || isNaN(newBalance)) {
       return NextResponse.json(
-        { success: false, message: 'Invalid serviceId or balance.' },
+        { success: false, message: 'Invalid serviceId or numeric balance required.' },
         { status: 400 }
       );
     }
@@ -191,13 +208,19 @@ export async function POST(req: NextRequest) {
       (db as any).subscriptions[serviceId] = {};
     }
 
-    (db as any).subscriptions[serviceId].allocatedBalance = Math.round(newBalance * 100) / 100;
+    const roundedVal = Math.round(newBalance * 100) / 100;
+    (db as any).subscriptions[serviceId].currentBalance = roundedVal;
+    if (typeof allocatedBalance === 'number' && !isNaN(allocatedBalance) && allocatedBalance > 0) {
+      (db as any).subscriptions[serviceId].allocatedBalance = Math.round(allocatedBalance * 100) / 100;
+    } else if (roundedVal > 0 && !(db as any).subscriptions[serviceId].allocatedBalance) {
+      (db as any).subscriptions[serviceId].allocatedBalance = roundedVal;
+    }
     (db as any).subscriptions[serviceId].updatedAt = new Date().toISOString();
     saveDb(db);
 
     return NextResponse.json({
       success: true,
-      message: `Updated ${serviceId} allocated balance to ${newBalance}.`,
+      message: `Updated ${serviceId} live balance to ${newBalance}.`,
       updated: (db as any).subscriptions[serviceId],
     });
   } catch (err: any) {

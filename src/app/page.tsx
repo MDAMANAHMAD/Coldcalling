@@ -292,6 +292,7 @@ export default function ColdCallingHomePage() {
     provider: string;
     role: string;
     allocatedBalance: number;
+    currentBalance?: number;
     currency: string;
     unit: string;
     rateDescription: string;
@@ -299,8 +300,10 @@ export default function ColdCallingHomePage() {
     rechargeNote: string;
     consumed: number;
     remaining: number;
+    percentRemaining?: number;
     status: string;
     isLow: boolean;
+    isNegative?: boolean;
   }
 
   const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
@@ -321,7 +324,32 @@ export default function ColdCallingHomePage() {
       const res = await fetch('/api/subscriptions');
       const data = await res.json();
       if (data?.success && Array.isArray(data.subscriptions)) {
-        setSubscriptions(data.subscriptions);
+        // Read any local overrides for instantaneous response
+        let localOverrides: Record<string, number> = {};
+        try {
+          const stored = localStorage.getItem('qualivo_subscriptions_balance');
+          if (stored) localOverrides = JSON.parse(stored);
+        } catch (e) {}
+
+        const mapped = data.subscriptions.map((s: SubscriptionItem) => {
+          if (localOverrides[s.id] !== undefined) {
+            const rawVal = localOverrides[s.id];
+            const isNeg = rawVal < 0;
+            const pct = rawVal <= 0 ? 0 : s.allocatedBalance > 0 ? Math.min(100, Math.round((rawVal / s.allocatedBalance) * 100)) : 100;
+            return {
+              ...s,
+              remaining: rawVal,
+              currentBalance: rawVal,
+              percentRemaining: pct,
+              isNegative: isNeg,
+              isLow: rawVal <= 50,
+              status: isNeg ? `🚨 Suspended (${s.unit}${rawVal})` : rawVal <= 50 ? '⚠️ Low Balance' : '✓ Active & Healthy'
+            };
+          }
+          return s;
+        });
+
+        setSubscriptions(mapped);
         if (data.activeUsageStats) {
           setActiveUsageStats(data.activeUsageStats);
         }
@@ -339,20 +367,26 @@ export default function ColdCallingHomePage() {
 
   const handleSaveSubBalance = async (serviceId: string) => {
     const val = parseFloat(newSubBalance);
-    if (isNaN(val) || val < 0) return;
+    if (isNaN(val)) return;
     setSubUpdating(true);
     try {
-      const res = await fetch('/api/subscriptions', {
+      // 1. Immediately store in localStorage
+      try {
+        const stored = localStorage.getItem('qualivo_subscriptions_balance');
+        const map = stored ? JSON.parse(stored) : {};
+        map[serviceId] = val;
+        localStorage.setItem('qualivo_subscriptions_balance', JSON.stringify(map));
+      } catch (e) {}
+
+      // 2. Sync to server
+      await fetch('/api/subscriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ serviceId, newBalance: val }),
       });
-      const data = await res.json();
-      if (data?.success) {
-        await fetchSubscriptions();
-        setEditingSubId(null);
-        setNewSubBalance('');
-      }
+      await fetchSubscriptions();
+      setEditingSubId(null);
+      setNewSubBalance('');
     } catch (e) {
       console.error('Failed to update subscription balance:', e);
     } finally {
@@ -495,6 +529,9 @@ export default function ColdCallingHomePage() {
       userEmail: currentUser?.email || 'test@gmail.com',
     });
   };
+
+  const vobizSub = useMemo(() => subscriptions.find(s => s.id === 'vobiz'), [subscriptions]);
+  const vobizNegative = Boolean(vobizSub && (vobizSub.remaining < 0 || vobizSub.isNegative));
 
   const loadData = async () => {
     try {
@@ -1039,6 +1076,39 @@ export default function ColdCallingHomePage() {
         <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 space-y-6">
+          {/* Live Carrier Alert Banner when Vobiz balance is negative */}
+          {vobizNegative && (
+            <div className="p-4 rounded-2xl bg-rose-500/20 border border-rose-500/50 backdrop-blur-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-rose-200 shadow-xl ring-1 ring-rose-500/30">
+              <div className="flex items-center space-x-3">
+                <div className="h-9 w-9 rounded-xl bg-rose-500/30 flex items-center justify-center flex-shrink-0 animate-pulse text-rose-300">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-extrabold text-white text-xs">
+                      Carrier Telephony Alert: Vobiz Balance is Overdrawn (-₹{Math.abs(vobizSub?.remaining ?? 488).toFixed(2)})
+                    </p>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black uppercase tracking-wider">
+                      Carrier Suspended
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-rose-200/90 font-medium mt-0.5">
+                    Live Vobiz SIP carrier requires a wallet recharge before phone calls can ring. Please recharge at <strong>vobiz.ai</strong>.
+                  </p>
+                </div>
+              </div>
+              <a
+                href="https://vobiz.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30 flex-shrink-0 transition-all cursor-pointer"
+              >
+                <span>Recharge Vobiz Now</span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          )}
+
           {/* Top Row: Description on Left, Dial Form on Right */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
             <div className="max-w-xl space-y-2">
@@ -1586,7 +1656,12 @@ export default function ColdCallingHomePage() {
         {/* 5 Active Services Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {subscriptions.map((item) => {
-            const pct = item.allocatedBalance > 0 
+            const isNegative = Boolean(item.isNegative || item.remaining < 0);
+            const pct = isNegative 
+              ? 0 
+              : item.percentRemaining !== undefined
+              ? item.percentRemaining
+              : item.allocatedBalance > 0 
               ? Math.max(0, Math.min(100, Math.round((item.remaining / item.allocatedBalance) * 100))) 
               : 100;
             const isEditing = editingSubId === item.id;
@@ -1595,7 +1670,9 @@ export default function ColdCallingHomePage() {
               <div
                 key={item.id}
                 className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                  item.isLow
+                  isNegative
+                    ? 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-400 dark:border-rose-800 shadow-md shadow-rose-500/10 ring-1 ring-rose-500/20'
+                    : item.isLow
                     ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm shadow-rose-500/5'
                     : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-600'
                 }`}
@@ -1614,12 +1691,14 @@ export default function ColdCallingHomePage() {
 
                     <span
                       className={`px-2 py-0.5 text-[10px] font-black rounded-full border ${
-                        item.isLow
+                        isNegative
+                          ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-sm'
+                          : item.isLow
                           ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse'
                           : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
                       }`}
                     >
-                      {item.isLow ? '⚠️ Needs Recharge' : '✓ Active & Healthy'}
+                      {item.status}
                     </span>
                   </div>
 
@@ -1628,15 +1707,23 @@ export default function ColdCallingHomePage() {
                     {item.role}
                   </p>
 
+                  {/* Negative Callout Warning */}
+                  {isNegative && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] font-bold flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-rose-500 flex-shrink-0 animate-bounce" />
+                      <span>Wallet overdrawn! Carrier line disconnected until recharge is completed.</span>
+                    </div>
+                  )}
+
                   {/* Balance Display */}
-                  <div className="pt-2">
+                  <div className="pt-1">
                     <div className="flex items-baseline justify-between mb-1">
                       <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
                         Remaining:
                       </span>
                       <div className="text-right">
-                        <span className="text-lg font-black text-slate-900 dark:text-white font-mono">
-                          {item.unit}{item.remaining}
+                        <span className={`text-lg font-black font-mono ${isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                          {item.remaining < 0 ? `-${item.unit}${Math.abs(item.remaining).toFixed(2)}` : `${item.unit}${item.remaining}`}
                         </span>
                         <span className="text-[10px] text-slate-400 font-medium ml-1">
                           / {item.unit}{item.allocatedBalance}
@@ -1648,19 +1735,23 @@ export default function ColdCallingHomePage() {
                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                       <div
                         className={`h-2 rounded-full transition-all duration-500 ${
-                          item.isLow
+                          isNegative
+                            ? 'bg-rose-600'
+                            : item.isLow
                             ? 'bg-rose-500'
                             : pct > 50
                             ? 'bg-emerald-500'
                             : 'bg-amber-500'
                         }`}
-                        style={{ width: `${pct}%` }}
+                        style={{ width: `${isNegative ? 0 : pct}%` }}
                       />
                     </div>
 
                     <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 font-medium">
                       <span>Consumed: {item.unit}{item.consumed}</span>
-                      <span>{pct}% balance left</span>
+                      <span className={isNegative ? 'text-rose-600 dark:text-rose-400 font-extrabold' : ''}>
+                        {isNegative ? `🚨 Overdrawn (-${item.unit}${Math.abs(item.remaining)})` : `${pct}% balance left`}
+                      </span>
                     </div>
                   </div>
 
@@ -1676,7 +1767,7 @@ export default function ColdCallingHomePage() {
                   {isEditing ? (
                     <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-blue-400 dark:border-blue-600 space-y-2">
                       <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                        Update Allocated Balance ({item.unit}):
+                        Update Live Balance ({item.unit}):
                       </p>
                       <div className="flex items-center gap-1.5">
                         <input
@@ -1684,7 +1775,7 @@ export default function ColdCallingHomePage() {
                           step="any"
                           value={newSubBalance}
                           onChange={(e) => setNewSubBalance(e.target.value)}
-                          placeholder={`E.g. ${item.allocatedBalance}`}
+                          placeholder={`E.g. ${item.remaining}`}
                           className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
                           autoFocus
                         />
@@ -1708,7 +1799,7 @@ export default function ColdCallingHomePage() {
                       <button
                         onClick={() => {
                           setEditingSubId(item.id);
-                          setNewSubBalance(String(item.allocatedBalance));
+                          setNewSubBalance(String(item.remaining));
                         }}
                         className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
                       >
@@ -1721,7 +1812,9 @@ export default function ColdCallingHomePage() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
-                          item.isLow
+                          isNegative
+                            ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/40 ring-1 ring-rose-400'
+                            : item.isLow
                             ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-600/30'
                             : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-600/20'
                         }`}
