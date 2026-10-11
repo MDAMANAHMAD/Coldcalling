@@ -38,31 +38,31 @@ export function exportLeadsToPdf({
       title: 'INTERESTED CLIENTS LEADS REPORT',
       subtitle: 'High-intent prospective buyers interested in Sai Complex Dombivli East (1 BHK / 2 BHK)',
       primaryColor: [16, 185, 129], // Emerald green
-      filename: `Qualivo_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `Gayatri_AI_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     'Site Visit': {
       title: 'SITE VISIT SCHEDULED LEADS REPORT',
       subtitle: 'Confirmed site visit appointments booked for Sai Complex Dombivli East',
       primaryColor: [37, 99, 235], // Royal blue
-      filename: `Qualivo_Site_Visits_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `Gayatri_AI_Site_Visits_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     'Future Plan': {
       title: 'FUTURE PLAN / FOLLOW-UP LEADS REPORT',
       subtitle: 'Clients requesting callback later, future purchase plans, or postponed decision',
       primaryColor: [217, 119, 6], // Amber
-      filename: `Qualivo_Future_Plan_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `Gayatri_AI_Future_Plan_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     'Not Interested': {
       title: 'NOT INTERESTED / DNC LEADS REPORT',
       subtitle: 'Opted out, wrong numbers, or not currently looking to purchase property',
       primaryColor: [225, 29, 72], // Rose red
-      filename: `Qualivo_Not_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `Gayatri_AI_Not_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     All: {
       title: 'COMPLETE CALL LOGS & LEADS REPORT',
       subtitle: 'Comprehensive log of all AI outbound calls conducted by Gayatri Voice Agent',
       primaryColor: [30, 41, 59], // Slate navy
-      filename: `Qualivo_All_Leads_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
+      filename: `Gayatri_AI_All_Leads_Report_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
   };
 
@@ -83,7 +83,7 @@ export function exportLeadsToPdf({
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text('QUALIVO AI — REAL ESTATE TELEPHONY PLATFORM', 14, 11);
+  doc.text('GAYATRI AI — REAL ESTATE COLD CALLING', 14, 11);
 
   // Subtitle / Report Title
   doc.setFont('helvetica', 'normal');

@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         participantMetadata: metadata,
-        playRingtone: false, // Do not generate synthetic ringtone into room audio
+        playRingtone: true,
         waitUntilAnswered: false, // Non-blocking dispatch
       }
     );

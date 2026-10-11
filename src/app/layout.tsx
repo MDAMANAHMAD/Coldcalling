@@ -6,8 +6,8 @@ import AppLayout from "@/components/AppLayout";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Qualivo — AI Real Estate Telephony Platform",
-  description: "Qualivo AI Voice Agent platform for real estate tele-calling. Dials customers, pitches Sai Complex Dombivli East, handles objections in Hindi, Marathi and English, and books site visits automatically.",
+  title: "Gayatri AI — Cold Calling",
+  description: "Gayatri AI Voice Agent for real estate cold calling. Dials customers, pitches Sai Complex Dombivli East, handles objections in Hindi, Marathi and English, and books site visits automatically.",
 };
 
 export default function RootLayout({

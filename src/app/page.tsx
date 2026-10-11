@@ -36,14 +36,7 @@ import {
   Square,
   FileText,
   ChevronDown,
-  BarChart3,
-  Save,
-  Check,
-  Wallet,
-  ExternalLink,
-  ShieldCheck,
-  AlertTriangle,
-  Edit3
+  BarChart3
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
@@ -216,7 +209,6 @@ export default function ColdCallingHomePage() {
   // Dynamic Voice Speed State & Persistence
   const [voiceSpeed, setVoiceSpeed] = useState<number>(0.94);
   const [isSavingSpeed, setIsSavingSpeed] = useState<boolean>(false);
-  const [speedSavedSuccess, setSpeedSavedSuccess] = useState<boolean>(false);
 
   // Analytics Period Filter State
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
@@ -285,116 +277,6 @@ export default function ColdCallingHomePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── Qualivo Active Subscriptions & Recharge State ──
-  interface SubscriptionItem {
-    id: string;
-    name: string;
-    provider: string;
-    role: string;
-    allocatedBalance: number;
-    currentBalance?: number;
-    currency: string;
-    unit: string;
-    rateDescription: string;
-    rechargeUrl: string;
-    rechargeNote: string;
-    consumed: number;
-    remaining: number;
-    percentRemaining?: number;
-    status: string;
-    isLow: boolean;
-    isNegative?: boolean;
-  }
-
-  const [subscriptions, setSubscriptions] = useState<SubscriptionItem[]>([]);
-  const [showSubscriptionsModal, setShowSubscriptionsModal] = useState(false);
-  const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
-  const [editingSubId, setEditingSubId] = useState<string | null>(null);
-  const [newSubBalance, setNewSubBalance] = useState<string>('');
-  const [subUpdating, setSubUpdating] = useState(false);
-  const [activeUsageStats, setActiveUsageStats] = useState<{
-    totalCalls: number;
-    totalMinutes: number;
-    estimatedChars: number;
-    estimatedTokens: number;
-  }>({ totalCalls: 0, totalMinutes: 0, estimatedChars: 0, estimatedTokens: 0 });
-
-  const fetchSubscriptions = useCallback(async () => {
-    try {
-      setLoadingSubscriptions(true);
-      const res = await fetch('/api/subscriptions');
-      const data = await res.json();
-      if (data?.success && Array.isArray(data.subscriptions)) {
-        // Read any local overrides for instantaneous response
-        let localOverrides: Record<string, number> = {};
-        try {
-          const stored = localStorage.getItem('qualivo_subscriptions_balance');
-          if (stored) localOverrides = JSON.parse(stored);
-        } catch (e) {}
-
-        const mapped = data.subscriptions.map((s: SubscriptionItem) => {
-          if (localOverrides[s.id] !== undefined) {
-            const rawVal = localOverrides[s.id];
-            const isNeg = rawVal < 0;
-            const pct = rawVal <= 0 ? 0 : s.allocatedBalance > 0 ? Math.min(100, Math.round((rawVal / s.allocatedBalance) * 100)) : 100;
-            return {
-              ...s,
-              remaining: rawVal,
-              currentBalance: rawVal,
-              percentRemaining: pct,
-              isNegative: isNeg,
-              isLow: rawVal <= 50,
-              status: isNeg ? `🚨 Suspended (${s.unit}${rawVal})` : rawVal <= 50 ? '⚠️ Low Balance' : '✓ Active & Healthy'
-            };
-          }
-          return s;
-        });
-
-        setSubscriptions(mapped);
-        if (data.activeUsageStats) {
-          setActiveUsageStats(data.activeUsageStats);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to load subscriptions:', e);
-    } finally {
-      setLoadingSubscriptions(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchSubscriptions();
-  }, [fetchSubscriptions]);
-
-  const handleSaveSubBalance = async (serviceId: string) => {
-    const val = parseFloat(newSubBalance);
-    if (isNaN(val)) return;
-    setSubUpdating(true);
-    try {
-      // 1. Immediately store in localStorage
-      try {
-        const stored = localStorage.getItem('qualivo_subscriptions_balance');
-        const map = stored ? JSON.parse(stored) : {};
-        map[serviceId] = val;
-        localStorage.setItem('qualivo_subscriptions_balance', JSON.stringify(map));
-      } catch (e) {}
-
-      // 2. Sync to server
-      await fetch('/api/subscriptions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceId, newBalance: val }),
-      });
-      await fetchSubscriptions();
-      setEditingSubId(null);
-      setNewSubBalance('');
-    } catch (e) {
-      console.error('Failed to update subscription balance:', e);
-    } finally {
-      setSubUpdating(false);
-    }
-  };
-
   // Load persisted voice speed on mount
   useEffect(() => {
     try {
@@ -435,29 +317,6 @@ export default function ColdCallingHomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ voiceSpeed: rounded }),
       });
-      setSpeedSavedSuccess(true);
-      setTimeout(() => setSpeedSavedSuccess(false), 2500);
-    } catch (e) {
-      console.warn('Could not save voice speed to server:', e);
-    } finally {
-      setIsSavingSpeed(false);
-    }
-  };
-
-  const handleSaveVoiceSpeed = async () => {
-    const rounded = Math.round(voiceSpeed * 100) / 100;
-    try {
-      setIsSavingSpeed(true);
-      try {
-        localStorage.setItem('gayatri_voice_speed', String(rounded));
-      } catch {}
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voiceSpeed: rounded }),
-      });
-      setSpeedSavedSuccess(true);
-      setTimeout(() => setSpeedSavedSuccess(false), 3000);
     } catch (e) {
       console.warn('Could not save voice speed to server:', e);
     } finally {
@@ -531,9 +390,6 @@ export default function ColdCallingHomePage() {
     });
   };
 
-  const vobizSub = useMemo(() => subscriptions.find(s => s.id === 'vobiz'), [subscriptions]);
-  const vobizNegative = Boolean(vobizSub && (vobizSub.remaining < 0 || vobizSub.isNegative));
-
   const loadData = async () => {
     try {
       // 1. Fetch server logs from database (Server Action + direct API endpoint)
@@ -574,7 +430,7 @@ export default function ColdCallingHomePage() {
         console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
       }
 
-      // 2. Read preserved call history from browser storage
+      // 2. Read preserved call history from browser storage (purging corrupted fake templates)
       let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
       try {
         const stored = localStorage.getItem('gayatri_permanent_history');
@@ -584,6 +440,9 @@ export default function ColdCallingHomePage() {
             const name = (item.customerName || item.leadName || '').toLowerCase();
             const sid = (item.callSid || item.id || '').toLowerCase();
             if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
+            // Purge any corrupted dummy entries containing the fake fallback template
+            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Complex Dombivli East se. Humare paas premium one BHK'))) return false;
+            if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
             return true;
           });
         }
@@ -594,13 +453,16 @@ export default function ColdCallingHomePage() {
       // 3. Merge server and local history: SERVER LOGS ARE THE SINGLE SOURCE OF TRUTH
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
 
-      // First, seed with all authoritative server logs
+      // First, seed with all authoritative server logs (LiveKit Cloud persistent storage)
       const nowMs = Date.now();
       for (const item of serverLogs) {
         if (!item || item.callSid === 'gayatri-persistent-storage') continue;
         const name = (item.customerName || item.leadName || '').toLowerCase();
         const sid = (item.callSid || item.id || '').toLowerCase();
         if (sid.includes('probe') || name.includes('probe')) continue;
+        // Purge dummy corrupted records from server logs as well
+        if (item.transcript && item.transcript.includes('Haan boliye')) continue;
+        if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) continue;
 
         const key = item.callSid || item.id;
         if (!item.recordingUrl && item.callSid && !item.callSid.includes('probe')) {
@@ -1077,39 +939,18 @@ export default function ColdCallingHomePage() {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Qualivo • Gayatri Voice AI</span>
+                  <span>Gayatri AI • Kusha Cloned Voice Engine</span>
                 </div>
                 <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
                   <User className="h-3.5 w-3.5 text-emerald-400" />
                   <span>Account: <strong className="text-white">{currentUser?.email || 'test@gmail.com'}</strong></span>
                 </div>
-                {/* Compact Subscriptions & Recharge Trigger Pill */}
-                <button
-                  type="button"
-                  onClick={() => setShowSubscriptionsModal(true)}
-                  className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all cursor-pointer ${
-                    vobizNegative
-                      ? 'bg-rose-500/30 border-rose-400/60 text-rose-200 hover:bg-rose-500/40 shadow-sm'
-                      : 'bg-white/10 border-white/20 text-slate-200 hover:bg-white/20'
-                  }`}
-                  title="Click to view Active Service Subscriptions & Recharge Balances"
-                >
-                  <Wallet className="h-3.5 w-3.5 text-blue-300" />
-                  <span>Subscriptions & Recharge</span>
-                  {vobizNegative ? (
-                    <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[9px] font-black animate-pulse">
-                      🚨 -₹{Math.abs(vobizSub?.remaining ?? 488).toFixed(0)}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-emerald-300 font-semibold">✓ 5 Active</span>
-                  )}
-                </button>
               </div>
               <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                Qualivo 1-Click Outbound Voice AI Call
+                1-Click Outbound Voice AI Call
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Instantly dial any customer phone number. Qualivo AI Voice Agent (Gayatri) introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
+                Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
               </p>
             </div>
 
@@ -1198,13 +1039,9 @@ export default function ColdCallingHomePage() {
               <span className="text-xs text-slate-400">
                 {voiceSpeed < 0.90 ? '(Relaxed & Clear)' : voiceSpeed <= 0.96 ? '(Natural Indian Rhythm — Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
               </span>
-              {speedSavedSuccess ? (
-                <span className="text-[11px] text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30 animate-in fade-in">
-                  <Check className="h-3.5 w-3.5 text-emerald-400" /> Saved & Locked
-                </span>
-              ) : isSavingSpeed ? (
-                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saving to Cloud...</span>
-              ) : null}
+              {isSavingSpeed && (
+                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saved to Cloud</span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -1240,38 +1077,6 @@ export default function ColdCallingHomePage() {
                     {p.label}
                   </button>
                 ))}
-
-                {/* Explicit Save Button for Voice Speed */}
-                <button
-                  type="button"
-                  onClick={handleSaveVoiceSpeed}
-                  disabled={isSavingSpeed}
-                  className={`flex items-center space-x-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-sm ml-1 ${
-                    speedSavedSuccess
-                      ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/40 ring-1 ring-emerald-300 scale-105'
-                      : isSavingSpeed
-                      ? 'bg-emerald-600/70 text-emerald-100 cursor-not-allowed'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/30 shadow-emerald-500/20 hover:shadow-emerald-500/30 active:scale-95'
-                  }`}
-                  title="Save voice speed until changed"
-                >
-                  {speedSavedSuccess ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Saved!</span>
-                    </>
-                  ) : isSavingSpeed ? (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-3.5 w-3.5" />
-                      <span>Save Speed</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
           </div>
@@ -1468,49 +1273,30 @@ export default function ColdCallingHomePage() {
             </p>
           </div>
 
-          {/* Action Buttons: Subscriptions & Time Period Filter */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowSubscriptionsModal(true)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm cursor-pointer transition-all"
-              title="Click to view Active Service Subscriptions & Recharge Status"
-            >
-              <Wallet className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span>Subscriptions</span>
-              {vobizNegative ? (
-                <span className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[9px] font-black animate-pulse">
-                  🚨 -₹{Math.abs(vobizSub?.remaining ?? 488).toFixed(0)}
-                </span>
-              ) : (
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">✓ Active</span>
-              )}
-            </button>
-
-            {/* Time Period Filter Pills */}
-            <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-              {[
-                { id: 'today', label: 'Today' },
-                { id: 'week', label: 'This Week' },
-                { id: 'month', label: 'This Month' },
-                { id: 'year', label: 'Yearly' },
-                { id: 'all', label: 'All Time' },
-              ].map(p => {
-                const active = analyticsPeriod === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setAnalyticsPeriod(p.id as any)}
-                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      active
-                        ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Time Period Filter Pills */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+            {[
+              { id: 'today', label: 'Today' },
+              { id: 'week', label: 'This Week' },
+              { id: 'month', label: 'This Month' },
+              { id: 'year', label: 'Yearly' },
+              { id: 'all', label: 'All Time' },
+            ].map(p => {
+              const active = analyticsPeriod === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setAnalyticsPeriod(p.id as any)}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    active
+                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1620,259 +1406,7 @@ export default function ColdCallingHomePage() {
         </div>
       </div>
 
-      {/* 3. QUALIVO ACTIVE SERVICE SUBSCRIPTIONS & RECHARGE STATUS (ON-DEMAND MODAL) */}
-      <AnimatePresence>
-        {showSubscriptionsModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-fadeIn">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-5xl max-h-[90vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-y-auto p-6 sm:p-7 space-y-6"
-            >
-              {/* Header Bar */}
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                      <Wallet className="h-5 w-5" />
-                    </div>
-                    <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
-                      <span>Qualivo Active Subscriptions & Recharge Status</span>
-                    </h3>
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-bold border border-blue-500/20">
-                      Project: Qualivo
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium leading-relaxed">
-                    Live recharge balances & usage monitoring for <strong>primary services in active use</strong>. Fallback providers (ElevenLabs, Groq, Fireworks) are excluded.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <button
-                    onClick={fetchSubscriptions}
-                    disabled={loadingSubscriptions}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all cursor-pointer shadow-sm"
-                    title="Refresh Recharge Status"
-                  >
-                    <RefreshCw className={`h-3.5 w-3.5 ${loadingSubscriptions ? 'animate-spin text-blue-600' : ''}`} />
-                    <span>Refresh</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowSubscriptionsModal(false)}
-                    className="p-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
-                    title="Close"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 5 Active Services Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {subscriptions.map((item) => {
-                  const isNegative = Boolean(item.isNegative || item.remaining < 0);
-                  const pct = isNegative 
-                    ? 0 
-                    : item.percentRemaining !== undefined
-                    ? item.percentRemaining
-                    : item.allocatedBalance > 0 
-                    ? Math.max(0, Math.min(100, Math.round((item.remaining / item.allocatedBalance) * 100))) 
-                    : 100;
-                  const isEditing = editingSubId === item.id;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col justify-between ${
-                        isNegative
-                          ? 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-400 dark:border-rose-800 shadow-md shadow-rose-500/10 ring-1 ring-rose-500/20'
-                          : item.isLow
-                          ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/60 shadow-sm shadow-rose-500/5'
-                          : 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700/80 hover:border-blue-400 dark:hover:border-blue-600'
-                      }`}
-                    >
-                      <div className="space-y-3">
-                        {/* Card Header */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                              {item.provider}
-                            </span>
-                            <h4 className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight mt-0.5">
-                              {item.name}
-                            </h4>
-                          </div>
-
-                          <span
-                            className={`px-2 py-0.5 text-[10px] font-black rounded-full border ${
-                              isNegative
-                                ? 'bg-rose-600 text-white border-rose-700 animate-pulse shadow-sm'
-                                : item.isLow
-                                ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 animate-pulse'
-                                : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
-                            }`}
-                          >
-                            {item.status}
-                          </span>
-                        </div>
-
-                        {/* Role description */}
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
-                          {item.role}
-                        </p>
-
-                        {/* Negative Callout Warning */}
-                        {isNegative && (
-                          <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] font-bold flex items-center gap-2">
-                            <AlertTriangle className="h-4 w-4 text-rose-500 flex-shrink-0 animate-bounce" />
-                            <span>Wallet overdrawn! Carrier line disconnected until recharge is completed.</span>
-                          </div>
-                        )}
-
-                        {/* Balance Display */}
-                        <div className="pt-1">
-                          <div className="flex items-baseline justify-between mb-1">
-                            <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                              Remaining:
-                            </span>
-                            <div className="text-right">
-                              <span className={`text-lg font-black font-mono ${isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                                {item.remaining < 0 ? `-${item.unit}${Math.abs(item.remaining).toFixed(2)}` : `${item.unit}${item.remaining}`}
-                              </span>
-                              <span className="text-[10px] text-slate-400 font-medium ml-1">
-                                / {item.unit}{item.allocatedBalance}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Progress Bar */}
-                          <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                            <div
-                              className={`h-2 rounded-full transition-all duration-500 ${
-                                isNegative
-                                  ? 'bg-rose-600'
-                                  : item.isLow
-                                  ? 'bg-rose-500'
-                                  : pct > 50
-                                  ? 'bg-emerald-500'
-                                  : 'bg-amber-500'
-                              }`}
-                              style={{ width: `${isNegative ? 0 : pct}%` }}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 font-medium">
-                            <span>Consumed: {item.unit}{item.consumed}</span>
-                            <span className={isNegative ? 'text-rose-600 dark:text-rose-400 font-extrabold' : ''}>
-                              {isNegative ? `🚨 Overdrawn (-${item.unit}${Math.abs(item.remaining)})` : `${pct}% balance left`}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Rate / Note */}
-                        <div className="text-[10px] bg-white dark:bg-slate-900/60 p-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 space-y-0.5">
-                          <p><strong className="text-slate-700 dark:text-slate-300">Rate:</strong> {item.rateDescription}</p>
-                          <p className="italic text-slate-400">ℹ️ {item.rechargeNote}</p>
-                        </div>
-                      </div>
-
-                      {/* Actions & Inline Edit */}
-                      <div className="pt-4 border-t border-slate-200/60 dark:border-slate-700/60 mt-3 space-y-2">
-                        {isEditing ? (
-                          <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-blue-400 dark:border-blue-600 space-y-2">
-                            <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                              Update Live Balance ({item.unit}):
-                            </p>
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                step="any"
-                                value={newSubBalance}
-                                onChange={(e) => setNewSubBalance(e.target.value)}
-                                placeholder={`E.g. ${item.remaining}`}
-                                className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
-                                autoFocus
-                              />
-                              <button
-                                onClick={() => handleSaveSubBalance(item.id)}
-                                disabled={subUpdating}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold cursor-pointer transition-all"
-                              >
-                                {subUpdating ? '...' : 'Save'}
-                              </button>
-                              <button
-                                onClick={() => { setEditingSubId(null); setNewSubBalance(''); }}
-                                className="px-2 py-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingSubId(item.id);
-                                setNewSubBalance(String(item.remaining));
-                              }}
-                              className="flex items-center gap-1 text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="h-3 w-3" />
-                              <span>Update Balance</span>
-                            </button>
-
-                            <a
-                              href={item.rechargeUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all cursor-pointer ${
-                                isNegative
-                                  ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-600/40 ring-1 ring-rose-400'
-                                  : item.isLow
-                                  ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm shadow-rose-600/30'
-                                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-600/20'
-                              }`}
-                            >
-                              <span>Recharge</span>
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Excluded Fallback Services Banner & Aggregate Metrics */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-200">
-                    <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                    <span>Standby Fallback Services (Zero Active Billing)</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    <strong>ElevenLabs Flash</strong> (Backup TTS) • <strong>Groq LPU Llama 3.3</strong> (Backup LLM) • <strong>Fireworks AI</strong> (Backup LLM) remain on standby. No credits consumed during standard operations.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <span>Calls Placed: <strong className="text-blue-600 dark:text-blue-400">{activeUsageStats.totalCalls}</strong></span>
-                  <span>•</span>
-                  <span>Talk Time: <strong className="text-emerald-600 dark:text-emerald-400">{activeUsageStats.totalMinutes}m</strong></span>
-                  <span>•</span>
-                  <span>Spoken Chars: <strong className="text-purple-600 dark:text-purple-400">{activeUsageStats.estimatedChars.toLocaleString()}</strong></span>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 4. QUALIVO CALL LOGS & INTELLIGENCE TABLE */}
+      {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         
         {/* Table Header Controls */}
@@ -1880,7 +1414,7 @@ export default function ColdCallingHomePage() {
           <div>
             <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center space-x-2">
               <PhoneCall className="h-5 w-5 text-blue-600" />
-              <span>Qualivo Call Logs & Transcripts</span>
+              <span>Gayatri AI Call Logs & Transcripts</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5 font-medium">
               Every customer conversation recorded, transcribed, and tagged with lead sentiment.
@@ -2024,7 +1558,7 @@ export default function ColdCallingHomePage() {
           {loading ? (
             <div className="py-16 text-center text-xs text-slate-400">
               <div className="h-6 w-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
-              Loading Qualivo call logs...
+              Loading Gayatri call logs...
             </div>
           ) : filteredCalls.length === 0 ? (
             <div className="py-16 text-center text-xs text-slate-400 space-y-2">
