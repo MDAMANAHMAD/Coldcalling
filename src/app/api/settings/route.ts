@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 export async function GET() {
   try {
     const db = getDb();
-    const voiceSpeed = (db as any).settings?.voiceSpeed ?? 0.94;
+    const voiceSpeed = (db as any).settings?.voiceSpeed ?? 1.05;
     return NextResponse.json({
       success: true,
       settings: {
@@ -18,7 +18,7 @@ export async function GET() {
   } catch (err: any) {
     console.error('Error fetching settings:', err);
     return NextResponse.json(
-      { success: false, error: err.message, settings: { voiceSpeed: 0.94 } },
+      { success: false, error: err.message, settings: { voiceSpeed: 1.05 } },
       { status: 500 }
     );
   }
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     let speed = Number(body.voiceSpeed ?? body.voice_speed);
 
     if (isNaN(speed) || speed < 0.6 || speed > 1.6) {
-      speed = 0.94;
+      speed = 1.05;
     }
     speed = Math.round(speed * 100) / 100;
 

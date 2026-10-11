@@ -323,7 +323,7 @@
       "calledAt": "2026-09-13T13:56:40.000Z",
       "outcome": "Site Visit Scheduled",
       "detectedQuestions": [
-        "2 BHK Configuration & Pricing (₹72 Lakh)",
+        "2 BHK Configuration & Pricing (\u20b972 Lakh)",
         "Project Amenities (Gym, Children Play Area, Water Supply)",
         "Site Visit Booking (Sunday Dopahar)"
       ]
@@ -344,7 +344,7 @@
       "calledAt": "2026-09-13T13:23:08.000Z",
       "outcome": "Interested",
       "detectedQuestions": [
-        "1 BHK Flat Pricing (₹36 Lakh)",
+        "1 BHK Flat Pricing (\u20b936 Lakh)",
         "Under-construction Timeline",
         "WhatsApp Brochure Request"
       ]
@@ -376,15 +376,15 @@
       "userEmail": "test@gmail.com",
       "durationSeconds": 135,
       "recordingUrl": "",
-      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj se baat kar sakti hoon?\n[3.8s] Raj: Haan Raj bol raha hoon.\n[7.2s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[14.5s] Raj: Pricing kya hai 2 BHK ki?\n[19.0s] Gayatri: Raj ji, 2 BHK ka carpet area 760 sq ft hai aur all-inclusive price sirf ₹52 Lakh se shuru hoti hai. Isme zero stamp duty aur zero registration fees ka limited festive offer chal raha hai.\n[32.1s] Raj: Achha, brochure WhatsApp par bhej dijiye.\n[36.5s] Gayatri: Zaroor Raj ji, main brochure aur floor plan aapke isi number par WhatsApp kar deti hoon.\n[48.0s] Raj: Theek hai, main dekh kar batata hoon.\n[52.0s] Gayatri: Dhanyawad Raj ji! Aapka din shubh ho, bye!",
-      "aiSummary": "Outbound AI call placed to Raj. Client confirmed interest in Dombivli East 2 BHK (760 sq ft, ₹52 Lakh) and requested brochure on WhatsApp.",
+      "transcript": "[0.5s] Gayatri: Hello. Main Gayatri baat kar rahi hoon Sai Complex Dombivli East se. Kya main Raj se baat kar sakti hoon?\n[3.8s] Raj: Haan Raj bol raha hoon.\n[7.2s] Gayatri: Namaskar Raj ji! Humara Sai Complex Dombivli East station se sirf saat minute ki doori par hai. Yahan one BHK aur two BHK premium flats available hain.\n[14.5s] Raj: Pricing kya hai 2 BHK ki?\n[19.0s] Gayatri: Raj ji, 2 BHK ka carpet area 760 sq ft hai aur all-inclusive price sirf \u20b952 Lakh se shuru hoti hai. Isme zero stamp duty aur zero registration fees ka limited festive offer chal raha hai.\n[32.1s] Raj: Achha, brochure WhatsApp par bhej dijiye.\n[36.5s] Gayatri: Zaroor Raj ji, main brochure aur floor plan aapke isi number par WhatsApp kar deti hoon.\n[48.0s] Raj: Theek hai, main dekh kar batata hoon.\n[52.0s] Gayatri: Dhanyawad Raj ji! Aapka din shubh ho, bye!",
+      "aiSummary": "Outbound AI call placed to Raj. Client confirmed interest in Dombivli East 2 BHK (760 sq ft, \u20b952 Lakh) and requested brochure on WhatsApp.",
       "sentiment": "positive",
       "calledAt": "2026-09-12T07:13:40.000Z",
       "outcome": "Interested",
       "customerName": "Raj",
       "customerPhone": "+918693081506",
       "detectedQuestions": [
-        "2 BHK Pricing (₹52 Lakh)",
+        "2 BHK Pricing (\u20b952 Lakh)",
         "WhatsApp Brochure Request",
         "Festive Offer Details"
       ]
@@ -435,5 +435,8 @@
       "status": "confirmed",
       "createdAt": "2026-08-01T09:03:28.955Z"
     }
-  ]
+  ],
+  "settings": {
+    "voiceSpeed": 1.05
+  }
 }

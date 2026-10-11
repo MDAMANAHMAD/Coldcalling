@@ -207,7 +207,7 @@ export default function ColdCallingHomePage() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Dynamic Voice Speed State & Persistence
-  const [voiceSpeed, setVoiceSpeed] = useState<number>(0.94);
+  const [voiceSpeed, setVoiceSpeed] = useState<number>(1.05);
   const [isSavingSpeed, setIsSavingSpeed] = useState<boolean>(false);
 
   // Analytics Period Filter State
@@ -1037,7 +1037,7 @@ export default function ColdCallingHomePage() {
                 </span>
               </div>
               <span className="text-xs text-slate-400">
-                {voiceSpeed < 0.90 ? '(Relaxed & Clear)' : voiceSpeed <= 0.96 ? '(Natural Indian Rhythm — Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
+                {voiceSpeed < 0.95 ? '(Relaxed & Clear)' : voiceSpeed <= 1.05 ? '(Natural Rhythm — Recommended)' : '(Fast)'}
               </span>
               {isSavingSpeed && (
                 <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saved to Cloud</span>

@@ -1386,7 +1386,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.05"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -1826,8 +1826,8 @@ async def entrypoint(ctx: JobContext):
     # Dynamic Voice Speed resolution: Priority:
     # 1. room metadata (voice_speed / voiceSpeed)
     # 2. db.json / settings.json
-    # 3. os.getenv("CARTESIA_SPEED", "0.94")
-    cartesia_speed = 0.94
+    # 3. os.getenv("CARTESIA_SPEED", "1.05")
+    cartesia_speed = 1.05
     custom_speed = None
     if ctx.room.metadata:
         try:
@@ -1857,9 +1857,9 @@ async def entrypoint(ctx: JobContext):
         cartesia_speed = custom_speed
     else:
         try:
-            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.05"))
         except Exception:
-            cartesia_speed = 0.94
+            cartesia_speed = 1.05
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
