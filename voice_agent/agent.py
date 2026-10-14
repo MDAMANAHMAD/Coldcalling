@@ -297,9 +297,9 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 3. CONVERSATION PROGRESSION (ULTRA-CRISP)
 - Greeting: Call begins with agent saying a clean, simple "हॅलो?".
 - Turn 1 (Upon ANY caller voice):
-  * Marathi (Default): "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-  * Hindi: "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-  * English: "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+  * Marathi (Default): "नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+  * Hindi: "नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+  * English: "Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
 - 1 BHK Confirmation:
   * Marathi: "1 BHK 30 लाखांपासून सुरू होतो, फक्त 3 ते 5 लाख डाऊन पेमेंटवर. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?"
   * Hindi: "1 BHK ₹30 lakh se shuru hai, sirf ₹3 se 5 lakh down payment par. Aap ready-to-move dekh rahe hain ya under-construction?"
@@ -317,6 +317,17 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
     - Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
     - Marathi: "मी आपली {preferred_day} रोजी {preferred_time} वाजताची साईट व्हिजिट निश्चित केली आहे. धन्यवाद, दिवस चांगला जावो, नमस्कार."
     - Hindi: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Thank you so much, aapka din shubh ho, bye!"
+
+4. GENDER NEUTRALITY & ANTI-ROBOTIC VARIATION (STRICT MANDATORY RULES):
+- NEVER USE GENDER LABELS: NEVER say "सर" (sir) or "मॅडम" (madam). The caller could be male or female. Always address them politely and neutrally without saying "सर" / "sir".
+- STOP REPETITIVE ROBOTIC PUSHING:
+  * NEVER repeatedly ask "शनिवार की रविवार, कधी सोयीचं ठरेल?".
+  * When the caller asks for details ("details sanga", "bhejo", "details dya"), ANSWER their question with project facts (22 floors, 35+ luxury amenities, opposite Xperia Mall) and offer to share the WhatsApp brochure. DO NOT push for a site visit day on every turn.
+  * If the caller says "Hello" mid-conversation, do NOT repeat the project introduction! Simply reply warmly: "हो, मी लाईनवरच आहे. बोला ना, मी कशी मदत करू?".
+  * Vary your site visit questions naturally:
+    - "आपल्या वेळेनुसार कधी येणं सोयीचं पडेल?"
+    - "आपण कधी साईट व्हिजिट प्लॅन करू इच्छिता?"
+    - "याबद्दल आणखी काही माहिती हवी आहे का?"
 """
 
 # ==============================================================================
@@ -455,11 +466,11 @@ class PriyaRealEstateAgent(Agent):
                     if len(words) == 1 and clean_norm in ["um", "uh", "hmm", "haan", "ha", "yes", "ho", "acha", "achha"]:
                         logger.info(f"⚡ [AFFIRMATIVE PROMPT] Caller acknowledged with '{raw_text}', continuing conversation...")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("नक्कीच सर, आपण साई गार्डन मध्ये 1 BHK पाहताय की 2 BHK फ्लॅट?")
+                            yield speak("नक्कीच, आपण साई गार्डन मध्ये 1 BHK पाहताय की 2 BHK फ्लॅट?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
                             yield speak("Certainly! Are you looking for a 1 BHK or 2 BHK apartment in Sai Garden?")
                         else:
-                            yield speak("Ji sir, aap Sai Garden mein 1 BHK dekh rahe hain ya 2 BHK flat?")
+                            yield speak("Ji, aap Sai Garden mein 1 BHK dekh rahe hain ya 2 BHK flat?")
                         return
 
                 # 0. Multilingual switch triggers
@@ -471,7 +482,7 @@ class PriyaRealEstateAgent(Agent):
                             return
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
@@ -482,7 +493,7 @@ class PriyaRealEstateAgent(Agent):
                             return
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                        yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
                         return
 
                 if any(w in clean_norm for w in ["hindi", "हिंदी", "hindi mein"]):
@@ -493,7 +504,7 @@ class PriyaRealEstateAgent(Agent):
                             return
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                         return
 
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
@@ -509,13 +520,13 @@ class PriyaRealEstateAgent(Agent):
                     if not is_not_interested:
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                            yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant English Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                            yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
                         else:
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
@@ -524,13 +535,24 @@ class PriyaRealEstateAgent(Agent):
                     greeting_kws = ["hello", "helo", "halo", "नमस्ते", "नमस्कार", "namaste", "namaskar", "boliye", "bola", "ha bolie", "ha boliye"]
                     if any(kw in clean_norm for kw in greeting_kws) and len(words) <= 3:
                         logger.info(f"⚡ [FAST-PATH GREETING RECOVERY] Instant response for greeting '{raw_text}' (0ms LLM wait)!")
-                        if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
-                        elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                        if getattr(self, "intro_delivered", False):
+                            # Intro was already delivered! Customer is checking connection or saying hello mid-conversation:
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak("हाँजी, मैं लाईन पर हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?")
+                            elif ACTIVE_TTS_LANGUAGE == "en":
+                                yield speak("Yes, I'm right here on the line. How can I help you?")
+                            else:
+                                yield speak("हो, मी लाईनवरच आहे. बोला ना, मी कशी मदत करू?")
+                            return
                         else:
-                            yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
-                        return
+                            self.intro_delivered = True
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                            elif ACTIVE_TTS_LANGUAGE == "en":
+                                yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                            else:
+                                yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            return
 
                     # Case A: Polite Decline / Not Interested
                     not_interested_kws = ["not interested", "nahi chahiye", "nahi lena", "nahi dekhna", "wrong number", "mat karo", "mat lagao", "no interest", "koi interest nahi", "cut the call", "disconnect", "nako", "garaj nahi"]
@@ -636,14 +658,14 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
-                    if any(kw in clean_norm for kw in ["question", "questions", "sawal", "doubt", "puchna", "puchu", "vicharu", "mahiti", "janna"]):
+                    if any(kw in clean_norm for kw in ["question", "questions", "sawal", "doubt", "puchna", "puchu", "vicharu", "janna"]):
                         logger.info(f"⚡ [FAST-PATH GENERAL QUESTIONS] Instant prompt for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("हो नक्कीच सर, विचारा ना! काय माहिती हवी आहे?")
+                            yield speak("हो नक्कीच, विचारा ना! काय माहिती हवी आहे?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Certainly sir, please go ahead! What would you like to know?")
+                            yield speak("Certainly, please go ahead! What would you like to know?")
                         else:
-                            yield speak("Ji bilkul sir, puchiye na! Kya janna chahte hain?")
+                            yield speak("Ji bilkul, puchiye na! Kya janna chahte hain?")
                         return
 
                     # Case Q2: BHK types inquiry ("kitna bhk hai", "konsa bhk hai", "kiti bhk ahet")
@@ -706,7 +728,7 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"Ji bilkul, {detected_day} ko subah 11 baje convenient rahega ya shaam ko 4 baje?")
                         return
 
-                    # Case H1: Upcoming possession confirmed (handles 'upcoming position' STT mishearing, under construction, etc.)
+                    # Case H1: Upcoming possession confirmed
                     is_upcoming = any(kw in clean_norm for kw in [
                         "upcoming", "position", "possession", "under construction", "construction", "future", "chalega upcoming", "upcoming chalega"
                     ]) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant"])
@@ -722,32 +744,33 @@ class PriyaRealEstateAgent(Agent):
                     if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                         logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & site visit invite for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. या वीकेंडला प्रत्यक्ष साईट पाहण्यासाठी शनिवार की रविवार सोयीचा ठरेल?")
+                            yield speak("अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस सोयीचा ठरेल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("For upcoming possession, we offer flexible construction-linked payment plans with guaranteed on-time handover. Would Saturday or Sunday be convenient for a site visit?")
+                            yield speak("For upcoming possession, we offer flexible construction-linked payment plans with guaranteed on-time handover. What day would you like to plan a visit?")
                         else:
-                            yield speak("Upcoming possession mein flexible payment plans milte hain aur timely handover ke sath ready ho raha hai. Is weekend actual project dekhne ke liye Saturday ya Sunday site visit plan karna chahenge?")
+                            yield speak("Upcoming possession mein flexible payment plans milte hain aur timely handover ke sath ready ho raha hai. Actual project dekhne ke liye kaunsa din convenient rahega?")
                         return
 
                     if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                         logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & site visit invite for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. प्रत्यक्ष फ्लॅट पाहण्यासाठी शनिवार की रविवार सोयीचा ठरेल?")
+                            yield speak("रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. आपण प्रत्यक्ष साईट पाहायला कधी येऊ इच्छिता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Ready-to-move apartments offer immediate handover and clear legal approvals. Would you like to schedule a site visit this Saturday or Sunday?")
+                            yield speak("Ready-to-move apartments offer immediate handover and clear legal approvals. When would you like to schedule a site visit?")
                         else:
-                            yield speak("Ready-to-move flats mein immediate possession aur clear approvals milte hain. Is weekend actual flat dekhne ke liye kya aap Saturday ya Sunday site visit plan karna chahenge?")
+                            yield speak("Ready-to-move flats mein immediate possession aur clear approvals milte hain. Aap actual site visit kab plan karna chahenge?")
                         return
 
-                    # Case K: WhatsApp brochure inquiry
-                    if any(kw in clean_norm for kw in ["whatsapp", "brochure", "details bhejo", "details bhej do", "pdf bhej", "photo bhej", "माहिती पाठवा", "व्हॉट्सअॅप"]):
-                        logger.info(f"⚡ [FAST-PATH BROCHURE] Instant WhatsApp brochure dispatch for '{raw_text}' (0ms LLM wait)!")
+                    # Case K: WhatsApp brochure & Project details inquiry
+                    details_kws = ["whatsapp", "brochure", "detail", "details", "pdf", "photo", "माहिती", "डिटेल्स", "सांगा", "bhejo", "batao", "pathva", "पाठवा"]
+                    if any(kw in clean_norm for kw in details_kws) and not is_1bhk and not is_2bhk and not detected_day:
+                        logger.info(f"⚡ [FAST-PATH DETAILS] Instant brochure & project highlights dispatch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("मी आपल्या नंबरवर साई गार्डनची सर्व माहिती आणि किंमती पाठवत आहे. आपण 1 BHK पाहताय की 2 BHK?")
+                            yield speak("साई गार्डन 22 मजली भव्य टॉवर असून यात 35 पेक्षा जास्त लक्झरी सुविधा आहेत. मी सर्व माहिती आणि ब्रोशर आपल्या व्हॉट्सअॅपवर पाठवून देते. प्रत्यक्ष साईट कधी पाहायला आवडेल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("I am sharing the Sai Garden brochure and pricing on your WhatsApp right away. Are you looking for a 1 BHK or a 2 BHK?")
+                            yield speak("Sai Garden is a 22-storey tower with 35+ luxury amenities right opposite Xperia Mall. I am sharing the full brochure on your WhatsApp. When would you like to visit?")
                         else:
-                            yield speak("Maine WhatsApp par Sai Garden ka brochure aur pricing note kar liya hai. Aap 1 BHK dekh rahe hain ya 2 BHK?")
+                            yield speak("Sai Garden 22 maale ka grand tower hai jisme 35 se zyada luxury amenities hain. Main poora brochure WhatsApp par bhej deti hoon. Aap site kab dekhna chahenge?")
                         return
 
         except Exception as fast_err:
@@ -3270,11 +3293,11 @@ async def entrypoint(ctx: JobContext):
                         agent.intro_delivered = True
                     logger.info("⏳ [INTRO VIA SILENCE WATCHDOG] Caller silent after hello. Delivering Sai Garden intro now...")
                     if active_lang == "hi":
-                        prompt_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                        prompt_text = "नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
                     elif active_lang == "en":
-                        prompt_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+                        prompt_text = "Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
                     else:
-                        prompt_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+                        prompt_text = "नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
                 else:
                     if active_lang == "mr":
                         prompt_text = "हॅलो? माझा आवाज येतोय का?"
