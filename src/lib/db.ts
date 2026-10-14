@@ -305,18 +305,64 @@ export function getDb(): AppDatabase {
 }
 
 export function saveDb(data: AppDatabase): void {
+  // Guard against destructive empty overwrites
+  if ((!data.callLogs || data.callLogs.length === 0) && global.__APP_DB_CACHE__?.callLogs && global.__APP_DB_CACHE__.callLogs.length > 0) {
+    data.callLogs = global.__APP_DB_CACHE__.callLogs;
+  }
+  if ((!data.leads || data.leads.length === 0) && global.__APP_DB_CACHE__?.leads && global.__APP_DB_CACHE__.leads.length > 0) {
+    data.leads = global.__APP_DB_CACHE__.leads;
+  }
+
   // Always update in-memory cache first
   global.__APP_DB_CACHE__ = data;
 
   const activePath = resolveDbPath();
+  const serialized = JSON.stringify(data, null, 2);
+
+  // 1. Create a safe backup before overwriting (if active file exists and is non-empty)
   try {
-    fs.writeFileSync(activePath, JSON.stringify(data, null, 2), 'utf8');
+    if (fs.existsSync(activePath)) {
+      const backupDir = path.join(process.cwd(), 'db_backups');
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
+      }
+      const backupPath = path.join(backupDir, `db_${Date.now()}.json`);
+      fs.copyFileSync(activePath, backupPath);
+
+      // Keep only the latest 30 backups to save space
+      const backupFiles = fs.readdirSync(backupDir)
+        .filter(f => f.startsWith('db_') && f.endsWith('.json'))
+        .sort();
+      if (backupFiles.length > 30) {
+        for (const oldFile of backupFiles.slice(0, backupFiles.length - 30)) {
+          try { fs.unlinkSync(path.join(backupDir, oldFile)); } catch {}
+        }
+      }
+    }
+  } catch (backupErr) {
+    console.warn('[DB]: Automated backup warning:', backupErr);
+  }
+
+  // 2. Atomic write to avoid corruption during server restarts or power interruptions
+  const tempPath = `${activePath}.${Date.now()}.tmp`;
+  try {
+    fs.writeFileSync(tempPath, serialized, 'utf8');
+    fs.renameSync(tempPath, activePath);
   } catch (e) {
-    console.warn(`[DB]: Failed writing to ${activePath}, attempting /tmp fallback:`, e);
+    console.warn(`[DB]: Atomic write failed for ${activePath}, falling back to direct write:`, e);
     try {
-      fs.writeFileSync(TMP_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
-    } catch (e2) {
-      console.warn("[DB]: Could not write to /tmp either, preserved in memory:", e2);
+      fs.writeFileSync(activePath, serialized, 'utf8');
+    } catch (eDirect) {
+      console.warn(`[DB]: Failed writing directly to ${activePath}, attempting /tmp fallback:`, eDirect);
+      try {
+        fs.writeFileSync(TMP_DB_FILE, serialized, 'utf8');
+      } catch (e2) {
+        console.warn("[DB]: Could not write to /tmp either, data preserved in global cache:", e2);
+      }
+    }
+  } finally {
+    if (fs.existsSync(tempPath)) {
+      try { fs.unlinkSync(tempPath); } catch {}
     }
   }
 }

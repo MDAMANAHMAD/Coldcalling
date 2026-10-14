@@ -36,7 +36,10 @@ import {
   Square,
   FileText,
   ChevronDown,
-  BarChart3
+  BarChart3,
+  CalendarDays,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
@@ -378,6 +381,85 @@ export default function ColdCallingHomePage() {
       notInterested,
       futurePlan
     };
+  }, [filteredCallsForAnalytics]);
+
+  // Extract confirmed site visits for the Google Calendar schedule segment
+  const siteVisits = useMemo(() => {
+    const visits: {
+      id: string;
+      customerName: string;
+      customerPhone: string;
+      day: string;
+      time: string;
+      flatType: string;
+      status: string;
+      googleCalendarUrl: string;
+      recordingUrl?: string;
+      callSid?: string;
+      createdAt?: string;
+      summary: string;
+      originalCall: (CallLog & { leadName: string; leadPhone?: string });
+    }[] = [];
+
+    const visitCalls = filteredCallsForAnalytics.filter(c => {
+      const tag = getOutcomeTag(c);
+      return tag.label === 'Site Visit Scheduled' || 
+             (c.aiSummary && c.aiSummary.toLowerCase().includes('site visit')) ||
+             (c.transcript && c.transcript.toLowerCase().includes('site visit'));
+    });
+
+    for (const c of visitCalls) {
+      const text = ((c.aiSummary || '') + ' ' + (c.transcript || '')).toLowerCase();
+      
+      let day = 'Saturday';
+      if (text.includes('sunday') || text.includes('ravivar') || text.includes('raviwar') || text.includes('रविवार')) day = 'Sunday';
+      else if (text.includes('saturday') || text.includes('shanivar') || text.includes('shaniwar') || text.includes('शनिवार')) day = 'Saturday';
+      else if (text.includes('friday') || text.includes('shukravar') || text.includes('शुक्रवार')) day = 'Friday';
+      else if (text.includes('tomorrow') || text.includes('kal')) day = 'Tomorrow';
+
+      let time = '11:00 AM';
+      if (text.includes('4 pm') || text.includes('4 baje') || text.includes('4:00') || text.includes('shaam') || text.includes('संध्याकाळी') || text.includes('evening')) {
+        time = '4:00 PM';
+      } else if (text.includes('3 pm') || text.includes('3 baje')) {
+        time = '3:00 PM';
+      } else if (text.includes('11') || text.includes('subah') || text.includes('सकाळी') || text.includes('morning')) {
+        time = '11:00 AM';
+      }
+
+      let flatType = '1 BHK / 2 BHK';
+      if (text.includes('2 bhk') || text.includes('2bhk') || text.includes('दोन') || text.includes('don bhk') || text.includes('two')) {
+        flatType = '2 BHK (₹45L)';
+      } else if (text.includes('1 bhk') || text.includes('1bhk') || text.includes('एक') || text.includes('one')) {
+        flatType = '1 BHK (₹30L)';
+      }
+
+      const name = c.customerName || c.leadName || 'Interested Buyer';
+      const phone = c.customerPhone || c.leadPhone || '';
+      const summary = c.aiSummary || 'Site visit confirmed for Sai Garden project.';
+
+      const gTitle = encodeURIComponent(`Site Visit: ${name} (${flatType}) - Sai Garden`);
+      const gDetails = encodeURIComponent(`Client: ${name}\nPhone: ${phone}\nFlat Type: ${flatType}\nProject: Sai Garden, Shilphata-Manpada Highway, Opp. Xperia Mall\nAI Summary: ${summary}`);
+      const gLoc = encodeURIComponent('Sai Garden, Shilphata-Manpada Highway, Opposite Xperia Mall, Nilje, Dombivli');
+      const gCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${gTitle}&details=${gDetails}&location=${gLoc}`;
+
+      visits.push({
+        id: c.callSid || c.id || String(Math.random()),
+        customerName: name,
+        customerPhone: phone,
+        day,
+        time,
+        flatType,
+        status: 'Confirmed',
+        googleCalendarUrl: gCalUrl,
+        recordingUrl: c.recordingUrl,
+        callSid: c.callSid,
+        createdAt: (c as any).createdAt || c.calledAt || (c as any).timestamp || new Date().toISOString(),
+        summary,
+        originalCall: c
+      });
+    }
+
+    return visits;
   }, [filteredCallsForAnalytics]);
 
   const handleDownloadPdf = (category: PdfReportCategory) => {
@@ -950,7 +1032,7 @@ export default function ColdCallingHomePage() {
                 1-Click Outbound Voice AI Call
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
+                Instantly dial any customer phone number. Gayatri introduces <strong className="text-white">Sai Garden (Shilphata Highway, Opp. Xperia Mall)</strong>, handles inquiries with #1 priority in pure Marathi (with auto-switch to Hindi or English), and books confirmed site visits. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
               </p>
             </div>
 
@@ -1406,6 +1488,124 @@ export default function ColdCallingHomePage() {
         </div>
       </div>
 
+      {/* 2.5 SITE VISIT SCHEDULE & GOOGLE CALENDAR SEGMENT */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-5 border-b border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center space-x-3">
+            <div className="h-11 w-11 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <CalendarDays className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="font-black text-base text-slate-900 dark:text-white">
+                  Sai Garden Site Visit Schedule
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                  {siteVisits.length} Confirmed Visit{siteVisits.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5 font-medium flex items-center gap-1.5">
+                <MapPin className="h-3 w-3 text-slate-400" />
+                <span>Opp. Xperia Mall, Shilphata-Manpada Highway • Sync directly to Google Calendar</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            <a
+              href="https://calendar.google.com/calendar/u/0/r"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm"
+              title="Open Google Calendar in a new tab"
+            >
+              <Calendar className="h-3.5 w-3.5 text-blue-500" />
+              <span>Open Google Calendar</span>
+              <ExternalLink className="h-3 w-3 text-slate-400 ml-0.5" />
+            </a>
+          </div>
+        </div>
+
+        {/* Schedule Grid: Core slots & Booked Visits */}
+        {siteVisits.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="h-12 w-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+              <Calendar className="h-6 w-6" />
+            </div>
+            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              No Site Visits Scheduled In This Filter Range
+            </h4>
+            <p className="text-xs text-slate-400 max-w-md mx-auto mt-1 font-medium">
+              Gayatri AI automatically negotiates preferred slots (Saturday/Sunday 11 AM or 4 PM) with interested callers. Once confirmed, visits appear here with 1-click Google Calendar sync.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-5">
+            {siteVisits.map((visit) => (
+              <div 
+                key={visit.id}
+                className="p-4 rounded-2xl border border-indigo-100 dark:border-indigo-950/60 bg-gradient-to-br from-indigo-50/40 via-white to-blue-50/20 dark:from-slate-900 dark:via-slate-900/90 dark:to-indigo-950/20 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <User className="h-3.5 w-3.5 text-indigo-500" />
+                        <span>{visit.customerName}</span>
+                      </h4>
+                      {visit.customerPhone && (
+                        <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                          {visit.customerPhone}
+                        </p>
+                      )}
+                    </div>
+                    <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      {visit.status}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                      <Clock className="h-3 w-3 text-indigo-500" />
+                      <span>{visit.day} • {visit.time}</span>
+                    </span>
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20">
+                      <Building2 className="h-3 w-3 text-blue-500" />
+                      <span>{visit.flatType}</span>
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 font-medium mb-3 bg-white/60 dark:bg-slate-800/60 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                    {visit.summary}
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                  <a
+                    href={visit.googleCalendarUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+                    title="Add directly to your Google Calendar"
+                  >
+                    <Calendar className="h-3.5 w-3.5" />
+                    <span>Add to Google Cal</span>
+                  </a>
+
+                  <button
+                    onClick={() => setSelectedCall(visit.originalCall)}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    <span>Transcript</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
         
@@ -1641,7 +1841,7 @@ export default function ColdCallingHomePage() {
 
                       {/* AI Summary / Notes */}
                       <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
-                        {call.aiSummary || 'Outbound sales call discussing Sai Complex Dombivli East project.'}
+                        {call.aiSummary || 'Outbound consultation regarding Sai Garden project (Opp. Xperia Mall).'}
                       </p>
                     </div>
                   </div>
@@ -1739,7 +1939,7 @@ export default function ColdCallingHomePage() {
               <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center justify-between">
                 <div>
                   <span className="font-bold">AI Call Summary: </span>
-                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
+                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Garden project (Opp. Xperia Mall).'}
                 </div>
                 {(() => {
                   const sTag = getSentimentTag(selectedCall);
