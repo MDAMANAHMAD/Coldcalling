@@ -383,6 +383,7 @@ class PriyaRealEstateAgent(Agent):
         self._hangup_fnc = hangup_fnc
         self._on_speech_captured = on_speech_captured
         self.off_topic_count = 0
+        self.intro_delivered = False
         
         now = datetime.now()
         day_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -486,6 +487,10 @@ class PriyaRealEstateAgent(Agent):
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
                 # Instantly initiates predefined sales intro on ANY vocalization (<300ms)
                 if len(user_msgs) == 1:
+                    if getattr(self, "intro_delivered", False):
+                        logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
+                        return
+                    self.intro_delivered = True
                     is_not_interested = any(kw in clean_norm for kw in [
                         "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako"
                     ])
@@ -545,65 +550,65 @@ class PriyaRealEstateAgent(Agent):
                     if is_2bhk and not is_1bhk:
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("2 BHK 45 लाखांपासून सुरू होतो, 35 पेक्षा जास्त ॲमेनिटीजसह. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?")
+                            yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Our 2 BHK starts at 45 Lakh with 35+ lifestyle amenities. Are you looking for ready-to-move or under-construction?")
+                            yield speak("Our 2 BHK starts at 45 Lakh rupees. It is a 22-storey luxury tower with 35+ lifestyle amenities including swimming pool, clubhouse, and gym. Are you looking for ready-to-move or upcoming possession?")
                         else:
-                            yield speak("2 BHK ₹45 lakh se start hai, 35+ amenities ke sath. Aap ready-to-move dekh rahe hain ya under-construction?")
+                            yield speak("2 BHK ₹45 lakh se start hota hai. Yeh 22 maale ka grand tower hai jisme swimming pool, modern gym aur clubhouse samet 35 se zyada lifestyle amenities milti hain. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
                         return
 
                     if is_1bhk and not is_2bhk:
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("1 BHK 30 लाखांपासून सुरू होतो, फक्त 3 ते 5 लाख डाऊन पेमेंटवर. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?")
+                            yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Our 1 BHK starts at 30 Lakh with just 3 to 5 Lakh down payment. Are you looking for ready-to-move or under-construction?")
+                            yield speak("Our 1 BHK starts at 30 Lakh rupees with flexible 3 to 5 Lakh down payment and easy bank loan options. Are you looking for ready-to-move or under-construction?")
                         else:
-                            yield speak("1 BHK ₹30 lakh se shuru hai, sirf ₹3 se 5 lakh down payment par. Aap ready-to-move dekh rahe hain ya under-construction?")
+                            yield speak("1 BHK ₹30 lakh se shuru hota hai. Isme sirf ₹3 se 5 lakh down payment aur easy bank home loan ki suvidha available hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
                         return
 
                     # Case E: Down Payment / Home Loan Inquiry
                     if any(kw in clean_norm for kw in ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन"]):
                         logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सोपे होम लोन मिळेल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
+                            yield speak("हो, संपूर्ण रक्कम एकाच वेळी देण्याची गरज नाही. आपल्या पात्रतेनुसार फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी बँकेतून सोपे होम लोन उपलब्ध होईल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Yes, only 3 to 5 Lakh down payment and the balance via easy home loans. When can you visit the site?")
+                            yield speak("Yes, you do not need to arrange the entire amount at once. Based on eligibility, only 3 to 5 Lakh down payment and balance via easy bank loans. When can you visit the site?")
                         else:
-                            yield speak("Ji haan, sirf ₹3 se 5 lakh down payment aur baaki easy home loan mil jayega. Site visit kab plan karenge?")
+                            yield speak("Ji haan, poora amount ek saath dene ki zaroorat nahi hai. Eligibility ke according sirf ₹3 se 5 lakh down payment aur baaki bank loan mil jata hai. Site visit ke liye kab aana chahenge?")
                         return
 
                     # Case F: Location / Highway / Xperia Mall Inquiry
                     if any(kw in clean_norm for kw in ["kahan hai", "kidhar hai", "location", "address", "kuthe ahe", "xperia", "mall", "shilphata", "manpada", "nilje", "ghansoli", "हायवे", "कुठे"]):
                         logger.info(f"⚡ [FAST-PATH LOCATION] Instant location response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("साई गार्डन एक्सपेरिया मॉलच्या अगदी समोर, निळजे स्टेशनजवळ आहे. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
+                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त 2 मिनिटांवर आणि घणसोली 15 मिनिटांच्या अंतरावर आहे. आपण साईट व्हिजिटसाठी कधी येऊ शकता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Sai Garden is located right opposite Xperia Mall, near Nilje Station. When can you plan a visit?")
+                            yield speak("Sai Garden is located on Shilphata Highway, right opposite Xperia Mall. Nilje Station is just 2 minutes away. When can you plan a site visit?")
                         else:
-                            yield speak("Sai Garden Xperia Mall ke theek samne, Nilje station ke paas hai. Site visit ke liye kab aana chahenge?")
+                            yield speak("Sai Garden Shilphata-Manpada highway par Xperia Mall ke theek samne hai. Nilje station 2 minute aur Ghansoli 15 minute ki drive par hai. Site visit ke liye kab aana chahenge?")
                         return
 
                     # Case G: Connectivity / Metro / Bullet Train Inquiry
                     if any(kw in clean_norm for kw in ["metro", "bullet train", "train", "station", "connectivity", "रस्ता", "स्टेशन"]):
                         logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("समोर मेट्रो स्टेशन आणि निळजे स्टेशन 2 मिनिटांवर आहे. या वीकेंडला साईट व्हिजिट करूया का?")
+                            yield speak("कनेक्टिव्हिटी उत्तम आहे. समोर मेट्रो स्टेशन येत आहे, निळजे स्टेशन 2 मिनिटांवर आहे आणि जवळच बुलेट ट्रेन मार्ग देखील आहे. आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Upcoming Metro station in front and Nilje station 2 minutes away. Shall we plan a visit this weekend?")
+                            yield speak("Connectivity is superb with an upcoming Metro station in front, Nilje station 2 minutes away, and the Bullet train corridor nearby. When can you plan a visit?")
                         else:
-                            yield speak("Samne Metro station aur Nilje station 2 minute par hai. Kya is weekend site visit plan karein?")
+                            yield speak("Connectivity bahut shaandar hai. Samne Metro station aa raha hai, Nilje station 2 minute par hai aur Bullet train route bhi hai. Aap actual site visit kab plan karenge?")
                         return
 
                     # Case H: Amenities / Building Floors Inquiry
                     if any(kw in clean_norm for kw in ["amenities", "amenity", "gym", "swimming pool", "clubhouse", "floors", "building", "माले", "मजली", "सुविधा"]):
                         logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("प्रोजेक्ट 22 मजली इमारत असून यात स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त सुविधा आहेत. साईट व्हिजिट कधी कराल?")
+                            yield speak("साई गार्डन 22 मजली टॉवर असून यात 35 पेक्षा जास्त लक्झरी ॲमेनिटीज आहेत — जसे की स्विमिंग पूल, मॉडर्न जिम, क्लबहाऊस, चिल्ड्रन्स प्ले एरिया आणि लँडस्केप गार्डन. आपण प्रत्यक्ष साईट व्हिजिट कधी प्लॅन कराल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("It is a 22-storey tower with 35+ amenities including a pool and gym. When would you like to visit?")
+                            yield speak("Sai Garden is a 22-storey tower with 35+ luxury amenities including a swimming pool, clubhouse, modern gym, and landscaped podium garden. When would you like to visit?")
                         else:
-                            yield speak("22 maale ki building hai aur pool, gym samet 35+ amenities hain. Site visit kab plan karenge?")
+                            yield speak("Sai Garden 22 maale ka tower hai jisme 35 se zyada luxury amenities hain — jaise swimming pool, modern gym, clubhouse, children play area aur landscape garden. Kya aap actual site visit plan karna chahenge?")
                         return
 
                     # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
@@ -2719,6 +2724,24 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{ev.transcript}'")
             else:
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
+
+            # INSTANT TURN 1 TRIGGER (<200ms):
+            # As soon as caller voices ANY response to initial "हॅलो?", fire intro immediately!
+            if not getattr(agent, "intro_delivered", False) and len(ev.transcript.strip()) > 0:
+                agent.intro_delivered = True
+                active_l = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+                logger.info(f"⚡ [INSTANT TURN 1 TRIGGER] Caller voiced '{ev.transcript}' (is_final={ev.is_final})! Firing intro in '{active_l}' immediately (<200ms)!")
+                if active_l == "hi":
+                    intro_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                elif active_l == "en":
+                    intro_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+                else:
+                    intro_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+                t_user_stop = 0.0
+                record_dialogue_turn("agent", intro_text)
+                session.say(intro_text, allow_interruptions=True)
+                return
+
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
             record_dialogue_turn("customer", ev.transcript.strip())
