@@ -466,6 +466,10 @@ class PriyaRealEstateAgent(Agent):
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
                     ACTIVE_TTS_LANGUAGE = "mr"
                     if len(user_msgs) == 1:
+                        if getattr(self, "intro_delivered", False):
+                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
+                            return
+                        self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
@@ -473,6 +477,10 @@ class PriyaRealEstateAgent(Agent):
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     ACTIVE_TTS_LANGUAGE = "en"
                     if len(user_msgs) == 1:
+                        if getattr(self, "intro_delivered", False):
+                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
+                            return
+                        self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
                         return
@@ -480,6 +488,10 @@ class PriyaRealEstateAgent(Agent):
                 if any(w in clean_norm for w in ["hindi", "हिंदी", "hindi mein"]):
                     ACTIVE_TTS_LANGUAGE = "hi"
                     if len(user_msgs) == 1:
+                        if getattr(self, "intro_delivered", False):
+                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
+                            return
+                        self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                         return
@@ -1998,7 +2010,7 @@ async def entrypoint(ctx: JobContext):
     if is_cartesia and hasattr(tts, "update_options"):
         tts.update_options(
             voice=kusha_voice_id,
-            language="hi",
+            language="mr",
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume
@@ -2621,6 +2633,7 @@ async def entrypoint(ctx: JobContext):
     has_prompted_silence = False
     agent_is_speaking = False
     intro_finished = False
+    intro_delivered = False
     caller_has_spoken = False
     watchdog_task = None
     last_agent_speech = ""
@@ -2714,7 +2727,8 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
-        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken
+        global ACTIVE_TTS_LANGUAGE
+        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken, intro_delivered, agent
         caller_has_spoken = True
         t_last_activity = time.time()
         has_prompted_silence = False
@@ -2726,21 +2740,32 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
 
             # INSTANT TURN 1 TRIGGER (<200ms):
-            # As soon as caller voices ANY response to initial "हॅलो?", fire intro immediately!
-            if not getattr(agent, "intro_delivered", False) and len(ev.transcript.strip()) > 0:
-                agent.intro_delivered = True
-                active_l = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                logger.info(f"⚡ [INSTANT TURN 1 TRIGGER] Caller voiced '{ev.transcript}' (is_final={ev.is_final})! Firing intro in '{active_l}' immediately (<200ms)!")
-                if active_l == "hi":
-                    intro_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                elif active_l == "en":
-                    intro_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
-                else:
-                    intro_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-                t_user_stop = 0.0
-                record_dialogue_turn("agent", intro_text)
-                session.say(intro_text, allow_interruptions=True)
-                return
+            # As soon as caller voices ANY greeting or word in response to initial "हॅलो?", fire intro immediately!
+            if not intro_delivered and ev.transcript and len(ev.transcript.strip()) > 0:
+                clean_tr = ev.transcript.strip().lower()
+                clean_chars = re.sub(r'[^\w\s]', '', clean_tr).strip()
+                if len(clean_chars) >= 1:
+                    intro_delivered = True
+                    if agent:
+                        agent.intro_delivered = True
+                    # Detect if caller responded in Hindi or English right away
+                    detected_first_lang = resolve_language(clean_tr, ACTIVE_TTS_LANGUAGE or "mr")
+                    if detected_first_lang != ACTIVE_TTS_LANGUAGE:
+                        ACTIVE_TTS_LANGUAGE = detected_first_lang
+                        current_lang = detected_first_lang
+
+                    active_l = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+                    logger.info(f"⚡ [INSTANT TURN 1 TRIGGER] Caller voiced '{ev.transcript}' (is_final={ev.is_final})! Firing intro in '{active_l}' immediately (<200ms)!")
+                    if active_l == "hi":
+                        intro_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                    elif active_l == "en":
+                        intro_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+                    else:
+                        intro_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+                    t_user_stop = 0.0
+                    record_dialogue_turn("agent", intro_text)
+                    session.say(intro_text, allow_interruptions=True)
+                    return
 
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
@@ -2784,7 +2809,6 @@ async def entrypoint(ctx: JobContext):
             
             if new_lang != current_lang:
                 current_lang = new_lang
-                global ACTIVE_TTS_LANGUAGE
                 ACTIVE_TTS_LANGUAGE = current_lang
                 logger.info(f"🗣️ Language Switch Detected: '{current_lang}' (ACTIVE_TTS_LANGUAGE={ACTIVE_TTS_LANGUAGE}) for text: '{ev.transcript}'")
                 
