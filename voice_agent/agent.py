@@ -2722,7 +2722,7 @@ async def entrypoint(ctx: JobContext):
 
                         logger.info(f"⚡⚡⚡ [INSTANT VAD TURN 1 INTRO] Caller spoke for {spoken_dur:.2f}s. Triggering Sai Garden intro immediately via VAD (0ms STT wait)!")
                         record_dialogue_turn("agent", intro_text)
-                        session.say(intro_text, allow_interruptions=True)
+                        session.say(intro_text, allow_interruptions=False)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
