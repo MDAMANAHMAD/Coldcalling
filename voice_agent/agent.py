@@ -2917,11 +2917,12 @@ async def entrypoint(ctx: JobContext):
                 text = raw_text.lower()
                 ending_phrases = [
                     "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-                    "shukriya", "bye!", "bye", "baad mein call karte hain",
+                    "bye!", "bye", "baad mein call karte hain",
                     "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
-                    "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
+                    "दिवस चांगला जावो", "काळजी घ्या", "नंतर कॉल करते", "नंतर फोन करते"
                 ]
-                if any(phrase in text for phrase in ending_phrases):
+                customer_turns = [d for d in call_dialogue if d.get("role") == "customer" and len(d.get("text", "").strip()) > 3]
+                if len(customer_turns) >= 2 and any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
                     trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
@@ -3048,11 +3049,12 @@ async def entrypoint(ctx: JobContext):
         text = raw_text.lower()
         ending_phrases = [
             "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-            "shukriya", "bye!", "bye", "baad mein call karte hain",
+            "bye!", "bye", "baad mein call karte hain",
             "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
-            "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
+            "दिवस चांगला जावो", "काळजी घ्या", "नंतर कॉल करते", "नंतर फोन करते"
         ]
-        if any(phrase in text for phrase in ending_phrases):
+        customer_turns = [d for d in call_dialogue if d.get("role") == "customer" and len(d.get("text", "").strip()) > 3]
+        if len(customer_turns) >= 2 and any(phrase in text for phrase in ending_phrases):
             logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
             trigger_hangup(wait_for_speech=True, delay_seconds=0.8)
 
