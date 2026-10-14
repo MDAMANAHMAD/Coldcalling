@@ -452,9 +452,33 @@ class PriyaRealEstateAgent(Agent):
                     ACTIVE_TTS_LANGUAGE = det_lang
                     logger.info(f"🗣️ [LLM NODE LANGUAGE LOCK] Updated ACTIVE_TTS_LANGUAGE to '{ACTIVE_TTS_LANGUAGE}' from text: '{raw_text}'")
 
+                # Comprehensive BHK & Number Matching Across Languages (Marathi, Hindi, English)
+                is_both_bhk = any(kw in clean_norm for kw in [
+                    "both", "dono", "donhi", "दोन्ही", "दोनो", "either", "konta pan", "koi bhi", "1 and 2", "1 aur 2", "dono dekh", "donhi dakhva"
+                ])
+
+                is_1bhk_kws = [
+                    "1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk", "एक बीएचके", "१ बीएचके", "१bhk", "1 bk", "one bk",
+                    "1 flat", "one flat", "ek flat", "1st", "first", "पहिला", "pahila", "pehla", "1 number", "ek number", "single",
+                    "वन बीएचके", "वन bhk", "वनbhk"
+                ]
+                is_1bhk = any(kw in clean_norm for kw in is_1bhk_kws) or (
+                    any(w in words for w in ["one", "1", "ek", "onebhk", "एक", "१", "pehla", "pahila"]) and not any(w in words for w in ["two", "2", "do", "don", "दोन", "दो", "२", "dono", "donhi", "both"])
+                )
+
+                is_2bhk_kws = [
+                    "2 bhk", "2bhk", "two bhk", "do bhk", "second bhk", "don bhk", "done bhk", "dawn bhk", "2 bk", "two bk",
+                    "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk", "don", "दोन", "do", "दो",
+                    "2 flat", "two flat", "do flat", "2nd", "second", "दुसरा", "dusra", "2 number", "do number", "don number",
+                    "टू बीएचके", "टू bhk", "टूbhk", "टु बीएचके"
+                ]
+                is_2bhk = any(kw in clean_norm for kw in is_2bhk_kws) or (
+                    any(w in words for w in ["two", "2", "do", "don", "twobhk", "दोन", "दो", "२", "dusra"]) and not any(w in words for w in ["one", "1", "ek", "एक", "१", "dono", "donhi", "both"])
+                )
+
                 # Check for unintelligible / mumbled / empty speech on subsequent turns
                 if len(user_msgs) >= 2:
-                    if len(words) == 0 or (len(clean_norm) <= 2 and clean_norm not in ["1", "2", "no", "ho", "do"]):
+                    if len(words) == 0 or (len(clean_norm) <= 2 and clean_norm not in ["1", "2", "no", "ho", "do", "ek", "don", "२", "१"]):
                         logger.info(f"⚡ [UNCLEAR SPEECH DETECTED] Prompting polite clarification for '{raw_text}'")
                         if ACTIVE_TTS_LANGUAGE == "mr":
                             yield speak("माफ करा, आपला आवाज स्पष्ट आला नाही. आपण पुन्हा सांगू शकाल का?")
@@ -516,6 +540,40 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("काही हरकत नाही, वेळ दिल्याबद्दल धन्यवाद, दिवस चांगला जावो, नमस्कार.")
                         return
 
+                    # If caller immediately responded with BHK choice on Turn 1!
+                    if is_both_bhk:
+                        self.intro_delivered = True
+                        logger.info(f"⚡ [FAST-PATH TURN 1 BOTH BHK] Caller interested in both BHKs for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("We offer 1 BHK from 30 Lakh and 2 BHK from 45 Lakh with 35+ lifestyle amenities. Are you looking for ready-to-move or under-construction?")
+                        else:
+                            yield speak("Hamare yahan 1 BHK ₹30 lakh se aur 2 BHK ₹45 lakh se start hota hai, sath mein 35+ modern amenities milti hain. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
+                        return
+
+                    if is_1bhk and not is_2bhk:
+                        self.intro_delivered = True
+                        logger.info(f"⚡ [FAST-PATH TURN 1 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("Our 1 BHK starts at 30 Lakh rupees with flexible 3 to 5 Lakh down payment and easy bank loan options. Are you looking for ready-to-move or under-construction?")
+                        else:
+                            yield speak("1 BHK ₹30 lakh se shuru hota hai. Isme sirf ₹3 se 5 lakh down payment aur easy bank home loan ki suvidha available hai. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
+                        return
+
+                    if is_2bhk and not is_1bhk:
+                        self.intro_delivered = True
+                        logger.info(f"⚡ [FAST-PATH TURN 1 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("Our 2 BHK starts at 45 Lakh rupees. It is a 22-storey luxury tower with 35+ lifestyle amenities including swimming pool, clubhouse, and gym. Are you looking for ready-to-move or upcoming possession?")
+                        else:
+                            yield speak("2 BHK ₹45 lakh se start hota hai. Yeh 22 maale ka grand tower hai jisme swimming pool, modern gym aur clubhouse samet 35 se zyada lifestyle amenities milti hain. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
+                        return
+
                     if getattr(self, "intro_delivered", False):
                         logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY VIA VAD] Skipping duplicate intro in llm_node.")
                         return
@@ -534,6 +592,22 @@ class PriyaRealEstateAgent(Agent):
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
                 elif len(user_msgs) >= 2:
+                    # Case R: Caller didn't hear / asks to repeat ("kya bola", "kay bolla", "pardon", "repeat", "aawaz nahi ala", "phir se")
+                    repeat_kws = [
+                        "kya bola", "kya bole", "kya kaha", "phir se", "fir se", "repeat", "pardon",
+                        "samajh nahi", "samajhla nahi", "aiku nahi", "aawaz nahi ala", "aawaz nahi aala", "aawaz nahi",
+                        "kay mhanalat", "kay bolla", "ek aur baar", "ekda sanga", "bolie na", "kya bole aap"
+                    ]
+                    if any(kw in clean_norm for kw in repeat_kws):
+                        logger.info(f"⚡ [FAST-PATH REPEAT REQUEST] Instant repeat for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("हो, मी विचारत होते — आपण साई गार्डन मध्ये 1 BHK फ्लॅट शोधत आहात की 2 BHK?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("Yes, I was asking — are you looking for a 1 BHK or a 2 BHK apartment in Sai Garden?")
+                        else:
+                            yield speak("जी, मैं पूछ रही थी — क्या आप साई गार्डन में 1 BHK फ्लैट देख रहे हैं या 2 BHK?")
+                        return
+
                     # Case 0: Repeated Greeting ("Hello", "हा बोलिए", "हॅलो", "नमस्ते")
                     greeting_kws = ["hello", "helo", "halo", "नमस्ते", "नमस्कार", "namaste", "namaskar", "boliye", "bola", "ha bolie", "ha boliye"]
                     if any(kw in clean_norm for kw in greeting_kws) and len(words) <= 3:
@@ -586,17 +660,18 @@ class PriyaRealEstateAgent(Agent):
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                         return
 
-                    # Case C: 2 BHK confirmed / chosen (Comprehensive Marathi & Hindi recognition)
-                    is_2bhk = any(kw in clean_norm for kw in [
-                        "2 bhk", "2bhk", "two bhk", "do bhk", "second bhk", "don bhk", "done bhk", "dawn bhk",
-                        "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk", "don", "दोन"
-                    ]) or (clean_norm in ["two", "2", "do", "don", "twobhk", "दोन"] and len(words) <= 2)
+                    # Case Both: Both 1 BHK & 2 BHK
+                    if is_both_bhk:
+                        logger.info(f"⚡ [FAST-PATH BOTH BHK] Instant both BHK response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("We offer 1 BHK from 30 Lakh and 2 BHK from 45 Lakh with 35+ lifestyle amenities. Are you looking for ready-to-move or under-construction?")
+                        else:
+                            yield speak("Hamare yahan 1 BHK ₹30 lakh se aur 2 BHK ₹45 lakh se start hota hai, sath mein 35+ modern amenities milti hain. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
+                        return
 
-                    # Case D: 1 BHK confirmed / chosen
-                    is_1bhk = any(kw in clean_norm for kw in [
-                        "1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk", "एक बीएचके", "१ बीएचके", "१bhk"
-                    ]) or (clean_norm in ["one", "1", "ek", "onebhk", "एक"] and len(words) <= 2)
-
+                    # Case C: 2 BHK confirmed / chosen
                     if is_2bhk and not is_1bhk:
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
@@ -607,6 +682,7 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("2 BHK ₹45 lakh se start hota hai. Yeh 22 maale ka grand tower hai jisme swimming pool, modern gym aur clubhouse samet 35 se zyada lifestyle amenities milti hain. Aap ready-to-move dekh rahe hain ya under-construction chalega?")
                         return
 
+                    # Case D: 1 BHK confirmed / chosen
                     if is_1bhk and not is_2bhk:
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
@@ -1383,14 +1459,24 @@ STT_REPLACE = {
     "2bhk": "2 BHK",
     "2BHK": "2 BHK",
     "two bhk": "2 BHK",
+    "टू बीएचके": "2 BHK",
+    "टू bhk": "2 BHK",
+    "टूbhk": "2 BHK",
+    "टु बीएचके": "2 BHK",
     "ek bhk": "1 BHK",
     "एक बीएचके": "1 BHK",
     "एक bhk": "1 BHK",
+    "एक बी एच के": "1 BHK",
     "१ बीएचके": "1 BHK",
     "१bhk": "1 BHK",
     "1bhk": "1 BHK",
     "1BHK": "1 BHK",
     "one bhk": "1 BHK",
+    "वन बीएचके": "1 BHK",
+    "वन bhk": "1 BHK",
+    "वनbhk": "1 BHK",
+    "१ नंबर": "1 BHK",
+    "२ नंबर": "2 BHK",
     # 1 RK terms
     "१ आरके": "1 RK",
     "१आरके": "1 RK",
@@ -2722,7 +2808,19 @@ async def entrypoint(ctx: JobContext):
 
                         logger.info(f"⚡⚡⚡ [INSTANT VAD TURN 1 INTRO] Caller spoke for {spoken_dur:.2f}s. Triggering Sai Garden intro immediately via VAD (0ms STT wait)!")
                         record_dialogue_turn("agent", intro_text)
-                        session.say(intro_text, allow_interruptions=False)
+                        speech_handle = session.say(intro_text, allow_interruptions=False)
+
+                        async def _unlock_intro_interruptions(sh):
+                            try:
+                                await asyncio.sleep(0.8)
+                                target = sh if (sh and hasattr(sh, "allow_interruptions")) else getattr(session, "current_speech", None)
+                                if target and hasattr(target, "allow_interruptions"):
+                                    target.allow_interruptions = True
+                                    logger.info("🔓 [TURN 1 INTRO] Enabled caller interruptions after initial greeting grace period.")
+                            except Exception as e:
+                                logger.debug(f"Unlock intro interruptions note: {e}")
+
+                        asyncio.create_task(_unlock_intro_interruptions(speech_handle))
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
