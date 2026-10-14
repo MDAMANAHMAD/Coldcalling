@@ -520,6 +520,18 @@ class PriyaRealEstateAgent(Agent):
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
                 elif len(user_msgs) >= 2:
+                    # Case 0: Repeated Greeting ("Hello", "हा बोलिए", "हॅलो", "नमस्ते")
+                    greeting_kws = ["hello", "helo", "halo", "नमस्ते", "नमस्कार", "namaste", "namaskar", "boliye", "bola", "ha bolie", "ha boliye"]
+                    if any(kw in clean_norm for kw in greeting_kws) and len(words) <= 3:
+                        logger.info(f"⚡ [FAST-PATH GREETING RECOVERY] Instant response for greeting '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                        else:
+                            yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        return
+
                     # Case A: Polite Decline / Not Interested
                     not_interested_kws = ["not interested", "nahi chahiye", "nahi lena", "nahi dekhna", "wrong number", "mat karo", "mat lagao", "no interest", "koi interest nahi", "cut the call", "disconnect", "nako", "garaj nahi"]
                     if any(kw in clean_norm for kw in not_interested_kws):
@@ -2630,6 +2642,7 @@ async def entrypoint(ctx: JobContext):
     t_user_stop = 0.0
     turn_counter = 0
     t_last_activity = time.time()
+    last_prompt_time = time.time()
     has_prompted_silence = False
     agent_is_speaking = False
     intro_finished = False
@@ -2644,26 +2657,30 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
                 t_last_activity = time.time()
+                last_prompt_time = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
                 t_user_stop = time.perf_counter()
                 intro_finished = True
                 t_last_activity = time.time()
+                last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
     @session.on("agent_state_changed")
     def _on_agent_state_changed(ev: AgentStateChangedEvent):
-        nonlocal t_user_stop, turn_counter, agent_is_speaking, t_last_activity
+        nonlocal t_user_stop, turn_counter, agent_is_speaking, t_last_activity, last_prompt_time
         try:
             if ev.new_state == "speaking":
                 agent_is_speaking = True
+                t_last_activity = time.time()
+                last_prompt_time = time.time()
                 if t_user_stop > 0:
                     elapsed_ms = (time.perf_counter() - t_user_stop) * 1000
                     # Sanity filter: A real turn response happens within 6 seconds.
@@ -2682,6 +2699,7 @@ async def entrypoint(ctx: JobContext):
             elif ev.new_state in ["listening", "idle"]:
                 agent_is_speaking = False
                 t_last_activity = time.time()
+                last_prompt_time = time.time()
         except Exception as err:
             logger.debug(f"Agent state changed error: {err}")
 
@@ -2739,33 +2757,14 @@ async def entrypoint(ctx: JobContext):
             else:
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
 
-            # INSTANT TURN 1 TRIGGER (<200ms):
-            # As soon as caller voices ANY greeting or word in response to initial "हॅलो?", fire intro immediately!
-            if not intro_delivered and ev.transcript and len(ev.transcript.strip()) > 0:
-                clean_tr = ev.transcript.strip().lower()
-                clean_chars = re.sub(r'[^\w\s]', '', clean_tr).strip()
-                if len(clean_chars) >= 1:
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_delivered = True
-                    # Detect if caller responded in Hindi or English right away
-                    detected_first_lang = resolve_language(clean_tr, ACTIVE_TTS_LANGUAGE or "mr")
-                    if detected_first_lang != ACTIVE_TTS_LANGUAGE:
-                        ACTIVE_TTS_LANGUAGE = detected_first_lang
-                        current_lang = detected_first_lang
-
-                    active_l = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                    logger.info(f"⚡ [INSTANT TURN 1 TRIGGER] Caller voiced '{ev.transcript}' (is_final={ev.is_final})! Firing intro in '{active_l}' immediately (<200ms)!")
-                    if active_l == "hi":
-                        intro_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                    elif active_l == "en":
-                        intro_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
-                    else:
-                        intro_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-                    t_user_stop = 0.0
-                    record_dialogue_turn("agent", intro_text)
-                    session.say(intro_text, allow_interruptions=True)
-                    return
+            # Early Language Detection on Turn 1 & all turns:
+            clean_tr = ev.transcript.strip().lower()
+            if len(clean_tr) >= 2:
+                det_lang = resolve_language(clean_tr, ACTIVE_TTS_LANGUAGE or "mr")
+                if det_lang != ACTIVE_TTS_LANGUAGE:
+                    ACTIVE_TTS_LANGUAGE = det_lang
+                    current_lang = det_lang
+                    logger.info(f"🗣️ Early Language Detection: '{det_lang}' from text: '{clean_tr}'")
 
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
@@ -3183,12 +3182,13 @@ async def entrypoint(ctx: JobContext):
         logger.info("🎙️ [CALL CONNECTED] Ready! Gayatri listening for caller greeting/voice to deliver predefined intro...")
         intro_finished = True
 
-    # Silence Watchdog: 0.8s (Initial Hello) -> 5s Interval Prompts -> 15s (Auto Hangup)
+    # Silence Watchdog: 0.8s (Initial Hello) -> 10s Intervals -> 20s (Auto Hangup)
     t_last_activity = time.time()
+    last_prompt_time = time.time()
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken
+        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken, intro_delivered
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing!
@@ -3198,7 +3198,7 @@ async def entrypoint(ctx: JobContext):
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.8s initial hello, 5s intervals, 15s auto-terminate)...")
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.8s initial hello, 10s intervals, 20s auto-terminate)...")
         
         t_call_pickup = time.time()
         last_prompt_time = t_call_pickup
@@ -3223,21 +3223,23 @@ async def entrypoint(ctx: JobContext):
                 if now - t_call_pickup >= 0.8:
                     initial_hello_done = True
                     last_prompt_time = now
+                    t_last_activity = now
                     logger.info("🎙️ [INITIAL GREETING] 0.8s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
                     try:
                         t_user_stop = 0.0
                         record_dialogue_turn("agent", "हॅलो?")
                         session.say("हॅलो?", allow_interruptions=True)
                         t_last_activity = time.time()
+                        last_prompt_time = time.time()
                     except Exception as e:
                         logger.warning(f"Error speaking initial 0.8s hello: {e}")
                 continue
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
 
-            # 2. If caller stays silent for 15.0 seconds total without response -> Terminate call
-            if silence_duration >= 15.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{active_lang}'...")
+            # 2. If caller stays silent for 20.0 seconds total without response -> Terminate call
+            if silence_duration >= 20.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=20s). Terminating call in language '{active_lang}'...")
                 if active_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, दिवस चांगला जावो, नमस्कार."
                 elif active_lang == "en":
@@ -3255,25 +3257,38 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 3. Say hello in every 5 seconds interval of caller silence
-            if (now - last_prompt_time >= 5.0) and (silence_duration >= 5.0):
+            # 3. Say prompt after 10.0 seconds interval of genuine caller silence
+            if (now - last_prompt_time >= 10.0) and (silence_duration >= 10.0):
                 last_prompt_time = now
-                logger.info(f"⏳ [SILENCE PROMPT] 5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
-                if active_lang == "mr":
-                    prompt_text = "हॅलो? माझा आवाज येतोय का?"
-                elif active_lang == "en":
-                    prompt_text = "Hello? Are you able to hear me?"
+                t_last_activity = now
+                logger.info(f"⏳ [SILENCE PROMPT] 10s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                
+                # If intro has not yet been delivered, deliver the Sai Garden intro directly
+                if not getattr(agent, "intro_delivered", False) and not intro_delivered:
+                    intro_delivered = True
+                    if agent:
+                        agent.intro_delivered = True
+                    logger.info("⏳ [INTRO VIA SILENCE WATCHDOG] Caller silent after hello. Delivering Sai Garden intro now...")
+                    if active_lang == "hi":
+                        prompt_text = "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                    elif active_lang == "en":
+                        prompt_text = "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+                    else:
+                        prompt_text = "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
                 else:
-                    if not caller_has_spoken:
-                        prompt_text = "Hello?"
+                    if active_lang == "mr":
+                        prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                    elif active_lang == "en":
+                        prompt_text = "Hello? Are you able to hear me?"
                     else:
                         prompt_text = "हॅलो? क्या आप सुन रहे हैं?"
+
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
                     session.say(prompt_text, allow_interruptions=True)
                 except Exception as e:
-                    logger.warning(f"Error speaking 5s interval silence prompt: {e}")
+                    logger.warning(f"Error speaking 10s interval silence prompt: {e}")
 
     watchdog_task = asyncio.create_task(_silence_watchdog())
 
