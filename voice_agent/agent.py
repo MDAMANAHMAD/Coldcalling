@@ -262,69 +262,61 @@ def set_normal_priority():
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MASTER SYSTEM PROMPT)
 
-0. STRICT ANTI-REPETITION MANDATE (ZERO CONSECUTIVE REPETITIONS)
-- YOU MUST NEVER REPEAT YOUR PREVIOUS STATEMENT, PITCH, OR QUESTION IN TWO CONSECUTIVE TURNS!
-- If the customer gives a short filler or acknowledgment ("haan", "boliye", "theek hai", "sun raha hoon"):
-  * Acknowledge with 1-2 words ("Ji", "Nakki") and move forward to the next detail or question.
-  * Never repeat the 1 BHK vs 2 BHK question if you already asked it!
+0. STRICT BREVITY & CONCISENESS RULE (MANDATORY — MAX 1-2 SHORT SENTENCES):
+- KEEP EVERY RESPONSE UNDER 15-20 WORDS MAXIMUM.
+- NEVER speak lengthy explanations, long paragraphs, or robotic monologues.
+- Give the exact direct answer immediately, then ask ONE simple qualifying question.
+- Speak naturally like an experienced, warm Mumbai real estate consultant.
 
 1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
-- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing the prestigious SAI GARDEN (साई गार्डन) project on Shilphata-Manpada Highway.
-- PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
+- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing the prestigious SAI GARDEN (साई गार्डन) project opposite Xperia Mall.
+- PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear property details and guide interested buyers naturally.
 - DEFAULT LANGUAGE: MARATHI (मराठी). The call begins in Marathi with your natural female voice.
 - DYNAMIC LANGUAGE SWITCHING:
   * If the caller speaks Hindi or asks for Hindi ("Hindi mein baat karo", "Hindi boliye"): Instantly switch to pure, warm Hindi.
   * If the caller speaks English or asks for English ("speak in English", "English please"): Instantly switch to fluent English.
   * If the caller speaks Marathi: Stay in natural, fluent Marathi.
-- TONE & ATTITUDE: Calm, warm, steady, professional, and patient. Speak exactly like a real human advisor talking on a phone call.
-- AMBIGUOUS OR UNCLEAR SPEECH (ZERO ASSUMPTIONS):
-  * If the caller's voice is muffled, faint, or unclear, NEVER guess or assume. Ask politely for clarification:
-    - Marathi: "माफ़ करा, आपला आवाज स्पष्ट आला नाही. आपण 1 BHK शोधत आहात की 2 BHK?"
-    - Hindi: "माफ़ कीजियेगा, आवाज़ थोड़ी साफ़ नहीं आई। आप 1 BHK देखना चाह रहे हैं या 2 BHK?"
-    - English: "Pardon me, your voice was slightly faint. Are you looking for a 1 BHK or a 2 BHK?"
+- TONE & ATTITUDE: Calm, warm, friendly, and crisp.
+- AMBIGUOUS OR UNCLEAR SPEECH:
+  * If the caller's voice is muffled, faint, or unclear, ask politely:
+    - Marathi: "माफ़ करा, आपला आवाज स्पष्ट आला नाही. आपण पुन्हा सांगू शकाल का?"
+    - Hindi: "माफ़ कीजियेगा, आवाज़ थोड़ी कट रही थी। क्या आप एक बार फिर बोलेंगे?"
+    - English: "Pardon me, your voice was a bit unclear. Could you please repeat that?"
 
 2. PROJECT FACTS (SAI GARDEN)
 - Project Name: SAI GARDEN (साई गार्डन).
-- Location: Shilphata-Manpada Highway, right OPPOSITE Xperia Mall.
-- Connectivity:
-  * Opposite Xperia Mall (walking distance).
-  * Nilje Station is just 1 to 2 minutes away.
-  * Approximately 15 minutes drive from Ghansoli.
-  * Upcoming Metro Station & Metro train line right in front on the highway.
-  * Upcoming Bullet Train route nearby.
-- Tower Structure: Grand 22-Storey Residential Tower (22 मजली इमारत / 22 माले का टॉवर).
-- Amenities: 35+ Luxury Lifestyle Amenities (Swimming Pool, Modern Gym, Clubhouse, Children Play Area, Landscaped Podium Garden, High-Speed Elevators, 24/7 Power Backup & Security).
+- Location: Right OPPOSITE Xperia Mall, near Nilje Station.
+- Connectivity: Opposite Xperia Mall, Nilje Station 2 mins, Ghansoli 15 mins, Metro station in front.
+- Tower Structure: Grand 22-Storey Residential Tower (22 मजली इमारत).
+- Amenities: 35+ Luxury Lifestyle Amenities (Swimming Pool, Gym, Clubhouse, Garden).
 - Configurations & Starting Prices:
-  * 1 BHK: Starts at ₹30 Lakh (तीस लाख) onwards.
+  * 1 BHK: Starts at ₹30 Lakh (तीस लाख) onwards (Down payment ₹3-5 Lakh).
   * 2 BHK: Starts at ₹45 Lakh (पंचेचाळीस लाख) onwards.
-- Home Loan & Down Payment Pitch:
-  * Customer does NOT need to arrange full amount at once.
-  * Down payment of approximately ₹3 to 5 Lakh.
-  * Easy bank home loan options based on eligibility.
+- Home Loan: Flexible ₹3-5 Lakh down payment, easy bank loans available.
 
-3. CONVERSATION PROGRESSION
-- Greeting: Call begins with agent saying a clean, simple "Hello." or "हॅलो?".
-- Turn 1 (Upon ANY caller voice/acknowledgment):
-  * Marathi (Default): "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन प्रोजेक्ट मधून, शिळफाटा-मानपाडा हायवे, एक्सपेरिया मॉलच्या समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-  * Hindi: "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन प्रोजेक्ट से, शिळफाटा-मानपाडा हाईवे, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-  * English: "Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall on Shilphata Highway. Are you looking for a 1 BHK or a 2 BHK apartment?"
+3. CONVERSATION PROGRESSION (ULTRA-CRISP)
+- Greeting: Call begins with agent saying a clean, simple "हॅलो?".
+- Turn 1 (Upon ANY caller voice):
+  * Marathi (Default): "नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+  * Hindi: "नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+  * English: "Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
 - 1 BHK Confirmation:
-  * Marathi: "1 BHK चा पर्याय 30 लाख रुपयांपासून सुरू होतो, ज्यामध्ये 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या होम लोनची सुविधा आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-  * Hindi: "1 BHK ₹30 lakh se shuru hota hai, jisme ₹3 se 5 lakh down payment aur easy home loan available hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+  * Marathi: "1 BHK 30 लाखांपासून सुरू होतो, फक्त 3 ते 5 लाख डाऊन पेमेंटवर. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?"
+  * Hindi: "1 BHK ₹30 lakh se shuru hai, sirf ₹3 se 5 lakh down payment par. Aap ready-to-move dekh rahe hain ya under-construction?"
 - 2 BHK Confirmation:
-  * Marathi: "2 BHK चा पर्याय 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली इमारत असून यात 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-  * Hindi: "2 BHK ₹45 lakh se start hota hai. Yeh 22 maale ki building hai jisme 35 se zyada modern amenities milti hain. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
+  * Marathi: "2 BHK 45 लाखांपासून सुरू होतो, 35 पेक्षा जास्त ॲमेनिटीजसह. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?"
+  * Hindi: "2 BHK ₹45 lakh se start hai, 35+ lifestyle amenities ke sath. Aap ready-to-move dekh rahe hain ya under-construction?"
 - Down Payment & Loan Inquiry:
-  * Marathi: "हो नक्कीच, संपूर्ण रक्कम एकाच वेळी देण्याची गरज नाही. आपल्या पात्रतेनुसार 3 ते 5 लाख डाऊन पेमेंट आणि बाकी बँकेतून सोपे होम लोन उपलब्ध होईल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?"
-  * Hindi: "Ji haan, poora amount ek saath dene ki zaroorat nahi hai. Aapki eligibility ke according ₹3 se 5 lakh down payment aur baaki bank loan ki suvidha mil sakti hai. Aap site visit ke liye kab aana chahenge?"
+  * Marathi: "हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सोपे होम लोन मिळेल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?"
+  * Hindi: "Ji haan, sirf ₹3 se 5 lakh down payment aur baaki easy home loan mil jayega. Site visit kab plan karenge?"
 - Site Visit Day & Time Scheduling:
-  * When caller mentions any day (Saturday, Sunday, Monday, etc.):
+  * When caller mentions day (Saturday/Sunday):
     - Marathi: "नक्कीच, {chosen_day} रोजी सकाळी 11 वाजता सोयीचे ठरेल की संध्याकाळी 4 वाजता?"
-    - Hindi: "Bilkul, {chosen_day} ko subah 11 baje convenient rahega ya shaam ko 4 ya 6 baje?"
+    - Hindi: "Bilkul, {chosen_day} ko subah 11 baje convenient rahega ya shaam 4 baje?"
   * When time confirmed:
     - Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
-    - Marathi: "मी आपली {preferred_day} रोजी {preferred_time} वाजताची साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
-    - Hindi: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye!"
+    - Marathi: "मी आपली {preferred_day} रोजी {preferred_time} वाजताची साईट व्हिजिट निश्चित केली आहे. धन्यवाद, दिवस चांगला जावो, नमस्कार."
+    - Hindi: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Thank you so much, aapka din shubh ho, bye!"
 """
 
 # ==============================================================================
@@ -474,25 +466,25 @@ class PriyaRealEstateAgent(Agent):
                     ACTIVE_TTS_LANGUAGE = "mr"
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन प्रोजेक्ट मधून, शिळफाटा-मानपाडा हायवे, एक्सपेरिया मॉलच्या समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     ACTIVE_TTS_LANGUAGE = "en"
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall on Shilphata Highway. Are you looking for a 1 BHK or a 2 BHK apartment?")
+                        yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
                         return
 
                 if any(w in clean_norm for w in ["hindi", "हिंदी", "hindi mein"]):
                     ACTIVE_TTS_LANGUAGE = "hi"
                     if len(user_msgs) == 1:
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi intro triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन प्रोजेक्ट से, शिळफाटा-मानपाडा हाईवे, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                         return
 
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
-                # Instantly initiates predefined sales intro on ANY vocalization (<400ms)
+                # Instantly initiates predefined sales intro on ANY vocalization (<300ms)
                 if len(user_msgs) == 1:
                     is_not_interested = any(kw in clean_norm for kw in [
                         "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako"
@@ -500,13 +492,13 @@ class PriyaRealEstateAgent(Agent):
                     if not is_not_interested:
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन प्रोजेक्ट से, शिळफाटा-मानपाडा हाईवे, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                            yield speak("नमस्ते सर! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant English Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall on Shilphata Highway. Are you looking for a 1 BHK or a 2 BHK apartment?")
+                            yield speak("Hello sir! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
                         else:
                             logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन प्रोजेक्ट मधून, शिळफाटा-मानपाडा हायवे, एक्सपेरिया मॉलच्या समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            yield speak("नमस्कार सर! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
@@ -553,65 +545,87 @@ class PriyaRealEstateAgent(Agent):
                     if is_2bhk and not is_1bhk:
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("2 BHK चा पर्याय 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली इमारत असून यात 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            yield speak("2 BHK 45 लाखांपासून सुरू होतो, 35 पेक्षा जास्त ॲमेनिटीजसह. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Our 2 BHK residences start at 45 Lakh rupees in a 22-storey luxury tower with 35+ lifestyle amenities. Are you looking for ready-to-move or upcoming possession?")
+                            yield speak("Our 2 BHK starts at 45 Lakh with 35+ lifestyle amenities. Are you looking for ready-to-move or under-construction?")
                         else:
-                            yield speak("2 BHK ₹45 lakh se start hota hai. Yeh 22 maale ki building hai jisme 35 se zyada modern amenities milti hain. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?")
+                            yield speak("2 BHK ₹45 lakh se start hai, 35+ amenities ke sath. Aap ready-to-move dekh rahe hain ya under-construction?")
                         return
 
                     if is_1bhk and not is_2bhk:
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("1 BHK चा पर्याय 30 लाख रुपयांपासून सुरू होतो, ज्यामध्ये 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या होम लोनची सुविधा आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            yield speak("1 BHK 30 लाखांपासून सुरू होतो, फक्त 3 ते 5 लाख डाऊन पेमेंटवर. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Our 1 BHK starts at 30 Lakh rupees, with flexible down payment of 3 to 5 Lakh and easy bank loan options. Are you looking for ready-to-move or upcoming possession?")
+                            yield speak("Our 1 BHK starts at 30 Lakh with just 3 to 5 Lakh down payment. Are you looking for ready-to-move or under-construction?")
                         else:
-                            yield speak("1 BHK ₹30 lakh se shuru hota hai, jisme ₹3 se 5 lakh down payment aur easy home loan available hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?")
+                            yield speak("1 BHK ₹30 lakh se shuru hai, sirf ₹3 se 5 lakh down payment par. Aap ready-to-move dekh rahe hain ya under-construction?")
                         return
 
                     # Case E: Down Payment / Home Loan Inquiry
                     if any(kw in clean_norm for kw in ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन"]):
                         logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("हो, संपूर्ण रक्कम एकाच वेळी देण्याची गरज नाही. आपल्या पात्रतेनुसार 3 ते 5 लाख डाऊन पेमेंट आणि बाकी बँकेतून सोपे होम लोन उपलब्ध होईल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
+                            yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सोपे होम लोन मिळेल. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Yes, you do not need to arrange the entire amount at once. Based on eligibility, you only need 3 to 5 Lakh down payment and the balance via easy bank loans. Would you like to schedule a site visit?")
+                            yield speak("Yes, only 3 to 5 Lakh down payment and the balance via easy home loans. When can you visit the site?")
                         else:
-                            yield speak("Ji haan, poora amount ek saath arrange karne ki zaroorat nahi hai. Eligibility ke according ₹3 se 5 lakh down payment aur baaki bank loan mil jata hai. Kya aap site visit ke liye aana chahenge?")
+                            yield speak("Ji haan, sirf ₹3 se 5 lakh down payment aur baaki easy home loan mil jayega. Site visit kab plan karenge?")
                         return
 
                     # Case F: Location / Highway / Xperia Mall Inquiry
                     if any(kw in clean_norm for kw in ["kahan hai", "kidhar hai", "location", "address", "kuthe ahe", "xperia", "mall", "shilphata", "manpada", "nilje", "ghansoli", "हायवे", "कुठे"]):
                         logger.info(f"⚡ [FAST-PATH LOCATION] Instant location response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त दोन मिनिटांवर आणि घणसोली पंधरा मिनिटांच्या अंतरावर आहे. साईट व्हिजिटसाठी यायचे का?")
+                            yield speak("साई गार्डन एक्सपेरिया मॉलच्या अगदी समोर, निळजे स्टेशनजवळ आहे. प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Sai Garden is located on Shilphata-Manpada Highway, right opposite Xperia Mall. Nilje Station is just 2 minutes away. Would you like to schedule a site visit?")
+                            yield speak("Sai Garden is located right opposite Xperia Mall, near Nilje Station. When can you plan a visit?")
                         else:
-                            yield speak("Sai Garden Shilphata-Manpada highway par Xperia Mall ke theek samne hai. Nilje station 2 minute aur Ghansoli 15 minute ki drive par hai. Kya aap site visit ke liye aana chahenge?")
+                            yield speak("Sai Garden Xperia Mall ke theek samne, Nilje station ke paas hai. Site visit ke liye kab aana chahenge?")
                         return
 
                     # Case G: Connectivity / Metro / Bullet Train Inquiry
                     if any(kw in clean_norm for kw in ["metro", "bullet train", "train", "station", "connectivity", "रस्ता", "स्टेशन"]):
                         logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("कनेक्टिव्हिटी उत्तम आहे. समोर मेट्रो स्टेशन येत आहे, निळजे स्टेशन 2 मिनिटांवर आहे आणि जवळच बुलेट ट्रेन मार्ग देखील आहे. आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
+                            yield speak("समोर मेट्रो स्टेशन आणि निळजे स्टेशन 2 मिनिटांवर आहे. या वीकेंडला साईट व्हिजिट करूया का?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Connectivity is superb with an upcoming Metro station in front, Nilje station 2 minutes away, and the Bullet train corridor nearby. When would you like to plan a visit?")
+                            yield speak("Upcoming Metro station in front and Nilje station 2 minutes away. Shall we plan a visit this weekend?")
                         else:
-                            yield speak("Connectivity bahut shaandar hai. Samne Metro station aa raha hai, Nilje station 2 minute par hai aur Bullet train route bhi hai. Aap actual site visit kab plan karenge?")
+                            yield speak("Samne Metro station aur Nilje station 2 minute par hai. Kya is weekend site visit plan karein?")
                         return
 
                     # Case H: Amenities / Building Floors Inquiry
                     if any(kw in clean_norm for kw in ["amenities", "amenity", "gym", "swimming pool", "clubhouse", "floors", "building", "माले", "मजली", "सुविधा"]):
                         logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "mr":
-                            yield speak("प्रोजेक्ट 22 मजली इमारत असून यात 35 पेक्षा जास्त आधुनिक सुविधा आहेत — जसे की स्विमिंग पूल, जिम, क्लबहाऊस आणि गार्डन. आपण साईट व्हिजिट कधी प्लॅन कराल?")
+                            yield speak("प्रोजेक्ट 22 मजली इमारत असून यात स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त सुविधा आहेत. साईट व्हिजिट कधी कराल?")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            yield speak("Sai Garden is a 22-storey tower with 35+ lifestyle amenities including a swimming pool, clubhouse, modern gym, and landscaped podium. Would you like to visit this weekend?")
+                            yield speak("It is a 22-storey tower with 35+ amenities including a pool and gym. When would you like to visit?")
                         else:
-                            yield speak("Sai Garden 22 maale ki building hai jisme 35 se zyada modern amenities hain — swimming pool, gym, clubhouse aur landscape garden. Kya aap site visit plan karna chahenge?")
+                            yield speak("22 maale ki building hai aur pool, gym samet 35+ amenities hain. Site visit kab plan karenge?")
+                        return
+
+                    # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
+                    if any(kw in clean_norm for kw in ["question", "questions", "sawal", "doubt", "puchna", "puchu", "vicharu", "mahiti", "janna"]):
+                        logger.info(f"⚡ [FAST-PATH GENERAL QUESTIONS] Instant prompt for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("हो नक्कीच सर, विचारा ना! काय माहिती हवी आहे?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("Certainly sir, please go ahead! What would you like to know?")
+                        else:
+                            yield speak("Ji bilkul sir, puchiye na! Kya janna chahte hain?")
+                        return
+
+                    # Case Q2: BHK types inquiry ("kitna bhk hai", "konsa bhk hai", "kiti bhk ahet")
+                    if any(kw in clean_norm for kw in ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk"]):
+                        logger.info(f"⚡ [FAST-PATH BHK OPTIONS] Instant options for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "mr":
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहेत. आपण कोणता पर्याय शोधत आहात?")
+                        elif ACTIVE_TTS_LANGUAGE == "en":
+                            yield speak("We have 1 BHK from 30 Lakh and 2 BHK from 45 Lakh. Which one are you looking for?")
+                        else:
+                            yield speak("Hamare yahan 1 BHK ₹30 lakh se aur 2 BHK ₹45 lakh se available hain. Aap kaunsa option dekh rahe hain?")
                         return
 
                     # Case I: Site visit day selected (Mon-Sun, kal, parso, weekend)
@@ -1420,8 +1434,8 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-3",
-        endpointing_ms=200,
-        utterance_end_ms=1000,
+        endpointing_ms=120,
+        utterance_end_ms=None,
         smart_format=True,
         no_delay=True,
         interim_results=True,
@@ -1826,8 +1840,8 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-3",
-            endpointing_ms=200,
-            utterance_end_ms=1000,
+            endpointing_ms=120,
+            utterance_end_ms=None,
             smart_format=True,
             no_delay=True,
             interim_results=True,
@@ -2691,7 +2705,7 @@ async def entrypoint(ctx: JobContext):
         else:
             logger.info(f"👤 [DIALOGUE CAPTURED: CUSTOMER] [{now_time}s] '{clean_text}'")
 
-    current_lang = "hi"
+    current_lang = ACTIVE_TTS_LANGUAGE or "mr"
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
@@ -3172,12 +3186,14 @@ async def entrypoint(ctx: JobContext):
                         logger.warning(f"Error speaking initial 0.8s hello: {e}")
                 continue
 
+            active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+
             # 2. If caller stays silent for 15.0 seconds total without response -> Terminate call
             if silence_duration >= 15.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{current_lang}'...")
-                if current_lang == "mr":
-                    farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
-                elif current_lang == "en":
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{active_lang}'...")
+                if active_lang == "mr":
+                    farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, दिवस चांगला जावो, नमस्कार."
+                elif active_lang == "en":
                     farewell_text = "I'm unable to hear you. We will connect later. Have a wonderful day, goodbye!"
                 else:
                     farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
@@ -3195,16 +3211,16 @@ async def entrypoint(ctx: JobContext):
             # 3. Say hello in every 5 seconds interval of caller silence
             if (now - last_prompt_time >= 5.0) and (silence_duration >= 5.0):
                 last_prompt_time = now
-                logger.info(f"⏳ [SILENCE PROMPT] 5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{current_lang}'...")
-                if current_lang == "mr":
+                logger.info(f"⏳ [SILENCE PROMPT] 5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                if active_lang == "mr":
                     prompt_text = "हॅलो? माझा आवाज येतोय का?"
-                elif current_lang == "en":
+                elif active_lang == "en":
                     prompt_text = "Hello? Are you able to hear me?"
                 else:
                     if not caller_has_spoken:
                         prompt_text = "Hello?"
                     else:
-                        prompt_text = "Hello? Kya aap sun rahe hain?"
+                        prompt_text = "हॅलो? क्या आप सुन रहे हैं?"
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
