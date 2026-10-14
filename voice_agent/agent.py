@@ -323,7 +323,7 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 - STOP REPETITIVE ROBOTIC PUSHING:
   * NEVER repeatedly ask "शनिवार की रविवार, कधी सोयीचं ठरेल?".
   * When the caller asks for details ("details sanga", "bhejo", "details dya"), ANSWER their question with project facts (22 floors, 35+ luxury amenities, opposite Xperia Mall) and offer to share the WhatsApp brochure. DO NOT push for a site visit day on every turn.
-  * If the caller says "Hello" mid-conversation, do NOT repeat the project introduction! Simply reply warmly: "हो, मी लाईनवरच आहे. बोला ना, मी कशी मदत करू?".
+  * If the caller says "Hello" or checks the line mid-conversation, do NOT sound like customer support ("kashi madat karu"). Simply say: "हो, मी विचारत होते, आपण 1 BHK शोधत आहात की 2 BHK?" (or answer their pending question).
   * Vary your site visit questions naturally:
     - "आपल्या वेळेनुसार कधी येणं सोयीचं पडेल?"
     - "आपण कधी साईट व्हिजिट प्लॅन करू इच्छिता?"
@@ -476,10 +476,7 @@ class PriyaRealEstateAgent(Agent):
                 # 0. Multilingual switch triggers
                 if any(w in clean_norm for w in ["marathi", "मराठी", "marathit"]):
                     ACTIVE_TTS_LANGUAGE = "mr"
-                    if len(user_msgs) == 1:
-                        if getattr(self, "intro_delivered", False):
-                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
-                            return
+                    if len(user_msgs) == 1 and not getattr(self, "intro_delivered", False):
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
@@ -487,10 +484,7 @@ class PriyaRealEstateAgent(Agent):
 
                 if any(w in clean_norm for w in ["english", "इंग्लिश"]):
                     ACTIVE_TTS_LANGUAGE = "en"
-                    if len(user_msgs) == 1:
-                        if getattr(self, "intro_delivered", False):
-                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
-                            return
+                    if len(user_msgs) == 1 and not getattr(self, "intro_delivered", False):
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant English intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
@@ -498,10 +492,7 @@ class PriyaRealEstateAgent(Agent):
 
                 if any(w in clean_norm for w in ["hindi", "हिंदी", "hindi mein"]):
                     ACTIVE_TTS_LANGUAGE = "hi"
-                    if len(user_msgs) == 1:
-                        if getattr(self, "intro_delivered", False):
-                            logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
-                            return
+                    if len(user_msgs) == 1 and not getattr(self, "intro_delivered", False):
                         self.intro_delivered = True
                         logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi intro triggered for '{raw_text}' (0ms LLM wait)!")
                         yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
@@ -510,24 +501,36 @@ class PriyaRealEstateAgent(Agent):
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
                 # Instantly initiates predefined sales intro on ANY vocalization (<300ms)
                 if len(user_msgs) == 1:
-                    if getattr(self, "intro_delivered", False):
-                        logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY] Skipping duplicate intro in llm_node.")
-                        return
-                    self.intro_delivered = True
                     is_not_interested = any(kw in clean_norm for kw in [
                         "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako"
                     ])
-                    if not is_not_interested:
+                    if is_not_interested:
+                        logger.info(f"⚡ [TURN 1 DECLINE DETECTED] Polite decline for '{raw_text}'!")
+                        if self._hangup_fnc:
+                            self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            logger.info(f"⚡ [FAST-PATH TURN 1] Instant Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                            yield speak("कोई बात नहीं, आपका समय देने के लिए धन्यवाद, आपका दिन शुभ हो, bye!")
                         elif ACTIVE_TTS_LANGUAGE == "en":
-                            logger.info(f"⚡ [FAST-PATH TURN 1] Instant English Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                            yield speak("No problem, thank you for your time. Have a great day, goodbye!")
                         else:
-                            logger.info(f"⚡ [FAST-PATH TURN 1] Instant Marathi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                            yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            yield speak("काही हरकत नाही, वेळ दिल्याबद्दल धन्यवाद, दिवस चांगला जावो, नमस्कार.")
                         return
+
+                    if getattr(self, "intro_delivered", False):
+                        logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY VIA VAD] Skipping duplicate intro in llm_node.")
+                        return
+
+                    self.intro_delivered = True
+                    if ACTIVE_TTS_LANGUAGE == "hi":
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
+                        yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                    elif ACTIVE_TTS_LANGUAGE == "en":
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] English Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
+                        yield speak("Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?")
+                    else:
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Marathi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
+                        yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                    return
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
                 elif len(user_msgs) >= 2:
@@ -537,12 +540,13 @@ class PriyaRealEstateAgent(Agent):
                         logger.info(f"⚡ [FAST-PATH GREETING RECOVERY] Instant response for greeting '{raw_text}' (0ms LLM wait)!")
                         if getattr(self, "intro_delivered", False):
                             # Intro was already delivered! Customer is checking connection or saying hello mid-conversation:
+                            # Gayatri is an outbound cold caller, so repeat the qualifying question directly:
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("हाँजी, मैं लाईन पर हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?")
+                                yield speak("जी, मैं पूछ रही थी, क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                             elif ACTIVE_TTS_LANGUAGE == "en":
-                                yield speak("Yes, I'm right here on the line. How can I help you?")
+                                yield speak("Yes, I was asking, are you looking for a 1 BHK or a 2 BHK?")
                             else:
-                                yield speak("हो, मी लाईनवरच आहे. बोला ना, मी कशी मदत करू?")
+                                yield speak("हो, मी विचारत होते, आपण 1 BHK शोधत आहात की 2 BHK?")
                             return
                         else:
                             self.intro_delivered = True
@@ -2673,6 +2677,9 @@ async def entrypoint(ctx: JobContext):
     caller_has_spoken = False
     watchdog_task = None
     last_agent_speech = ""
+    agent = None
+    t_user_speaking_start = 0.0
+    current_lang = ACTIVE_TTS_LANGUAGE or "mr"
 
     @session.on("error")
     def _on_session_error(ev):
@@ -2680,10 +2687,11 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, intro_delivered, agent, t_user_speaking_start, current_lang
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
+                t_user_speaking_start = time.perf_counter()
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 has_prompted_silence = False
@@ -2693,6 +2701,28 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
+
+                # INSTANT TURN 1 VAD INTRO TRIGGER:
+                # If intro has not yet been delivered and caller made a genuine vocalization (>= 0.15s),
+                # deliver the Sai Garden intro IMMEDIATELY via VAD (<250ms total), completely bypassing
+                # the 1.5s Deepgram STT endpointing wait!
+                if not intro_delivered and not (agent and getattr(agent, "intro_delivered", False)):
+                    spoken_dur = (t_user_stop - t_user_speaking_start) if t_user_speaking_start > 0 else 0.5
+                    if spoken_dur >= 0.15:
+                        intro_delivered = True
+                        if agent:
+                            agent.intro_delivered = True
+                        active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+                        if active_lang == "hi":
+                            intro_text = "नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                        elif active_lang == "en":
+                            intro_text = "Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
+                        else:
+                            intro_text = "नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+
+                        logger.info(f"⚡⚡⚡ [INSTANT VAD TURN 1 INTRO] Caller spoke for {spoken_dur:.2f}s. Triggering Sai Garden intro immediately via VAD (0ms STT wait)!")
+                        record_dialogue_turn("agent", intro_text)
+                        session.say(intro_text, allow_interruptions=True)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
@@ -3148,6 +3178,8 @@ async def entrypoint(ctx: JobContext):
         hangup_fnc=trigger_hangup,
         on_speech_captured=_record_agent_speech
     )
+    if intro_delivered:
+        agent.intro_delivered = True
 
     # Reset any previous session on job context to prevent "Only one AgentSession can be the primary at a time"
     if hasattr(ctx, "_primary_agent_session"):
