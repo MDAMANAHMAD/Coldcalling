@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
       } else {
         meta.callLogs.unshift(newCallLog);
       }
-      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 30);
+      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 100);
 
       // If audio recording data is provided as base64 data URL, persist in a dedicated cloud room: rec-{callSid}
       if (newCallLog.recordingUrl?.startsWith('data:audio/') || body.audioBase64) {
