@@ -933,10 +933,6 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                         return
 
-                    if getattr(self, "intro_delivered", False):
-                        logger.info("⚡ [TURN 1 ALREADY DELIVERED INSTANTLY VIA VAD] Skipping duplicate intro in llm_node.")
-                        return
-
                     self.intro_delivered = True
                     if ACTIVE_TTS_LANGUAGE == "hi":
                         logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
@@ -3225,41 +3221,7 @@ async def entrypoint(ctx: JobContext):
                 intro_finished = True
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
-                logger.info("🛑 [VAD] User stopped speaking! Fast turn-taking initiated immediately.")
-
-                # INSTANT TURN 1 VAD INTRO TRIGGER:
-                # If intro has not yet been delivered and caller made a genuine vocalization (>= 0.15s),
-                # deliver the Sai Garden intro IMMEDIATELY via VAD (<250ms total), completely bypassing
-                # the 1.5s Deepgram STT endpointing wait!
-                if not intro_delivered and not (agent and getattr(agent, "intro_delivered", False)):
-                    spoken_dur = (t_user_stop - t_user_speaking_start) if t_user_speaking_start > 0 else 0.5
-                    if spoken_dur >= 0.15:
-                        intro_delivered = True
-                        if agent:
-                            agent.intro_delivered = True
-                        active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                        if active_lang == "hi":
-                            intro_text = "नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                        elif active_lang == "en":
-                            intro_text = "Hello! This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
-                        else:
-                            intro_text = "नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-
-                        logger.info(f"⚡⚡⚡ [INSTANT VAD TURN 1 INTRO] Caller spoke for {spoken_dur:.2f}s. Triggering Sai Garden intro immediately via VAD (0ms STT wait)!")
-                        record_dialogue_turn("agent", intro_text)
-                        speech_handle = session.say(intro_text, allow_interruptions=False)
-
-                        async def _unlock_intro_interruptions(sh):
-                            try:
-                                await asyncio.sleep(0.8)
-                                target = sh if (sh and hasattr(sh, "allow_interruptions")) else getattr(session, "current_speech", None)
-                                if target and hasattr(target, "allow_interruptions"):
-                                    target.allow_interruptions = True
-                                    logger.info("🔓 [TURN 1 INTRO] Enabled caller interruptions after initial greeting grace period.")
-                            except Exception as e:
-                                logger.debug(f"Unlock intro interruptions note: {e}")
-
-                        asyncio.create_task(_unlock_intro_interruptions(speech_handle))
+                logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
