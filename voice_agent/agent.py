@@ -1055,13 +1055,12 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     self.intro_delivered = True
-                    greeting = get_time_of_day_greeting(ACTIVE_TTS_LANGUAGE)
                     if ACTIVE_TTS_LANGUAGE == "hi":
-                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch with greeting '{greeting}' for '{raw_text}' (0ms LLM wait)!")
-                        yield speak(f"नमस्कार! {greeting} सर, मैं गायत्री बोल रही हूँ साई गार्डन प्रोजेक्ट से। क्या आप अभी भी 1 BHK या 2 BHK देख रहे हैं?")
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch for '{raw_text}' (0ms LLM wait)!")
+                        yield speak("नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                     else:
-                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Marathi Sai Garden pitch with greeting '{greeting}' for '{raw_text}' (0ms LLM wait)!")
-                        yield speak(f"नमस्कार! {greeting} सर, मी गायत्री बोलतेय साई गार्डन प्रोजेक्टमधून. आपण अजूनही 1 BHK किंवा 2 BHK शोधत आहात का?")
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Marathi Sai Garden pitch for '{raw_text}' (0ms LLM wait)!")
+                        yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                     return
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
@@ -1114,11 +1113,10 @@ class PriyaRealEstateAgent(Agent):
                             return
                         else:
                             self.intro_delivered = True
-                            greeting = get_time_of_day_greeting(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"नमस्कार! {greeting} सर, मैं गायत्री बोल रही हूँ साई गार्डन प्रोजेक्ट से। क्या आप अभी भी 1 BHK या 2 BHK देख रहे हैं?")
+                                yield speak("नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                             else:
-                                yield speak(f"नमस्कार! {greeting} सर, मी गायत्री बोलतेय साई गार्डन प्रोजेक्टमधून. आपण अजूनही 1 BHK किंवा 2 BHK शोधत आहात का?")
+                                yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                             return
 
                     # Case A: Polite Decline / Not Interested -> Akshay Referral Script
@@ -1148,14 +1146,44 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार.")
                         return
 
+                    # Case Identity: Who is speaking? / Project name
+                    identity_kws = ["kaun bol", "kon bol", "koni bol", "kuthun bol", "aap kaun", "tumhi kon", "who is this", "who is speaking", "kiska phone", "kisne phone", "koni phone", "aap ka naam", "tumche naav", "naam kya", "kaha se bol", "kidhar se bol"]
+                    if any(kw in clean_norm for kw in identity_kws):
+                        logger.info(f"⚡ [FAST-PATH IDENTITY] Instant identity response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("जी, मैं गायत्री बात कर रही हूँ, साई गार्डन डोंबिवली ईस्ट से। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        else:
+                            yield speak("हो, मी गायत्री बोलतेय, साई गार्डन डोंबिवली ईस्ट मधून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        return
+
+                    # Case Number Source: Where did you get my number?
+                    number_src_kws = ["number kahan", "number kaha", "number kidhar", "number kuthun", "number koni", "mera number", "number mila", "number milala", "माझा नंबर", "नंबर कुठे"]
+                    if any(kw in clean_norm for kw in number_src_kws):
+                        logger.info(f"⚡ [FAST-PATH NUMBER SOURCE] Instant response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("आपने ऑनलाइन प्रॉपर्टी पोर्टल पर 1 BHK या 2 BHK के लिए enquiry की थी, वहीं से आपका नंबर मिला। क्या आप अभी भी फ्लैट देख रहे हैं?")
+                        else:
+                            yield speak("आपण प्रॉपर्टी पोर्टलवर 1 BHK किंवा 2 BHK साठी enquiry केली होती, तिथूनच नंबर मिळाला. आपण अजूनही फ्लॅट शोधत आहात का?")
+                        return
+
+                    # Case 1RK: Clarification that only 1 BHK & 2 BHK are available
+                    is_1rk_kws = ["1 rk", "1rk", "one rk", "studio", "एक आरके", "१ आरके", "1 room kitchen"]
+                    if any(kw in clean_norm for kw in is_1rk_kws):
+                        logger.info(f"⚡ [FAST-PATH 1RK INQUIRY] Honest 1/2 BHK only clarification for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("माफ़ कीजियेगा, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के ऑप्शन्स उपलब्ध हैं। क्या आप 1 BHK देखना चाहेंगे?")
+                        else:
+                            yield speak("माफ करा, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 1 BHK पाहू इच्छिता का?")
+                        return
+
                     # Case 3BHK: Honest clarification that only 1 BHK & 2 BHK are available
                     is_3bhk_kws = ["3 bhk", "3bhk", "three bhk", "teen bhk", "तीन बीएचके", "३ बीएचके", "३bhk", "3 bk", "three bk", "3 flat", "teen flat"]
                     if any(kw in clean_norm for kw in is_3bhk_kws):
                         logger.info(f"⚡ [FAST-PATH 3BHK INQUIRY] Honest 1/2 BHK only clarification for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("माफ़ कीजियेगा सर, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के विकल्प उपलब्ध हैं। क्या आप 2 BHK देखना चाहेंगे?")
+                            yield speak("माफ़ कीजियेगा, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के ऑप्शन्स उपलब्ध हैं। क्या आप 2 BHK देखना चाहेंगे?")
                         else:
-                            yield speak("माफ करा सर, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 2 BHK पाहू इच्छिता का?")
+                            yield speak("माफ करा, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 2 BHK पाहू इच्छिता का?")
                         return
 
                     # Case Both: Both 1 BHK & 2 BHK
@@ -1163,9 +1191,9 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_bhk = "Both"
                         logger.info(f"⚡ [FAST-PATH BOTH BHK] Instant both BHK response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज्यादा आधुनिक सुविधाएं मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कंस्ट्रक्शन चलेगा?")
+                            yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में gym, swimming pool जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
                         else:
-                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये gym, swimming pool सारख्या 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?")
                         return
 
                     # Case C: 2 BHK confirmed / chosen
@@ -1173,9 +1201,9 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_bhk = "2 BHK"
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कंस्ट्रक्शन चलेगा?")
+                            yield speak("2 BHK 45 लाख से शुरू होता है। यह G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool और clubhouse जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
                         else:
-                            yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            yield speak("2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही G+22 मजली भव्य इमारत असून यात gym, swimming pool आणि clubhouse अशा 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?")
                         return
 
                     # Case D: 1 BHK confirmed / chosen
@@ -1183,65 +1211,105 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_bhk = "1 BHK"
                         logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कंस्ट्रक्शन चलेगा?")
+                            yield speak("1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख down payment और easy bank home loan सुविधा उपलब्ध है। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
                         else:
-                            yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            yield speak("1 BHK फ्लॅट 30 लाखांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख down payment आणि easy bank home loan ची सुविधा उपलब्ध आहे. आपण ready-to-move पाहताय की under-construction चालेल?")
+                        return
+
+                    # Case Carpet Area / Flat Size
+                    carpet_kws = ["carpet", "sqft", "square feet", "kitna bada", "kiti square feet", "area kitna", "स्क्वेअर फीट", "कारपेट", "flat size", "size kitna"]
+                    if any(kw in clean_norm for kw in carpet_kws):
+                        logger.info(f"⚡ [FAST-PATH CARPET AREA] Instant carpet response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("हमारे 1 BHK का carpet area 375 से 520 sqft है और 2 BHK का 760 sqft तक है। आप 1 BHK देखना चाहेंगे या 2 BHK?")
+                        else:
+                            yield speak("आपल्या 1 BHK चा carpet area 375 ते 520 sqft आणि 2 BHK चा 760 sqft पर्यंत आहे. आपण 1 BHK पाहू इच्छिता की 2 BHK?")
+                        return
+
+                    # Case RERA & Builder
+                    rera_kws = ["rera", "builder", "developer", "legal", "rera number", "rera registered", "रेरा", "बिल्डर", "developer kaun"]
+                    if any(kw in clean_norm for kw in rera_kws):
+                        logger.info(f"⚡ [FAST-PATH RERA & BUILDER] Instant RERA response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("यह साई सिटी ग्रुप और श्री ओम साई डेवलपर्स का प्रोजेक्ट है। यह पूरी तरह MahaRERA रजिस्टर्ड है और इसका RERA नंबर PR1330002501452 है।")
+                        else:
+                            yield speak("हा साई सिटी ग्रुप आणि श्री ओम साई डेव्हलपर्सचा प्रोजेक्ट आहे. हा पूर्णपणे MahaRERA रजिस्टर्ड असून याचा RERA नंबर PR1330002501452 असा आहे.")
+                        return
+
+                    # Case Parking
+                    parking_kws = ["parking", "car parking", "गाडी", "पार्किंग", "bike parking"]
+                    if any(kw in clean_norm for kw in parking_kws):
+                        logger.info(f"⚡ [FAST-PATH PARKING] Instant parking response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("जी हाँ, प्रोजेक्ट में ample stack और puzzle car parking की पूरी सुविधा उपलब्ध है।")
+                        else:
+                            yield speak("होय, प्रोजेक्टमध्ये ample stack आणि puzzle car parking ची उत्तम सुविधा उपलब्ध आहे.")
+                        return
+
+                    # Case Balcony
+                    balcony_kws = ["balcony", "terrace", "gallery", "gellery", "गॅलरी", "बाल्कनी"]
+                    if any(kw in clean_norm for kw in balcony_kws):
+                        logger.info(f"⚡ [FAST-PATH BALCONY] Instant balcony response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("जी हाँ, फ्लैट्स में सुंदर open balcony दी गई है जहाँ से बढ़िया nature view मिलता है।")
+                        else:
+                            yield speak("होय, फ्लॅट्समध्ये सुंदर open balcony दिली आहे, जिथून छान nature view मिळतो.")
                         return
 
                     # Case S: Nearby Schools Inquiry
-                    schools_kws = ["school", "schools", "shala", "शाळा", "lodha world", "pawar public", "ira global", "chandresh", "शिक्षण", "स्कुल", "स्कूल"]
+                    schools_kws = ["school", "schools", "shala", "शाळा", "lodha world", "pawar public", "ira global", "chandresh", "शिक्षण", "स्कुल", "स्कूल", "college"]
                     if any(kw in clean_norm for kw in schools_kws):
                         logger.info(f"⚡ [FAST-PATH SCHOOLS] Instant schools response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("प्रोजेक्ट के पास लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल और चंद्रेश लोढा स्कूल जैसे बेहतरीन स्कूल हैं।")
+                            yield speak("प्रोजेक्ट के पास Lodha World School, Pawar Public School, Ira Global और Pendharkar College जैसे बेहतरीन institutions हैं।")
                         else:
-                            yield speak("प्रोजेक्ट जवळ लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल आणि चंद्रेश लोढा स्कूल अशा उत्तम शाळा आहेत.")
+                            yield speak("प्रोजेक्टजवळ Lodha World School, Pawar Public School, Ira Global आणि Pendharkar College सारख्या नामांकित शिक्षण संस्था आहेत.")
                         return
 
                     # Case M: Nearby Hospitals Inquiry
-                    hospitals_kws = ["hospital", "hospitals", "dawakhana", "दवाखाना", "हॉस्पिटल", "jupiter", "infinity", "mgm", "sai hospital", "doctor", "इस्पितळ"]
+                    hospitals_kws = ["hospital", "hospitals", "dawakhana", "दवाखाना", "हॉस्पिटल", "jupiter", "infinity", "mgm", "sai hospital", "doctor", "इस्पितळ", "neon", "vaze", "aims"]
                     if any(kw in clean_norm for kw in hospitals_kws):
                         logger.info(f"⚡ [FAST-PATH HOSPITALS] Instant hospitals response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("पास में ही ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम और साई हॉस्पिटल की सुविधा उपलब्ध है।")
+                            yield speak("पास में ही Jupiter Hospital, Neon Hospital, Vaze Hospital और AIMS Hospital की सुविधा उपलब्ध है।")
                         else:
-                            yield speak("जवळच ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम आणि साई हॉस्पिटल उपलब्ध आहेत.")
+                            yield speak("जवळच Jupiter Hospital, Neon Hospital, Vaze Hospital आणि AIMS Hospital उपलब्ध आहेत.")
                         return
 
                     # Case E: Down Payment / Home Loan Inquiry
                     if any(kw in clean_norm for kw in ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन"]):
                         logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("जी हाँ, सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी सभी प्रमुख बैंकों से आसान होम लोन मिल जाएगा। आपका डाउन पेमेंट का क्या बजट है?")
+                            yield speak("जी हाँ, सिर्फ 3 से 5 लाख down payment और बाकी सभी major banks से easy home loan मिल जाएगा। आपका down payment का क्या budget है?")
                         else:
-                            yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सर्व प्रमुख बँकांमधून सोपे होम लोन उपलब्ध होईल. तुमचे डाऊन पेमेंटचे बजेट किती आहे?")
+                            yield speak("हो, फक्त 3 ते 5 लाख down payment आणि बाकी सर्व major banks कडून easy home loan उपलब्ध होईल. तुमचे down payment चे budget किती आहे?")
                         return
 
                     # Case F: Location / Highway / Xperia Mall Inquiry
                     if any(kw in clean_norm for kw in ["kahan hai", "kidhar hai", "location", "address", "kuthe ahe", "xperia", "mall", "shilphata", "manpada", "nilje", "ghansoli", "lodha heaven", "हायवे", "कुठे", "पत्ता"]):
                         logger.info(f"⚡ [FAST-PATH LOCATION] Instant location response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवे पर, एक्सपेरिया मॉल के सामने है। निलजे स्टेशन सिर्फ 2 मिनट पर और घणसोली 15 मिनट पर है।")
+                            yield speak("साई गार्डन Kalyan-Shilphata रोड पर, Xperia Mall के बिल्कुल सामने है। Nilje station सिर्फ 2 मिनट पर है।")
                         else:
-                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त 2 मिनिटांवर आणि घणसोली 15 मिनिटांवर आहे.")
+                            yield speak("साई गार्डन Kalyan-Shilphata रोडवर, Xperia Mall च्या अगदी समोर आहे. Nilje station फक्त 2 मिनिटांवर आहे.")
                         return
 
-                    # Case G: Connectivity / Metro / Bullet Train Inquiry
+                    # Case G: Connectivity / Metro / Bullet Train / Station Inquiry
                     if any(kw in clean_norm for kw in ["metro", "bullet train", "train", "station", "connectivity", "रस्ता", "स्टेशन"]):
                         logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("कनेक्टिव्हिटी बहुत शानदार है। सामने मेट्रो स्टेशन आ रहा है, निलजे स्टेशन 2 मिनट पर है और बुलेट ट्रेन रूट भी पास है।")
+                            yield speak("कनेक्टिव्हिटी बहुत बढ़िया है। Nilje station सिर्फ 2 मिनट पर है, सामने upcoming Metro Line 12 आ रहा है और Dombivli station 20 मिनट पर है।")
                         else:
-                            yield speak("कनेक्टिव्हिटी उत्तम आहे. समोर मेट्रो स्टेशन येत आहे, निळजे स्टेशन 2 मिनिटांवर आहे आणि जवळच बुलेट ट्रेन मार्ग देखील आहे.")
+                            yield speak("कनेक्टिव्हिटी उत्तम आहे. Nilje station फक्त 2 मिनिटांवर आहे, समोर upcoming Metro Line 12 येत आहे आणि Dombivli station 20 मिनिटांवर आहे.")
                         return
 
                     # Case H: Amenities / Building Floors Inquiry
                     if any(kw in clean_norm for kw in ["amenities", "amenity", "gym", "swimming pool", "clubhouse", "floors", "building", "माले", "मजली", "सुविधा"]):
                         logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम, क्लबहाउस, चिल्ड्रन्स प्ले एरिया और लैंडस्केप गार्डन जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं।")
+                            yield speak("साई गार्डन G+22 मंजिला भव्य टावर है जिसमें gym, open garden, children play area और yoga room जैसी 35 से ज्यादा modern amenities हैं।")
                         else:
-                            yield speak("साई गार्डन ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, मॉडर्न जिम, क्लबहाऊस, चिल्ड्रन्स प्ले एरिया आणि लँडस्केप गार्डन अशा 35 पेक्षा जास्त आधुनिक सुविधा आहेत.")
+                            yield speak("साई गार्डन ही G+22 मजली भव्य इमारत असून यात gym, open garden, children play area आणि yoga room अशा 35 पेक्षा जास्त modern amenities आहेत.")
                         return
 
                     # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
@@ -1253,13 +1321,13 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("हो नक्कीच, विचारा ना. काय माहिती हवी आहे?")
                         return
 
-                    # Case Q2: BHK types inquiry ("kitna bhk hai", "konsa bhk hai", "kiti bhk ahet")
+                    # Case Q2: BHK types / Price / Budget inquiry ("kitna bhk hai", "price", "rate")
                     if any(kw in clean_norm for kw in ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk", "price", "किंमत", "rate", "cost", "budget"]):
                         logger.info(f"⚡ [FAST-PATH BHK OPTIONS] Instant options for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से उपलब्ध हैं। आप कौन सा विकल्प देख रहे हैं?")
+                            yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है। आप 1 BHK देखना चाहेंगे या 2 BHK?")
                         else:
-                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहेत. आपण कोणता पर्याय शोधत आहात?")
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. आपण 1 BHK पाहू इच्छिता की 2 BHK?")
                         return
 
                     # Case H1: Upcoming possession confirmed
@@ -2143,10 +2211,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 Multilingual STT (Real-time code-switching across Hindi, Marathi, and English)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 150ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
-    default_stt_lang = os.getenv("STT_LANGUAGE", "multi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+    default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2163,14 +2231,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.38 threshold, 50ms speech, 220ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 200ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
-        min_speech_duration=0.05,
-        activation_threshold=0.38,
-        deactivation_threshold=0.25,
-        prefix_padding_duration=0.15,
+        min_silence_duration=0.20,
+        min_speech_duration=0.04,
+        activation_threshold=0.20,
+        deactivation_threshold=0.12,
+        prefix_padding_duration=0.25,
         sample_rate=16000
     )
 
@@ -2556,8 +2624,8 @@ async def entrypoint(ctx: JobContext):
     if not stt:
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
-        default_stt_lang = os.getenv("STT_LANGUAGE", "multi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+        default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -2702,13 +2770,13 @@ async def entrypoint(ctx: JobContext):
     # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech, 220ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.22s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.20s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
-            min_speech_duration=0.05,
-            activation_threshold=0.38,
-            deactivation_threshold=0.25,
-            prefix_padding_duration=0.15,
+            min_silence_duration=0.20,
+            min_speech_duration=0.04,
+            activation_threshold=0.20,
+            deactivation_threshold=0.12,
+            prefix_padding_duration=0.25,
             sample_rate=16000
         )
     
@@ -2734,7 +2802,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.16,
+                "min_delay": 0.12,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -2744,9 +2812,9 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.20,
+                "min_duration": 0.08,
                 "resume_false_interruption": True,
-                "false_interruption_timeout": 1.2,
+                "false_interruption_timeout": 0.8,
             }
         }
     )
@@ -3919,6 +3987,7 @@ async def entrypoint(ctx: JobContext):
         t_call_pickup = time.time()
         last_prompt_time = t_call_pickup
         initial_hello_done = False
+        silence_prompt_count = 0
 
         while not _hangup_scheduled:
             await asyncio.sleep(0.2)
@@ -3953,9 +4022,9 @@ async def entrypoint(ctx: JobContext):
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
 
-            # 2. If caller stays silent for 15.0 seconds total without response -> Terminate call
-            if silence_duration >= 15.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{active_lang}'...")
+            # 2. If caller stays silent for 20.0 seconds total without response -> Terminate call
+            if silence_duration >= 20.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=20s). Terminating call in language '{active_lang}'...")
                 if active_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, दिवस चांगला जावो, नमस्कार."
                 elif active_lang == "en":
@@ -3973,11 +4042,11 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 3. Say prompt after 4.0 seconds interval of caller silence
-            if (now - last_prompt_time >= 4.0) and (silence_duration >= 4.0):
+            # 3. Say prompt after 7.0 seconds interval of genuine silence (Single 'हॅलो?' without repeating long lines)
+            if (now - last_prompt_time >= 7.0) and (silence_duration >= 7.0):
                 last_prompt_time = now
                 t_last_activity = now
-                logger.info(f"⏳ [SILENCE PROMPT] 4.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 7.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
                 
                 # If intro has not yet been delivered, deliver the Sai Garden intro directly
                 if not getattr(agent, "intro_delivered", False) and not intro_delivered:
@@ -3992,19 +4061,23 @@ async def entrypoint(ctx: JobContext):
                     else:
                         prompt_text = "नमस्कार, मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
                 else:
-                    if active_lang == "mr":
-                        prompt_text = "हॅलो? माझा आवाज येतोय का? आपण लाईनवर आहात का?"
-                    elif active_lang == "en":
-                        prompt_text = "Hello? Are you able to hear me?"
+                    if silence_prompt_count == 0:
+                        prompt_text = "हॅलो?"
                     else:
-                        prompt_text = "हॅलो? क्या आप मुझे सुन पा रहे हैं? आप लाईन पर हैं ना?"
+                        if active_lang == "mr":
+                            prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                        elif active_lang == "en":
+                            prompt_text = "Hello? Are you able to hear me?"
+                        else:
+                            prompt_text = "हॅलो? क्या आपको मेरी आवाज़ आ रही है?"
+                    silence_prompt_count += 1
 
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
                     session.say(prompt_text, allow_interruptions=True)
                 except Exception as e:
-                    logger.warning(f"Error speaking 4.5s interval silence prompt: {e}")
+                    logger.warning(f"Error speaking 7.0s interval silence prompt: {e}")
 
     watchdog_task = asyncio.create_task(_silence_watchdog())
 
