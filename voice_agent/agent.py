@@ -2231,13 +2231,13 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 200ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.32 threshold, 50ms speech, 300ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.20,
-        min_speech_duration=0.04,
-        activation_threshold=0.20,
-        deactivation_threshold=0.12,
+        min_silence_duration=0.30,
+        min_speech_duration=0.05,
+        activation_threshold=0.32,
+        deactivation_threshold=0.20,
         prefix_padding_duration=0.25,
         sample_rate=16000
     )
@@ -2770,12 +2770,12 @@ async def entrypoint(ctx: JobContext):
     # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech, 220ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.20s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.30s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.20,
-            min_speech_duration=0.04,
-            activation_threshold=0.20,
-            deactivation_threshold=0.12,
+            min_silence_duration=0.30,
+            min_speech_duration=0.05,
+            activation_threshold=0.32,
+            deactivation_threshold=0.20,
             prefix_padding_duration=0.25,
             sample_rate=16000
         )
@@ -2802,7 +2802,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.12,
+                "min_delay": 0.15,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -2811,10 +2811,9 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 1,
-                "min_duration": 0.08,
-                "resume_false_interruption": True,
-                "false_interruption_timeout": 0.8,
+                "min_duration": 0.10,
+                "resume_false_interruption": False,  # NEVER discard caller speech as false interruption!
+                "false_interruption_timeout": 3.0,
             }
         }
     )
@@ -3995,7 +3994,7 @@ async def entrypoint(ctx: JobContext):
                 break
                 
             # If agent is currently speaking or generating speech, reset caller silence timer
-            if agent_is_speaking or (session.current_speech and not session.current_speech.done()):
+            if agent_is_speaking or (session.current_speech and not session.current_speech.done()) or (session.agent_state == "speaking"):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 continue
@@ -4013,7 +4012,9 @@ async def entrypoint(ctx: JobContext):
                     try:
                         t_user_stop = 0.0
                         record_dialogue_turn("agent", "हॅलो?")
-                        session.say("हॅलो?", allow_interruptions=True)
+                        handle = session.say("हॅलो?", allow_interruptions=True)
+                        if handle:
+                            await handle.wait_for_playout()
                         t_last_activity = time.time()
                         last_prompt_time = time.time()
                     except Exception as e:
@@ -4048,34 +4049,25 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = now
                 logger.info(f"⏳ [SILENCE PROMPT] 7.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
                 
-                # If intro has not yet been delivered, deliver the Sai Garden intro directly
-                if not getattr(agent, "intro_delivered", False) and not intro_delivered:
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_delivered = True
-                    logger.info("⏳ [INTRO VIA SILENCE WATCHDOG] Caller silent after hello. Delivering Sai Garden intro now...")
-                    if active_lang == "hi":
-                        prompt_text = "नमस्ते, मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                    elif active_lang == "en":
-                        prompt_text = "Hello, This is Gayatri from Sai Garden, right opposite Xperia Mall. Are you looking for a 1 BHK or a 2 BHK?"
-                    else:
-                        prompt_text = "नमस्कार, मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+                if silence_prompt_count == 0:
+                    prompt_text = "हॅलो?"
                 else:
-                    if silence_prompt_count == 0:
-                        prompt_text = "हॅलो?"
+                    if active_lang == "mr":
+                        prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                    elif active_lang == "en":
+                        prompt_text = "Hello? Are you able to hear me?"
                     else:
-                        if active_lang == "mr":
-                            prompt_text = "हॅलो? माझा आवाज येतोय का?"
-                        elif active_lang == "en":
-                            prompt_text = "Hello? Are you able to hear me?"
-                        else:
-                            prompt_text = "हॅलो? क्या आपको मेरी आवाज़ आ रही है?"
-                    silence_prompt_count += 1
+                        prompt_text = "हॅलो? क्या आपको मेरी आवाज़ आ रही है?"
+                silence_prompt_count += 1
 
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
-                    session.say(prompt_text, allow_interruptions=True)
+                    handle = session.say(prompt_text, allow_interruptions=True)
+                    if handle:
+                        await handle.wait_for_playout()
+                    t_last_activity = time.time()
+                    last_prompt_time = time.time()
                 except Exception as e:
                     logger.warning(f"Error speaking 7.0s interval silence prompt: {e}")
 
