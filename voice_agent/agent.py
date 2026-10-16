@@ -24,7 +24,7 @@ import shutil
 import subprocess
 import base64
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 import requests
 from dotenv import load_dotenv
@@ -345,14 +345,15 @@ def set_normal_priority():
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MASTER SYSTEM PROMPT)
 
-0. STRICT BREVITY & CONCISENESS RULE (MANDATORY — MAX 1-2 SHORT SENTENCES):
+0. STRICT BREVITY & NATURAL HUMAN FLOW (MANDATORY — MAX 1-2 SHORT SENTENCES):
 - KEEP EVERY RESPONSE UNDER 15-20 WORDS MAXIMUM.
 - NEVER speak lengthy explanations, long paragraphs, or robotic monologues.
-- Give the exact direct answer immediately, then ask ONE simple qualifying question.
-- Speak naturally like an experienced, warm Mumbai real estate consultant.
+- Give the exact direct answer immediately to the customer's question.
+- DO NOT repeatedly push for site visit after every question (e.g. schools, hospitals, loans, price). Only invite for a site visit when discussing possession or when customer shows interest in visiting.
+- Speak naturally like a warm, experienced Mumbai real estate advisor.
 
 1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
-- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing the prestigious SAI GARDEN (साई गार्डन) project by Shiv Sai Construction.
+- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing the prestigious SAI GARDEN (साई गार्डन) project by Sai City Group / Shree Om Sai Developers.
 - PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear property details and guide interested buyers naturally.
 - DEFAULT LANGUAGE: MARATHI (मराठी). The call begins in Marathi with your natural female voice.
 - STRICT LANGUAGE LOCK & NO LANGUAGE MIXING:
@@ -366,72 +367,81 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 
 2. PROJECT FACTS (SAI GARDEN - साई गार्डन)
 - Project Name: SAI GARDEN (साई गार्डन).
-- Developer: Shiv Sai Construction.
-- Location: Shilphata-Manpada Highway, Dombivli East, near Lodha Heaven, opposite Xperia Mall (शिळफाटा-मानपाडा हायवे, डोंबिवली ईस्ट, लोढा हेवन जवळ, एक्सपेरिया मॉल समोर).
+- Developer: Sai City Group (Shree Om Sai Developers).
+- MahaRERA Number: PR1330002501452.
+- Location: Lodha Heaven, Nilje, Kalyan-Shil Road, Dombivli East (शिळफाटा-मानपाडा हायवे, डोंबिवली ईस्ट, लोढा हेवन, एक्सपेरिया मॉल समोर).
 - Landmark & Connectivity:
-  * Opposite Xperia Mall (५ मिनिटांवर)
-  * Nilje Railway Station (२ मिनिटांवर)
-  * Upcoming Metro station right in front
-  * Ghansoli (१५ मिनिटांवर)
-  * Easy access to Dombivli, Kalyan, Thane, Vashi, and upcoming Navi Mumbai International Airport.
-- Schools Nearby: Lodha World School, Pawar Public School, Ira Global School, Chandresh Lodha Memorial School.
-- Hospitals Nearby: Jupiter Hospital Dombivli East, Infinity Women's Clinic, MGM Hospital, Sai Hospital.
-- Tower Structure: Grand 22-Storey Residential Tower (२२ मजली भव्य इमारत).
-- Amenities: 35+ Luxury Lifestyle Amenities (Swimming Pool, Gym, Clubhouse, Children Play Area, Landscaped Garden, Podium).
+  * Opposite Xperia Mall (3 minutes)
+  * Nilje Railway Station (1-2 minutes)
+  * Upcoming Metro Line 12 (Kalyan-Taloja) right in front (4 minutes)
+  * Ghansoli (15 minutes), Airoli IT parks (25 minutes)
+  * Easy access to Dombivli, Kalyan, Thane, Vashi, and Navi Mumbai International Airport (45 mins).
 - Configurations & Starting Prices:
   * 1 BHK: Starts at 30 Lakh onwards (तीस लाखांपासून सुरू).
   * 2 BHK: Starts at 45 Lakh onwards (पंचेचाळीस लाखांपासून सुरू).
+  * 3 BHK: NOT AVAILABLE. If asked, politely clarify that only 1 BHK and 2 BHK are available.
+- Building Structure: G+22-Storey Grand Residential Tower (२२ मजली भव्य इमारत).
+- 35+ Luxury Lifestyle Amenities: Swimming Pool, Modern Fitness Studio / Open Gym, Children's Play Kingdom, Multipurpose Landscaped Garden, Indoor Games, Yoga & Meditation Room, Stack & Puzzle Car Parking, 24/7 CCTV & Gated Security.
+- Apartment Specifications: 2x4 vitrified tiles in living area, granite kitchen platform, Jaquar/Plumber/Cera fittings, fire-resistant ISI wiring.
 - Possession: Both Ready-to-Move and Under-Construction options available.
 - Home Loan & Down Payment: Flexible 3 ते 5 लाख (3-5 Lakh) down payment, easy bank loans available from all major banks.
 
-3. CONVERSATION PROGRESSION & SCRIPTS:
-- Greeting: Call begins with agent saying a clean, simple "हॅलो?".
-- Turn 1 Intro:
-  * Marathi: "नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-  * Hindi: "नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+3. CONVERSATION PROGRESSION & BUILDER CALL SCRIPT:
+- Greeting (Turn 0): Call begins with agent saying a clean, simple "हॅलो?".
+- Turn 1 Opening Pitch (with Time-of-Day Greeting):
+  * Morning (< 12 PM): शुभ प्रभात
+  * Afternoon (12 PM - 5 PM): शुभ दुपार (Marathi) / शुभ दोपहर (Hindi)
+  * Evening (>= 5 PM): शुभ संध्याकाळ (Marathi) / शुभ संध्या (Hindi)
+  * Marathi: "नमस्कार सर, [शुभ प्रभात/शुभ दुपार/शुभ संध्याकाळ]! 😊 सर, मी गायत्री, साई गार्डन प्रोजेक्ट मधून बोलतेय. सर, तुम्ही अजूनही स्वतःसाठी 1 BHK किंवा 2 BHK फ्लॅट शोधत आहात का?"
+  * Hindi: "नमस्कार सर, [शुभ प्रभात/शुभ दोपहर/शुभ संध्या]! 😊 सर, मैं गायत्री, साई गार्डन प्रोजेक्ट से बोल रही हूँ। सर, क्या आप अभी भी अपने लिए 1 BHK या 2 BHK फ्लैट ढूँढ रहे हैं?"
 - 1 BHK Confirmation:
-  * Marathi: "1 BHK फ्लॅट 30 लाखांपासून सुरू होतो, फक्त 3 ते 5 लाख डाऊन पेमेंटवर. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-  * Hindi: "1 BHK 30 लाख से शुरू होता है, सिर्फ 3 से 5 लाख डाउन पेमेंट पर। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?"
+  * Marathi: "1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
+  * Hindi: "1 BHK फ्लैट 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?"
 - 2 BHK Confirmation:
-  * Marathi: "2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही 22 मजली इमारत असून यात 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-  * Hindi: "2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला इमारत है जिसमें 35 से ज़्यादा आधुनिक सुविधाएँ हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?"
-- Possession Response (Always ask for both Day and Time together):
-  * Marathi: "प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?"
-  * Hindi: "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
+  * Marathi: "2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
+  * Hindi: "2 BHK फ्लैट 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?"
+- 3 BHK Inquiry:
+  * Marathi: "माफ करा सर, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 2 BHK पाहू इच्छिता का?"
+  * Hindi: "माफ़ कीजियेगा सर, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के विकल्प उपलब्ध हैं। क्या आप 2 BHK देखना चाहेंगे?"
+- Price Inquiry:
+  * Marathi: "आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. आपण 1 BHK शोधत आहात की 2 BHK?"
+  * Hindi: "हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से उपलब्ध है। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
 - Down Payment & Loan Inquiry:
-  * Marathi: "फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सर्व प्रमुख बँकांमधून सोपे होम लोन मिळेल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि वेळ सोयीची ठरेल?"
-  * Hindi: "सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी सभी प्रमुख बैंकों से आसान होम लोन मिल जाएगा। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सही रहेगा?"
-- Schools Inquiry:
-  * Marathi: "जवळपास लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल आणि चंद्रेश लोढा स्कूल आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि वेळ सोयीची ठरेल?"
-  * Hindi: "पास में लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल और चंद्रेश लोढा स्कूल हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सही रहेगा?"
-- Hospitals Inquiry:
-  * Marathi: "जवळच ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम आणि साई हॉस्पिटल उपलब्ध आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि वेळ सोयीची ठरेल?"
-  * Hindi: "पास में ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम और साई हॉस्पिटल हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सही रहेगा?"
-- Connectivity Inquiry:
-  * Marathi: "शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉल समोर आहे. निळजे स्टेशन 2 मिनिटांवर आणि समोरच मेट्रो स्टेशन येत आहे. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि वेळ सोयीची ठरेल?"
-  * Hindi: "शिळफाटा-मानपाडा हायवे पर एक्सपेरिया मॉल के ठीक सामने है, निलजे स्टेशन 2 मिनट पर है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सही रहेगा?"
+  * Marathi: "हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सर्व प्रमुख बँकांमधून सोपे होम लोन उपलब्ध होईल. तुमचे डाऊन पेमेंटचे बजेट किती आहे?"
+  * Hindi: "जी हाँ, सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी सभी प्रमुख बैंकों से आसान होम लोन मिल जाएगा। आपका डाउन पेमेंट का क्या बजट है?"
+- Schools Nearby Inquiry:
+  * Marathi: "प्रोजेक्ट जवळ लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल आणि चंद्रेश लोढा स्कूल अशा उत्तम शाळा आहेत."
+  * Hindi: "प्रोजेक्ट के पास लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल और चंद्रेश लोढा स्कूल जैसे बेहतरीन स्कूल हैं।"
+- Hospitals Nearby Inquiry:
+  * Marathi: "जवळच ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम आणि साई हॉस्पिटल उपलब्ध आहेत."
+  * Hindi: "पास में ही ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम और साई हॉस्पिटल की सुविधा उपलब्ध है।"
+- Location & Connectivity Inquiry:
+  * Marathi: "साई गार्डन शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त 2 मिनिटांवर आणि घणसोली 15 मिनिटांवर आहे."
+  * Hindi: "साई गार्डन शिळफाटा-मानपाडा हायवे पर, एक्सपेरिया मॉल के सामने है। निलजे स्टेशन सिर्फ 2 मिनट पर और घणसोली 15 मिनट पर है।"
+- Amenities Inquiry:
+  * Marathi: "साई गार्डन ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, मॉडर्न जिम, क्लबहाऊस, चिल्ड्रन्स प्ले एरिया आणि लँडस्केप गार्डन अशा 35 पेक्षा जास्त आधुनिक सुविधा आहेत."
+  * Hindi: "साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम, क्लबहाउस, चिल्ड्रन्स प्ले एरिया और लैंडस्केप गार्डन जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं।"
+- Possession Response (Ask for Day and Time):
+  * Marathi: "अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?"
+  * Hindi: "अंडर-कंस्ट्रक्शन में आसान पेमेंट प्लान उपलब्ध हैं और समय पर पजेशन मिल रहा है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
 - Flexible Site Visit Scheduling (DATE & TIME IN ONE GO):
-  * When caller suggests BOTH day and time in one response (e.g. "शनिवारी सकाळी ११ वाजता", "उद्या दुपारी ३ वाजता"):
+  * When caller suggests BOTH day and time in one response (e.g. "सोमवारी सकाळी 10 वाजता"):
     - Directly record and confirm BOTH in one go! Never ask date first and then separately ask time!
-    - Marathi: "नक्कीच! {day} रोजी {time} वाजता आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, दिवस चांगला जावो, नमस्कार!"
-    - Hindi: "बिल्कुल! {day} को {time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद, आपका दिन शुभ हो, नमस्ते।"
+    - Marathi: "नक्कीच! {day} रोजी {time} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार!"
+    - Hindi: "बिल्कुल! {day} को {time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते।"
   * When caller suggests only day:
     - Marathi: "नक्कीच, {day} रोजी कोणती वेळ सोयीची ठरेल — सकाळी की संध्याकाळी?"
     - Hindi: "बिल्कुल, {day} को कौन सा समय सही रहेगा — सुबह या शाम?"
   * When caller suggests only time:
-    - Marathi: "नक्कीच, {time} वाजता कोणत्या दिवशी येणं सोयीचं पडेल — आज की उद्या?"
+    - Marathi: "नक्कीच, {time} कोणत्या दिवशी येणं सोयीचं पडेल — आज की उद्या?"
     - Hindi: "बिल्कुल, {time} कौन से दिन आना सुविधाजनक रहेगा — आज या कल?"
-- Referral Fallback Script (When caller declines or is not interested):
-  * Marathi: "ठीक आहे, काही हरकत नाही. आपल्या फॅमिली किंवा फ्रेंड्स सर्कलमध्ये कोणी 1 BHK किंवा 2 BHK फ्लॅट शोधत असेल, तर आपण त्यांना आमच्या साई गार्डन प्रोजेक्टबद्दल माहिती देऊ शकाल का?"
-  * Hindi: "ठीक है, कोई बात नहीं। आपकी फैमिली या फ्रेंड्स सर्कल में कोई 1 BHK या 2 BHK फ्लैट देख रहा हो, तो क्या आप उन्हें हमारे साई गार्डन प्रोजेक्ट के बारे में बता सकते हैं?"
-  * After they answer the referral question:
-    - Marathi: "खूप खूप धन्यवाद! आपला दिवस चांगला जावो, नमस्कार."
-    - Hindi: "बहुत बहुत शुक्रिया! आपका दिन शुभ हो, नमस्ते."
-
-4. GENDER NEUTRALITY & ANTI-ROBOTIC RULES:
-- NEVER USE GENDER LABELS: NEVER say "सर" (sir) or "मॅडम" (madam). Address callers politely and neutrally.
-- STOP ROBOTIC PUSHING: NEVER repeatedly ask "शनिवार की रविवार, ११ की ४". Listen to customer's preference.
-- KEEP NATURAL PITCH: Maintain smooth, steady, polite human modulation. Do NOT inject high excited pitches.
+- Visiting Hours Restriction (9:00 AM to 9:00 PM):
+  * If caller suggests time before 9:00 AM or after 9:00 PM, politely explain visiting hours are 9:00 AM to 9:00 PM and ask for another time.
+- Past Time Restriction (Today):
+  * If caller suggests a time for today that has already passed, politely explain that the time has passed and ask for a later time today or tomorrow.
+- Referral Fallback Script (When caller declines or says No):
+  * Marathi: "ठीक आहे सर, काही हरकत नाही. 😊 सर, तुमच्या फॅमिली किंवा फ्रेंड्समध्ये कोणी 1 BHK किंवा 2 BHK फ्लॅट शोधत असेल, तर तुम्ही त्यांच्यासोबत आमचा कॉन्टॅक्ट नंबर शेअर करू शकता. किंवा त्यांची परमिशन घेऊन त्यांचा कॉन्टॅक्ट नंबर आम्हाला शेअर करू शकता. तुमच्या सहकार्याबद्दल खूप खूप धन्यवाद सर, नमस्कार!"
+  * Hindi: "ठीक है सर, कोई बात नहीं। 😊 सर, अगर आपकी फैमिली या फ्रेंड्स सर्कल में कोई 1 BHK या 2 BHK फ्लैट ढूंढ रहा हो, तो आप उनके साथ हमारा कॉन्टैक्ट नंबर शेयर कर सकते हैं। या उनकी परमिशन लेकर उनका कॉन्टैक्ट नंबर हमें शेयर कर सकते हैं। आपके सहयोग के लिए बहुत-बहुत धन्यवाद सर, नमस्ते!"
 """
 
 # ==============================================================================
@@ -573,11 +583,15 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
 
     if not detected_time:
         modifier = ""
-        if any(w in text for w in ["सकाळी", "subah", "morning", "am", "सुबह"]):
+        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text)) or any(w in text for w in ["सकाळी", "सुबह"])
+        is_afternoon = bool(re.search(r'\b(dopahar|afternoon)\b', text)) or any(w in text for w in ["दुपारी", "दोपहर"])
+        is_evening = bool(re.search(r'\b(shaam|evening|night|raat|raatri|pm)\b', text)) or any(w in text for w in ["संध्याकाळी", "रात्री", "शाम", "रात"])
+
+        if is_morning:
             modifier = "सुबह " if is_hindi else "सकाळी "
-        elif any(w in text for w in ["दुपारी", "dopahar", "afternoon", "दोपहर"]):
+        elif is_afternoon:
             modifier = "दोपहर " if is_hindi else "दुपारी "
-        elif any(w in text for w in ["संध्याकाळी", "shaam", "evening", "pm", "raatri", "रात्री", "शाम"]):
+        elif is_evening:
             modifier = "शाम " if is_hindi else "संध्याकाळी "
 
         hour_patterns = [
@@ -593,20 +607,20 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
             (r'(7[:.]30|7\s*30)', '7:30 बजे' if is_hindi else '७:३०'),
             (r'(8[:.]30|8\s*30)', '8:30 बजे' if is_hindi else '८:३०'),
             (r'(9[:.]30|9\s*30)', '9:30 बजे' if is_hindi else '९:३०'),
-            (r'\b(10|१०|das|दहा|दस)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '10:00 बजे' if is_hindi else '१०:००'),
-            (r'\b(11|११|gyarah|अकरा|ग्यारह)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '11:00 बजे' if is_hindi else '११:००'),
-            (r'\b(12|१२|bara|बारा|बारह)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '12:00 बजे' if is_hindi else '१२:००'),
-            (r'\b(1|१|ek|एक)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '1:00 बजे' if is_hindi else '१:००'),
-            (r'\b(2|२|don|दोन|do|दो)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '2:00 बजे' if is_hindi else '२:००'),
-            (r'\b(3|३|teen|तीन)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '3:00 बजे' if is_hindi else '३:००'),
-            (r'\b(4|४|char|चार)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '4:00 बजे' if is_hindi else '४:००'),
-            (r'\b(5|५|paanch|पाच|पाँच)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '5:00 बजे' if is_hindi else '५:००'),
-            (r'\b(6|६|chha|सहा|छह)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '6:00 बजे' if is_hindi else '६:००'),
-            (r'\b(7|७|saat|सात)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '7:00 बजे' if is_hindi else '७:००'),
-            (r'\b(8|८|aath|आठ)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '8:00 बजे' if is_hindi else '८:००'),
-            (r'\b(9|९|nau|नऊ|नौ)\b\s*(वाजता|baje|am|pm|o\'clock|बजे)?', '9:00 बजे' if is_hindi else '९:००'),
+            (r'\b(10|१०|das|दहा|दस)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '10 बजे' if is_hindi else '10 वाजता'),
+            (r'\b(11|११|gyarah|अकरा|ग्यारह)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '11 बजे' if is_hindi else '11 वाजता'),
+            (r'\b(12|१२|bara|बारा|बारह)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '12 बजे' if is_hindi else '12 वाजता'),
+            (r'\b(1|१|ek|एक)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '1 बजे' if is_hindi else '1 वाजता'),
+            (r'\b(2|२|don|दोन|do|दो)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '2 बजे' if is_hindi else '2 वाजता'),
+            (r'\b(3|३|teen|तीन)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '3 बजे' if is_hindi else '3 वाजता'),
+            (r'\b(4|४|char|चार)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '4 बजे' if is_hindi else '4 वाजता'),
+            (r'\b(5|५|paanch|पाच|पाँच)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '5 बजे' if is_hindi else '5 वाजता'),
+            (r'\b(6|६|chha|सहा|छह)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '6 बजे' if is_hindi else '6 वाजता'),
+            (r'\b(7|७|saat|सात)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '7 बजे' if is_hindi else '7 वाजता'),
+            (r'\b(8|८|aath|आठ)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '8 बजे' if is_hindi else '8 वाजता'),
+            (r'\b(9|९|nau|नऊ|नौ)\b\s*(वाजता|vajta|vaje|baje|am|pm|o\'clock|बजे)?', '9 बजे' if is_hindi else '9 वाजता'),
         ]
-        has_time_context = any(w in text for w in ["वाजता", "baje", "बजे", "am", "pm", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "time", "वेळ", "वेळेत", "समय"]) or any(re.search(r'\b(10|11|12|[1-9])\s*(baje|बजे|am|pm)\b', text) for _ in [1])
+        has_time_context = any(w in text for w in ["वाजता", "vajta", "vaje", "baje", "बजे", "am", "pm", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "time", "वेळ", "वेळेत", "समय"]) or any(re.search(r'\b(10|11|12|[1-9])\s*(baje|vajta|vaje|बजे|वाजता|am|pm)\b', text) for _ in [1])
         if has_time_context:
             for pat, h_str in hour_patterns:
                 if re.search(pat, text):
@@ -623,23 +637,133 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     return detected_day, detected_time
 
 
+def get_current_ist_time() -> datetime:
+    """Returns current datetime in Indian Standard Time (IST = UTC+5:30)."""
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    return datetime.now(ist_tz)
+
+
+def get_time_of_day_greeting(lang: str = "mr") -> str:
+    """
+    Returns time-of-day greeting based on current IST hour:
+    - Morning (< 12:00 PM): शुभ प्रभात (Marathi & Hindi)
+    - Afternoon (12:00 PM - 5:00 PM): शुभ दुपार (Marathi) / शुभ दोपहर (Hindi)
+    - Evening/Night (>= 5:00 PM): शुभ संध्याकाळ (Marathi) / शुभ संध्या (Hindi)
+    """
+    ist_now = get_current_ist_time()
+    hour = ist_now.hour
+    if hour < 12:
+        return "शुभ प्रभात"
+    elif 12 <= hour < 17:
+        return "शुभ दोपहर" if lang == "hi" else "शुभ दुपार"
+    else:
+        return "शुभ संध्या" if lang == "hi" else "शुभ संध्याकाळ"
+
+
+def parse_time_to_float_hour(time_str: str) -> float | None:
+    """
+    Parses a time string into 24-hour float format (e.g. 10:30 AM -> 10.5, 4:30 PM -> 16.5).
+    """
+    if not time_str:
+        return None
+    s = time_str.lower()
+    
+    is_half = any(h in s for h in ["30", "साडे", "साढ़े", "half"])
+    minutes = 0.5 if is_half else 0.0
+    
+    nums = re.findall(r'\b(1[0-2]|[1-9])\b', s)
+    if not nums:
+        deva_map = {'१': 1, '२': 2, '३': 3, '४': 4, '५': 5, '६': 6, '७': 7, '८': 8, '९': 9, '१०': 10, '११': 11, '१२': 12}
+        for k, v in deva_map.items():
+            if k in s:
+                nums = [str(v)]
+                break
+    if not nums:
+        word_map = {
+            'ek': 1, 'एक': 1, 'don': 2, 'दोन': 2, 'do': 2, 'दो': 2,
+            'teen': 3, 'तीन': 3, 'char': 4, 'चार': 4, 'paanch': 5, 'पाच': 5, 'पाँच': 5,
+            'saha': 6, 'छह': 6, 'saat': 7, 'सात': 7, 'aath': 8, 'आठ': 8,
+            'nau': 9, 'नऊ': 9, 'नौ': 9, 'das': 10, 'दहा': 10, 'दस': 10,
+            'gyarah': 11, 'अकरा': 11, 'ग्यारह': 11, 'bara': 12, 'बारा': 12, 'बारह': 12
+        }
+        for w, v in word_map.items():
+            if re.search(rf'\b{w}\b', s):
+                nums = [str(v)]
+                break
+    if not nums:
+        return None
+    
+    val = int(nums[0])
+    is_pm = bool(re.search(r'\b(pm|afternoon|evening|night)\b', s)) or any(p in s for p in ["दुपारी", "दोपहर", "संध्याकाळी", "शाम", "shaam", "रात्री", "रात", "raat", "raatri"])
+    is_am = bool(re.search(r'\b(am|morning)\b', s)) or any(a in s for a in ["सकाळी", "सुबह", "subah"])
+    
+    if is_pm:
+        if 1 <= val <= 11:
+            val += 12
+    elif is_am:
+        if val == 12:
+            val = 0
+    else:
+        # Business hours inference: if caller says 1 to 8 without AM/PM, it's afternoon/evening (13 to 20), not 2 AM!
+        if 1 <= val <= 8:
+            val += 12
+            
+    return val + minutes
+
+
+def validate_site_visit_slot(target_day: str | None, target_time: str | None, lang: str = "mr") -> tuple[bool, str | None]:
+    """
+    Validates site visit slot:
+    1. Visiting hours strictly 9:00 AM to 9:00 PM (9.0 to 21.0).
+    2. If day is today, slot must not be in the past or within 30 minutes.
+    Returns (is_valid, rejection_message_or_none).
+    """
+    if not target_time:
+        return True, None
+        
+    float_h = parse_time_to_float_hour(target_time)
+    if float_h is None:
+        return True, None
+        
+    # Check 1: 9 AM to 9 PM window
+    if float_h < 9.0 or float_h > 21.0:
+        if lang == "hi":
+            return False, "सर, साईट विजिट का समय सुबह 9:00 बजे से रात 9:00 बजे तक का है। क्या आप सुबह 9:00 से रात 9:00 के बीच का कोई समय बता सकते हैं?"
+        else:
+            return False, "सर, साईट व्हिजिटची वेळ सकाळी ९:०० ते रात्री ९:०० पर्यंत आहे. आपण सकाळी ९:०० ते रात्री ९:०० दरम्यानची एखादी वेळ सांगू शकाल का?"
+            
+    # Check 2: Past / too soon check if day is today
+    ist_now = get_current_ist_time()
+    cur_weekday = ist_now.weekday()
+    day_names_mr = ["सोमवार", "मंगळवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"]
+    day_names_hi = ["सोमवार", "मंगलवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"]
+    
+    is_today = False
+    if target_day:
+        td_clean = target_day.strip().lower()
+        if td_clean in ["आज", "today", "aaj", "atta", "आता"]:
+            is_today = True
+        elif td_clean in [day_names_mr[cur_weekday].lower(), day_names_hi[cur_weekday].lower()]:
+            is_today = True
+
+    if is_today:
+        cur_float = ist_now.hour + (ist_now.minute / 60.0)
+        if float_h <= cur_float + 0.5:
+            if lang == "hi":
+                return False, "सर, आज का वह समय बीत चुका है। क्या हम आज थोड़ा बाद का या कल का कोई समय रख सकते हैं?"
+            else:
+                return False, "सर, आजचा तो वेळ निघून गेला आहे. आपण आज थोड्या वेळाने किंवा उद्याचा कोणता वेळ ठरवू शकता का?"
+
+    return True, None
+
+
 def is_time_within_visiting_hours(time_str: str | None) -> bool:
     """Site visit hours are strictly 9:00 AM to 9:00 PM."""
     if not time_str:
         return True
-    t_clean = time_str.lower()
-    if any(k in t_clean for k in [
-        "सकाळी ६", "सकाळी ७", "सकाळी ८", "सुबह 6", "सुबह 7", "सुबह 8",
-        "6:00 am", "7:00 am", "8:00 am", "६:००", "७:००", "८:००", "8:30 am", "7:30 am", "6:30 am",
-        "सुबह 6:30", "सुबह 7:30", "सुबह 8:30", "सकाळी ६:३०", "सकाळी ७:३०", "सकाळी ८:३०"
-    ]):
-        return False
-    if any(k in t_clean for k in [
-        "रात्री १०", "रात्री ११", "रात्री १२", "रात 10", "रात 11", "रात 12",
-        "10:00 pm", "11:00 pm", "12:00 pm", "10:30 pm", "11:30 pm",
-        "रात 10:30", "रात 11:30", "रात्री १०:३०", "रात्री ११:३०"
-    ]):
-        return False
+    float_h = parse_time_to_float_hour(time_str)
+    if float_h is not None:
+        return 9.0 <= float_h <= 21.0
     return True
 
 
@@ -672,7 +796,9 @@ class PriyaRealEstateAgent(Agent):
         self.site_visit_time: Optional[str] = None
         self.referral_asked: bool = False
         
-        now = datetime.now()
+        now = get_current_ist_time()
+        time_greeting_mr = get_time_of_day_greeting("mr")
+        time_greeting_hi = get_time_of_day_greeting("hi")
         day_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         day_names_hi = ["Somvar", "Mangalvar", "Budhvar", "Guruvar", "Shukravar", "Shanivar", "Ravivar"]
         day_names_mr = ["सोमवार", "मंगळवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"]
@@ -680,10 +806,12 @@ class PriyaRealEstateAgent(Agent):
         cur_day_hi = day_names_hi[now.weekday()]
         cur_day_mr = day_names_mr[now.weekday()]
         cur_date_str = now.strftime("%d %B %Y")
+        cur_time_str = now.strftime("%I:%M %p")
         
         instructions = (
             f"{HINDI_REAL_ESTATE_PROMPT}\n\n"
-            f"REAL-TIME TEMPORAL CONTEXT: Today is {cur_day_en} ({cur_day_hi} in Hindi / {cur_day_mr} in Marathi), {cur_date_str}. "
+            f"REAL-TIME TEMPORAL CONTEXT: Today is {cur_day_en} ({cur_day_hi} in Hindi / {cur_day_mr} in Marathi), {cur_date_str}, current time {cur_time_str} IST. "
+            f"Appropriate greeting for this hour is '{time_greeting_mr}' (Marathi) / '{time_greeting_hi}' (Hindi). "
             f"If the customer asks what day today is, answer directly that today is {cur_day_hi} (or {cur_day_mr} in Marathi).\n\n"
             f"Aap abhi {customer_name} se call par baat kar rahi hain. "
             "STRICT RULE: Do NOT say the client's name in your responses. You must talk to them directly without repeating or saying their name at all. NEVER prefix your sentences with their name."
@@ -934,12 +1062,13 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     self.intro_delivered = True
+                    greeting = get_time_of_day_greeting(ACTIVE_TTS_LANGUAGE)
                     if ACTIVE_TTS_LANGUAGE == "hi":
-                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Hindi Sai Garden pitch with greeting '{greeting}' for '{raw_text}' (0ms LLM wait)!")
+                        yield speak(f"नमस्कार सर, {greeting}! सर, मैं गायत्री, साई गार्डन प्रोजेक्ट से बोल रही हूँ। सर, क्या आप अभी भी अपने लिए 1 BHK या 2 BHK फ्लैट ढूंढ रहे हैं?")
                     else:
-                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Marathi Sai Garden pitch triggered for '{raw_text}' (0ms LLM wait)!")
-                        yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        logger.info(f"⚡ [FAST-PATH TURN 1 FALLBACK] Marathi Sai Garden pitch with greeting '{greeting}' for '{raw_text}' (0ms LLM wait)!")
+                        yield speak(f"नमस्कार सर, {greeting}! सर, मी गायत्री, साई गार्डन प्रोजेक्ट मधून बोलतेय. सर, तुम्ही अजूनही स्वतःसाठी 1 BHK किंवा 2 BHK फ्लॅट शोधत आहात का?")
                     return
 
                 # 2. Subsequent Turns Fast Path (Sub-Second Latency Engine)
@@ -992,10 +1121,11 @@ class PriyaRealEstateAgent(Agent):
                             return
                         else:
                             self.intro_delivered = True
+                            greeting = get_time_of_day_greeting(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("नमस्ते! मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                                yield speak(f"नमस्कार सर, {greeting}! सर, मैं गायत्री, साई गार्डन प्रोजेक्ट से बोल रही हूँ। सर, क्या आप अभी भी अपने लिए 1 BHK या 2 BHK फ्लैट ढूंढ रहे हैं?")
                             else:
-                                yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                                yield speak(f"नमस्कार सर, {greeting}! सर, मी गायत्री, साई गार्डन प्रोजेक्ट मधून बोलतेय. सर, तुम्ही अजूनही स्वतःसाठी 1 BHK किंवा 2 BHK फ्लॅट शोधत आहात का?")
                             return
 
                     # Case A: Polite Decline / Not Interested -> Akshay Referral Script
@@ -1025,6 +1155,16 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार.")
                         return
 
+                    # Case 3BHK: Honest clarification that only 1 BHK & 2 BHK are available
+                    is_3bhk_kws = ["3 bhk", "3bhk", "three bhk", "teen bhk", "तीन बीएचके", "३ बीएचके", "३bhk", "3 bk", "three bk", "3 flat", "teen flat"]
+                    if any(kw in clean_norm for kw in is_3bhk_kws):
+                        logger.info(f"⚡ [FAST-PATH 3BHK INQUIRY] Honest 1/2 BHK only clarification for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("माफ़ कीजियेगा सर, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के विकल्प उपलब्ध हैं। क्या आप 2 BHK देखना चाहेंगे?")
+                        else:
+                            yield speak("माफ करा सर, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 2 BHK पाहू इच्छिता का?")
+                        return
+
                     # Case Both: Both 1 BHK & 2 BHK
                     if is_both_bhk:
                         self.selected_bhk = "Both"
@@ -1040,7 +1180,7 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_bhk = "2 BHK"
                         logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("2 BHK 45 लाख से शुरू होता है। यह 22 मंजिला भव्य टावर है जिसमें स्विमिंग पूल, जिम और क्लबहाउस समेत 35 से ज्यादा आधुनिक सुविधाएं मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कंस्ट्रक्शन चलेगा?")
+                            yield speak("2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कंस्ट्रक्शन चलेगा?")
                         else:
                             yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                         return
@@ -1060,9 +1200,9 @@ class PriyaRealEstateAgent(Agent):
                     if any(kw in clean_norm for kw in schools_kws):
                         logger.info(f"⚡ [FAST-PATH SCHOOLS] Instant schools response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("पास में लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल और चंद्रेश लोढा स्कूल हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("प्रोजेक्ट के पास लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल और चंद्रेश लोढा स्कूल जैसे बेहतरीन स्कूल हैं।")
                         else:
-                            yield speak("जवळपास लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल आणि चंद्रेश लोढा स्कूल आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("प्रोजेक्ट जवळ लोढा वर्ल्ड स्कूल, पवार पब्लिक स्कूल, आयरा ग्लोबल आणि चंद्रेश लोढा स्कूल अशा उत्तम शाळा आहेत.")
                         return
 
                     # Case M: Nearby Hospitals Inquiry
@@ -1070,45 +1210,45 @@ class PriyaRealEstateAgent(Agent):
                     if any(kw in clean_norm for kw in hospitals_kws):
                         logger.info(f"⚡ [FAST-PATH HOSPITALS] Instant hospitals response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("पास में ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम और साई हॉस्पिटल उपलब्ध हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("पास में ही ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम और साई हॉस्पिटल की सुविधा उपलब्ध है।")
                         else:
-                            yield speak("जवळच ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम आणि साई हॉस्पिटल उपलब्ध आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("जवळच ज्युपिटर हॉस्पिटल, इन्फिनिटी क्लिनिक, एमजीएम आणि साई हॉस्पिटल उपलब्ध आहेत.")
                         return
 
                     # Case E: Down Payment / Home Loan Inquiry
                     if any(kw in clean_norm for kw in ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन"]):
                         logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("जी हाँ, सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी बैंक होम लोन उपलब्ध हो जाता है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("जी हाँ, सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी सभी प्रमुख बैंकों से आसान होम लोन मिल जाएगा। आपका डाउन पेमेंट का क्या बजट है?")
                         else:
-                            yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी बँकेतून सोपे होम लोन उपलब्ध होईल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सर्व प्रमुख बँकांमधून सोपे होम लोन उपलब्ध होईल. तुमचे डाऊन पेमेंटचे बजेट किती आहे?")
                         return
 
                     # Case F: Location / Highway / Xperia Mall Inquiry
                     if any(kw in clean_norm for kw in ["kahan hai", "kidhar hai", "location", "address", "kuthe ahe", "xperia", "mall", "shilphata", "manpada", "nilje", "ghansoli", "lodha heaven", "हायवे", "कुठे", "पत्ता"]):
                         logger.info(f"⚡ [FAST-PATH LOCATION] Instant location response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवे, डोंबिवली ईस्ट, लोढा हेवन के पास, एक्सपेरिया मॉल के सामने है। निळजे स्टेशन सिर्फ 2 मिनट पर है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवे पर, एक्सपेरिया मॉल के सामने है। निलजे स्टेशन सिर्फ 2 मिनट पर और घणसोली 15 मिनट पर है।")
                         else:
-                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवे, डोंबिवली ईस्ट, लोढा हेवन जवळ, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त 2 मिनिटांवर आहे. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("साई गार्डन शिळफाटा-मानपाडा हायवेवर, एक्सपेरिया मॉलच्या अगदी समोर आहे. निळजे स्टेशन फक्त 2 मिनिटांवर आणि घणसोली 15 मिनिटांवर आहे.")
                         return
 
                     # Case G: Connectivity / Metro / Bullet Train Inquiry
                     if any(kw in clean_norm for kw in ["metro", "bullet train", "train", "station", "connectivity", "रस्ता", "स्टेशन"]):
                         logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("कनेक्टिव्हिटी बहुत शानदार है। सामने मेट्रो स्टेशन आ रहा है, निळजे स्टेशन 2 मिनट पर है और बुलेट ट्रेन रूट भी है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("कनेक्टिव्हिटी बहुत शानदार है। सामने मेट्रो स्टेशन आ रहा है, निलजे स्टेशन 2 मिनट पर है और बुलेट ट्रेन रूट भी पास है।")
                         else:
-                            yield speak("कनेक्टिव्हिटी उत्तम आहे. समोर मेट्रो स्टेशन येत आहे, निळजे स्टेशन 2 मिनिटांवर आहे आणि जवळच बुलेट ट्रेन मार्ग देखील आहे. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("कनेक्टिव्हिटी उत्तम आहे. समोर मेट्रो स्टेशन येत आहे, निळजे स्टेशन 2 मिनिटांवर आहे आणि जवळच बुलेट ट्रेन मार्ग देखील आहे.")
                         return
 
                     # Case H: Amenities / Building Floors Inquiry
                     if any(kw in clean_norm for kw in ["amenities", "amenity", "gym", "swimming pool", "clubhouse", "floors", "building", "माले", "मजली", "सुविधा"]):
                         logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("साई गार्डन 22 मंजिला टावर है जिसमें 35 से ज्यादा आधुनिक सुविधाएं हैं — जैसे स्विमिंग पूल, जिम, क्लबहाउस और गार्डन। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम, क्लबहाउस, चिल्ड्रन्स प्ले एरिया और लैंडस्केप गार्डन जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं।")
                         else:
-                            yield speak("साई गार्डन 22 मजली टॉवर असून यात 35 पेक्षा जास्त आधुनिक सुविधा आहेत — जसे की स्विमिंग पूल, मॉडर्न जिम, क्लबहाऊस, चिल्ड्रन्स प्ले एरिया आणि लँडस्केप गार्डन. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                            yield speak("साई गार्डन ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, मॉडर्न जिम, क्लबहाऊस, चिल्ड्रन्स प्ले एरिया आणि लँडस्केप गार्डन अशा 35 पेक्षा जास्त आधुनिक सुविधा आहेत.")
                         return
 
                     # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
@@ -1121,7 +1261,7 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     # Case Q2: BHK types inquiry ("kitna bhk hai", "konsa bhk hai", "kiti bhk ahet")
-                    if any(kw in clean_norm for kw in ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk"]):
+                    if any(kw in clean_norm for kw in ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk", "price", "किंमत", "rate", "cost", "budget"]):
                         logger.info(f"⚡ [FAST-PATH BHK OPTIONS] Instant options for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से उपलब्ध हैं। आप कौन सा विकल्प देख रहे हैं?")
@@ -1146,7 +1286,7 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_possession = "Under Construction"
                         logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & site visit invite for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("अंडर-कंस्ट्रक्शन में आसान पेमेंट प्लान उपलब्ध हैं और समय पर पजेशन मिल रहा है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("अंडर-कंस्ट्रक्शन में आसान पेमेंट प्लान उपलब्ध हैं और समय पर पजेशन मिल रहा है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
                         else:
                             yield speak("अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
                         return
@@ -1155,7 +1295,7 @@ class PriyaRealEstateAgent(Agent):
                         self.selected_possession = "Ready to Move" if is_ready else "Both"
                         logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & site visit invite for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("रेडी-टू-मूव फ्लैट्स में तुरंत पजेशन और सभी कानूनी मंजूरियां मिलती हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और कौन सा समय सही रहेगा?")
+                            yield speak("रेडी-टू-मूव फ्लैट्स में तुरंत पजेशन और सभी कानूनी मंजूरियां मिलती हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
                         else:
                             yield speak("रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
                         return
@@ -1172,12 +1312,11 @@ class PriyaRealEstateAgent(Agent):
                     if (detected_day and detected_time) or (explicit_confirm and target_day and target_time) or (target_day and target_time and (detected_day or detected_time)):
                         final_day = target_day
                         final_time = target_time
-                        if not is_time_within_visiting_hours(final_time):
-                            logger.info(f"⚡ [VISITING HOURS OUT OF BOUNDS] Requested time {final_time} outside 9am-9pm.")
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("साईट विजिट का समय सुबह 9:00 बजे से रात 9:00 बजे तक का है। क्या आप सुबह 9:00 से रात 9:00 के बीच का कोई समय बता सकते हैं?")
-                            else:
-                                yield speak("साई व्हिजिटची वेळ सकाळी ९:०० ते रात्री ९:०० पर्यंत आहे. आपण सकाळी ९:०० ते रात्री ९:०० दरम्यानची एखादी वेळ सांगू शकाल का?")
+                        
+                        is_valid_slot, reject_msg = validate_site_visit_slot(final_day, final_time, lang=ACTIVE_TTS_LANGUAGE)
+                        if not is_valid_slot and reject_msg:
+                            logger.info(f"⚡ [VISITING SLOT REJECTED] {final_day} at {final_time}: {reject_msg}")
+                            yield speak(reject_msg)
                             return
 
                         logger.info(f"⚡ [FAST-PATH SITE VISIT CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
@@ -1188,27 +1327,34 @@ class PriyaRealEstateAgent(Agent):
                             flat_type=self.selected_bhk or "1BHK/2BHK"
                         ))
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल, {final_day} को {final_time} आपकी साईट विजिट पक्की कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद, आपका दिन शुभ हो, नमस्ते.")
+                            yield speak(f"बिल्कुल! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
                         else:
-                            yield speak(f"नक्कीच, {final_day} रोजी {final_time} वाजता आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, दिवस चांगला जावो, नमस्कार.")
+                            time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
+                            yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
                         return
 
                     # 2. Caller provided ONLY day (e.g. "शनिवार", "उद्या", "आज")
                     if detected_day and not target_time:
                         logger.info(f"⚡ [FAST-PATH DAY SELECTED: {detected_day}] Asking for preferred time (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल, {detected_day} को आपके हिसाब से कौन सा समय सही रहेगा? सुबह या शाम?")
+                            yield speak(f"बिल्कुल, {detected_day} को कौन सा समय सही रहेगा? सुबह या शाम?")
                         else:
-                            yield speak(f"नक्कीच, {detected_day} रोजी आपल्या सोयीनुसार कोणती वेळ सोयीची ठरेल? सकाळी की संध्याकाळी?")
+                            yield speak(f"नक्कीच, {detected_day} रोजी कोणती वेळ सोयीची ठरेल? सकाळी की संध्याकाळी?")
                         return
 
-                    # 3. Caller provided ONLY time (e.g. "सकाळी ८:३० वाजता", "४ वाजता")
+                    # 3. Caller provided ONLY time (e.g. "सकाळी 10 वाजता", "4 वाजता")
                     if detected_time and not target_day:
+                        is_valid_slot, reject_msg = validate_site_visit_slot(None, detected_time, lang=ACTIVE_TTS_LANGUAGE)
+                        if not is_valid_slot and reject_msg:
+                            logger.info(f"⚡ [VISITING TIME REJECTED] {detected_time}: {reject_msg}")
+                            yield speak(reject_msg)
+                            return
                         logger.info(f"⚡ [FAST-PATH TIME SELECTED: {detected_time}] Asking for preferred day (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak(f"बिल्कुल, {detected_time} कौन से दिन आना सुविधाजनक रहेगा — आज या कल?")
                         else:
-                            yield speak(f"नक्कीच, {detected_time} कोणत्या दिवशी येणं सोयीचं पडेल — आज की उद्या?")
+                            time_phrase = detected_time if "वाजता" in detected_time else f"{detected_time} वाजता"
+                            yield speak(f"नक्कीच, {time_phrase} कोणत्या दिवशी येणं सोयीचं पडेल — आज की उद्या?")
                         return
 
                     # 4. Caller asked to confirm without specifying any day/time yet
@@ -2012,6 +2158,9 @@ def prewarm_fnc(proc: JobProcess):
         endpointing_ms=endpointing_ms,
         utterance_end_ms=None,
         smart_format=True,
+        punctuate=True,
+        filler_words=False,
+        vad_events=True,
         no_delay=True,
         interim_results=True,
         keyterm=STT_KEYTERMS,
@@ -2019,13 +2168,13 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 350ms silence)
+    # 3. Pre-warm Silero VAD (Noise cancellation filter: 0.50 activation, 0.35 deactivation)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.05,
-        activation_threshold=0.35,
-        deactivation_threshold=0.25,
+        min_silence_duration=0.40,
+        min_speech_duration=0.06,
+        activation_threshold=0.50,
+        deactivation_threshold=0.35,
         prefix_padding_duration=0.15,
         sample_rate=16000
     )
@@ -2420,6 +2569,9 @@ async def entrypoint(ctx: JobContext):
             endpointing_ms=endpointing_ms,
             utterance_end_ms=None,
             smart_format=True,
+            punctuate=True,
+            filler_words=False,
+            vad_events=True,
             no_delay=True,
             interim_results=True,
             keyterm=STT_KEYTERMS,
@@ -2557,10 +2709,10 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.35s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.05,
-            activation_threshold=0.35,
-            deactivation_threshold=0.25,
+            min_silence_duration=0.40,
+            min_speech_duration=0.06,
+            activation_threshold=0.50,
+            deactivation_threshold=0.35,
             prefix_padding_duration=0.15,
             sample_rate=16000
         )
