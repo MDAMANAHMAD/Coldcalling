@@ -1056,7 +1056,7 @@ class PriyaRealEstateAgent(Agent):
         elif self.selected_possession is None:
             return "आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if lang == "hi" else "आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
         else:
-            return "आप प्रत्यक्ष साइट विजिट के लिए कब आ सकते हैं?" if lang == "hi" else "आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?"
+            return "क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?" if lang == "hi" else "आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?"
 
     def switch_language(self, new_lang: str):
         global ACTIVE_TTS_LANGUAGE, LANGUAGE_LOCKED_EXPLICITLY
@@ -1541,9 +1541,9 @@ class PriyaRealEstateAgent(Agent):
                                 return
                             else:
                                 if ACTIVE_TTS_LANGUAGE == "hi":
-                                    yield speak("जी, आवाज़ आ रही है! आप साइट विजिट के लिए कब आ सकते हैं?")
+                                    yield speak("जी, आवाज़ आ रही है! बोलिए, क्या जानकारी चाहिए?")
                                 else:
-                                    yield speak("हो, आवाज येतोय! आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
+                                    yield speak("हो, आवाज येतोय! बोला, काय माहिती हवी आहे?")
                             return
                         else:
                             self.intro_delivered = True
@@ -1843,6 +1843,45 @@ class PriyaRealEstateAgent(Agent):
                                 yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                             return
 
+                        # Case Possession: Under Construction / Ready to Move (Checked immediately so caller's possession answer is never hijacked)
+                        upcoming_kws = [
+                            "upcoming", "position", "possession", "under construction", "under-construction", "underconstruction",
+                            "construction", "future", "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन",
+                            "चालू", "चालू काम", "चालेल मला", "मला चालेल", "chalel"
+                        ]
+                        is_upcoming = (
+                            fuzzy_contains(clean_norm, upcoming_kws, threshold=0.72)
+                            or (self.selected_possession is None and any(w in clean_norm for w in ["under", "chalel", "चालेल", "chalega", "चलेगा", "अंडर", "कन्स्ट्रक्शन"]))
+                        ) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"])
+
+                        ready_kws = [
+                            "ready to move", "ready-to-move", "ready tomove", "ready", "redy", "radi", "immediate", "turant",
+                            "ready chalega", "chalega ready", "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"
+                        ]
+                        is_ready = (
+                            fuzzy_contains(clean_norm, ready_kws, threshold=0.72)
+                            and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन", "अंडर"])
+                        )
+                        is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
+
+                        if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
+                            self.selected_possession = "Under Construction"
+                            logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak("बहुत बढ़िया! अंडर-कन्स्ट्रक्शन में आसान पेमेंट प्लान्स उपलब्ध हैं और समय पर पज़ेशन मिलेगा। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
+                            else:
+                                yield speak("खूप छान! अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
+                            return
+
+                        if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
+                            self.selected_possession = "Ready to Move" if is_ready else "Both"
+                            logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak("बहुत बढ़िया! रेडी-टू-मूव फ्लैट्स में तुरंत पज़ेशन और सभी कानूनी मंजूरियां मिलती हैं। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
+                            else:
+                                yield speak("खूप छान! रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
+                            return
+
                         # Case Carpet Area / Flat Size
                         carpet_kws = ["carpet", "sqft", "square feet", "kitna bada", "kiti square feet", "area kitna", "स्क्वेअर फीट", "कारपेट", "flat size", "size kitna"]
                         if any(kw in clean_norm for kw in carpet_kws):
@@ -2039,34 +2078,19 @@ class PriyaRealEstateAgent(Agent):
                                 yield speak(f"साई गार्डन Kalyan-Shilphata रोडवर, Xperia Mall च्या अगदी समोर आहे. Nilje station फक्त 2 मिनिटांवर आहे. {cq}")
                             return
 
-                        # Case G: Connectivity / Station (General station / railway / road)
-                        if any(kw in clean_norm for kw in ["station", "train", "connectivity", "रस्ता", "स्टेशन", "railway"]):
+                        # Case G: Connectivity / Station / Transport (General station / railway / road / metro)
+                        connectivity_kws = [
+                            "station", "train", "connectivity", "रस्ता", "स्टेशन", "railway",
+                            "कनॅक्टिव्हिटी", "कनेक्टिव्हिटी", "कनेक्टिविटी", "कुठून कुठून", "कुठून आहे",
+                            "कुठून कुठून आहे", "metro", "मेट्रो", "local", "लोकल"
+                        ]
+                        if any(kw in clean_norm for kw in connectivity_kws):
                             logger.info(f"⚡ [FAST-PATH CONNECTIVITY] Instant connectivity response for '{raw_text}' (0ms LLM wait)!")
                             cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"कनेक्टिव्हिटी बहुत बढ़िया है। Nilje station सिर्फ 2 मिनट पर है, सामने upcoming Metro Line 12 आ रहा है और Dombivli station 20 मिनट पर है। {cq}")
+                                yield speak(f"कनेक्टिव्हिटी बहुत बढ़िया है! Nilje station सिर्फ 2 मिनट पर है, सामने upcoming Metro Line 12 आ रहा है और Dombivli station 20 मिनट पर है। {cq}")
                             else:
-                                yield speak(f"कनेक्टिव्हिटी उत्तम आहे. Nilje station फक्त 2 मिनिटांवर आहे, समोर upcoming Metro Line 12 येत आहे आणि Dombivli station 20 मिनिटांवर आहे. {cq}")
-                            return
-
-                        # Case H: Amenities / Building Floors / Facilities Inquiry (Fuzzy & Phonetic Tolerant)
-                        amenities_kws = [
-                            "amenities", "amenity", "gym", "swimming pool", "swimming", "clubhouse", "floors", "building",
-                            "माले", "मजली", "सुविधा", "सुविधाएं", "सुविधाए", "lift", "लिफ्ट", "garden", "गार्डन",
-                            "facilities", "facility", "features", "feature", "काय काय आहे", "काय काय मिळेल",
-                            "काय सुविधा", "काय सोयी", "सोयी सुविधा", "क्या क्या है", "क्या क्या मिलेगा",
-                            "क्या सुविधाएं", "क्या सुविधा", "amneties", "amneti", "aminiti", "aminities", "eminities",
-                            "eminity", "amenitees", "amenitis", "aminites", "ameniti", "amenites",
-                            "suvidha", "suvidhaye", "suvidhaen", "suvidhas", "soyi",
-                            "एमिनिटी", "एमिनिटीज", "अमेनिटी", "अमेनिटीज", "अमिनिटी", "अमिनिटीज"
-                        ]
-                        if fuzzy_contains(clean_norm, amenities_kws, threshold=0.68):
-                            logger.info(f"⚡ [FAST-PATH AMENITIES (FUZZY MATCHED)] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
-                            cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें जिम, स्विमिंग पूल, ओपन गार्डन और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। {cq}")
-                            else:
-                                yield speak(f"साई गार्डन ही 22 मजली भव्य इमारत असून यात जिम, स्विमिंग पूल, ओपन गार्डन आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत। {cq}")
+                                yield speak(f"कनेक्टिव्हिटी उत्तम आहे! Nilje station फक्त 2 मिनिटांवर आहे, समोर upcoming Metro Line 12 येत आहे आणि Dombivli station 20 मिनिटांवर आहे. {cq}")
                             return
 
                         # Case Overview / How is the project ("kasa ahe", "kasa raha", "kaisa hai", "kaisa project", "kaisi building")
@@ -2101,47 +2125,6 @@ class PriyaRealEstateAgent(Agent):
                                 yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है। आप 1 BHK देखना चाहेंगे या 2 BHK?")
                             else:
                                 yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. आपण 1 BHK पाहू इच्छिता की 2 BHK?")
-                            return
-
-                        # Case H1: Upcoming possession confirmed (Fuzzy Tolerant)
-                        upcoming_kws = [
-                            "upcoming", "position", "possession", "under construction", "under-construction", "underconstruction", "construction", "future",
-                            "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन", "चालू"
-                        ]
-                        is_upcoming = (
-                            fuzzy_contains(clean_norm, upcoming_kws, threshold=0.70)
-                            and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह", "रेडि"])
-                        )
-
-                        # Case H2: Ready to move confirmed (Fuzzy Tolerant)
-                        ready_kws = [
-                            "ready to move", "ready-to-move", "ready tomove", "ready", "redy", "radi", "immediate", "turant", "ready chalega", "chalega ready",
-                            "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"
-                        ]
-                        is_ready = (
-                            fuzzy_contains(clean_norm, ready_kws, threshold=0.70)
-                            and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन"])
-                        )
-
-                        # Case H3: Both / Either
-                        is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
-
-                        if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
-                            self.selected_possession = "Under Construction"
-                            logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("बहुत बढ़िया! अंडर-कन्स्ट्रक्शन में आसान पेमेंट प्लान्स उपलब्ध हैं और समय पर पज़ेशन मिलेगा। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
-                            else:
-                                yield speak("खूप छान! अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
-                            return
-
-                        if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
-                            self.selected_possession = "Ready to Move" if is_ready else "Both"
-                            logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("बहुत बढ़िया! रेडी-टू-मूव फ्लैट्स में तुरंत पज़ेशन और सभी कानूनी मंजूरियां मिलती हैं। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
-                            else:
-                                yield speak("खूप छान! रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
                             return
 
                         # Case K: WhatsApp brochure & Project details inquiry
@@ -3656,9 +3639,10 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.80,  # Sustained human speech (>800ms) to interrupt; ignores line noise & brief echo
+                "min_duration": 0.85,  # Sustained human speech (>850ms) to interrupt; ignores line noise & brief echo
                 "min_words": 1,        # Requires at least 1 actual word from STT before interrupting
-                "resume_false_interruption": False,
+                "resume_false_interruption": True,  # Auto-resume speech if interruption was a false alarm (noise/cough/line pop)
+                "false_interruption_timeout": 2.0,
                 "discard_audio_if_uninterruptible": False,
             }
         }
@@ -4873,7 +4857,7 @@ async def entrypoint(ctx: JobContext):
                     try:
                         t_user_stop = 0.0
                         record_dialogue_turn("agent", "हॅलो?")
-                        handle = session.say("हॅलो?", allow_interruptions=True)
+                        handle = session.say("हॅलो?", allow_interruptions=False)
                         if handle:
                             await handle.wait_for_playout()
                         t_initial_hello_ended = time.time()
