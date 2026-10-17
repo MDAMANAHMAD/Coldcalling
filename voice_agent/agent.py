@@ -577,18 +577,32 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         (r'(साढ़े\s*छह|साडे\s*सहा|साडेसहा|sade\s*saha|sadesaha|6[:.]30|6\s*30)', 'शाम 6:30 बजे'),
     ]
     times_map = times_map_hi if is_hindi else times_map_mr
+    # Strip BHK / flat / price / floor numbers from text_for_time so they NEVER parse as site visit time!
+    text_for_time = re.sub(
+        r'\b(?:1|2|3|4|one|two|three|ek|do|don|teen|एक|दोन|दो|तीन|१|२|३)\s*(?:bhk|bk|rk|flat|रूम|फ्लॅट|फ्लेट|नंबर|बीएचके|बी एच के|आरके)\b',
+        ' ',
+        text,
+        flags=re.IGNORECASE
+    )
+    text_for_time = re.sub(
+        r'\b\d+\s*(?:lakh|lac|crore|cr|मजली|मंजिला|मंजिल|लाख|करोड|पैसे|रू|rs|rupees)\b',
+        ' ',
+        text_for_time,
+        flags=re.IGNORECASE
+    )
+
     detected_time = None
     for pat, t_name in times_map:
-        if re.search(pat, text):
+        if re.search(pat, text_for_time):
             detected_time = t_name
             break
 
     # 3. Numeric & Word Hour Detection
     if not detected_time:
         modifier = ""
-        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text)) or any(w in text for w in ["सकाळी", "सुबह"])
-        is_afternoon = bool(re.search(r'\b(dopahar|afternoon)\b', text)) or any(w in text for w in ["दुपारी", "दोपहर"])
-        is_evening = bool(re.search(r'\b(shaam|evening|night|raat|raatri|pm)\b', text)) or any(w in text for w in ["संध्याकाळी", "रात्री", "शाम", "रात"])
+        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text_for_time)) or any(w in text_for_time for w in ["सकाळी", "सुबह"])
+        is_afternoon = bool(re.search(r'\b(dopahar|afternoon)\b', text_for_time)) or any(w in text_for_time for w in ["दुपारी", "दोपहर"])
+        is_evening = bool(re.search(r'\b(shaam|evening|night|raat|raatri|pm)\b', text_for_time)) or any(w in text_for_time for w in ["संध्याकाळी", "रात्री", "शाम", "रात"])
 
         if is_morning:
             modifier = "सुबह " if is_hindi else "सकाळी "
@@ -612,7 +626,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         }
 
         # Check 11:00 or 11.00 format
-        m_clock = re.search(r'\b(1[0-2]|[1-9])[:.](00)\b', text)
+        m_clock = re.search(r'\b(1[0-2]|[1-9])[:.](00)\b', text_for_time)
         if m_clock:
             h_val = int(m_clock.group(1))
             if not modifier:
@@ -624,11 +638,15 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                     modifier = "शाम " if is_hindi else "संध्याकाळी "
             detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
 
-        # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता, अकारावास)
+        # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता)
+        # Note: Time unit suffix is STRICTLY MANDATORY (no '?') to prevent matching property types like '2 BHK' or 'एक'
+        # re.finditer takes the LAST match so caller self-corrections like "दो बज, बारह बज" correctly pick 12!
         if not detected_time:
-            m_explicit = re.search(r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|अकारा|अकारावास|अकरावास|ग्यारह|बारा|बारह|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|वाजे|वास|am|pm|o\'clock)?(?:$|[^\w\u0900-\u097F])', text)
-            if m_explicit:
-                raw_h = m_explicit.group(1)
+            pattern = r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|अकारा|अकारावास|अकरावास|ग्यारह|बारा|बारह|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|वाजे|वास|am|pm|o\'clock)(?:$|[^\w\u0900-\u097F])'
+            matches = list(re.finditer(pattern, text_for_time))
+            if matches:
+                last_m = matches[-1]
+                raw_h = last_m.group(1)
                 h_val = int(raw_h) if raw_h.isdigit() else num_words_map.get(raw_h, 0)
                 if 1 <= h_val <= 12:
                     if not modifier:
@@ -640,9 +658,9 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                             modifier = "शाम " if is_hindi else "संध्याकाळी "
                     detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
 
-        # If day is present (e.g. "monday 11", "kal 11", "sunday eleven"), ANY isolated 1-12 or number word is the hour!
+        # If day is present (e.g. "monday 11", "kal 11", "sunday eleven"), ANY isolated 1-12 or number word in text_for_time is the hour!
         if not detected_time and detected_day:
-            words = text.split()
+            words = text_for_time.split()
             found_h = None
             for w in words:
                 w_clean = re.sub(r'[^a-z0-9\u0900-\u097F]', '', w)
@@ -664,13 +682,15 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                         modifier = "शाम " if is_hindi else "संध्याकाळी "
                 detected_time = f"{modifier}{found_h} बजे" if is_hindi else f"{modifier}{found_h} वाजता"
 
-        # General time context fallback: evaluate longer words first (e.g. 'बारह' before 'दो') to avoid sub-word false matches
+        # General time context fallback: evaluate longer words first (e.g. 'बारह' before 'दो')
+        # Uses word boundaries so English words like 'amenities' containing 'am' NEVER trigger time context!
         if not detected_time:
-            has_time_context = any(w in text for w in ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "am", "pm", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "time", "वेळ", "वेळेत", "समय", "at", "around", "ko", "roji"])
+            time_words_devanagari = ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "o'clock"]
+            has_time_context = any(re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(w)}(?:$|[^\w\u0900-\u097F])', text_for_time) for w in time_words_devanagari) or bool(re.search(r'\b(am|pm)\b', text_for_time))
             if has_time_context:
                 sorted_num_words = sorted(num_words_map.items(), key=lambda x: len(str(x[0])), reverse=True)
                 for pat_word, h_val in sorted_num_words:
-                    if re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(str(pat_word))}(?:$|[^\w\u0900-\u097F])', text):
+                    if re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(str(pat_word))}(?:$|[^\w\u0900-\u097F])', text_for_time):
                         if not modifier:
                             if 8 <= h_val <= 11:
                                 modifier = "सुबह " if is_hindi else "सकाळी "
@@ -878,7 +898,7 @@ class PriyaRealEstateAgent(Agent):
         elif self.selected_possession is None:
             return "आप ready-to-move देख रहे हैं या under-construction चलेगा?" if lang == "hi" else "आपण ready-to-move पाहताय की under-construction चालेल?"
         else:
-            return "क्या आप इस वीकेंड प्रत्यक्ष विजिट के लिए आ सकते हैं?" if lang == "hi" else "आपण या वीकेंडला प्रत्यक्ष व्हिजिटसाठी येऊ शकता का?"
+            return "आप प्रत्यक्ष साइट विजिट के लिए कब आ सकते हैं?" if lang == "hi" else "आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?"
 
     def switch_language(self, new_lang: str):
         global ACTIVE_TTS_LANGUAGE, LANGUAGE_LOCKED_EXPLICITLY
@@ -927,25 +947,33 @@ class PriyaRealEstateAgent(Agent):
                 words = clean_norm.split()
 
                 # 0. Instant Multilingual switch triggers (Locks language & syncs Cartesia TTS / STT immediately)
-                hindi_switch_kws = ["hindi", "हिंदी", "hindi mein", "hindi madhe", "hindi madhye", "hindit", "hindi bola", "hindi me", "hindi bol"]
-                marathi_switch_kws = ["marathi", "मराठी", "marathit", "marathi madhe", "marathi madhye", "marathi mein", "marathi bola", "marathi bol"]
+                hindi_switch_kws = ["hindi", "हिंदी", "hindi mein", "hindi madhe", "hindi madhye", "hindit", "hindi bola", "hindi me", "hindi bol", "hindi chalega"]
+                marathi_switch_kws = ["marathi", "मराठी", "marathit", "marathi madhe", "marathi madhye", "marathi mein", "marathi bola", "marathi bol", "marathi chalel"]
 
                 if any(w in clean_norm for w in hindi_switch_kws):
                     self.switch_language("hi")
                     if self.selected_bhk is None:
-                        yield speak("नमस्ते, मैं गायत्री बोल रही हूँ साई गार्डन से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        if len(user_msgs) > 1:
+                            yield speak("जी बिल्कुल, हम हिंदी में बात कर सकते हैं। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                        else:
+                            yield speak("नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                     elif self.selected_possession is None:
-                        yield speak("बिल्कुल, हम हिंदी में बात कर सकते हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
+                        bhk_part = f"आप {self.selected_bhk} देख रहे हैं ना? " if self.selected_bhk else ""
+                        yield speak(f"जी बिल्कुल, हम हिंदी में बात कर सकते हैं। {bhk_part}आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
                     else:
-                        yield speak("बिल्कुल, हम हिंदी में बात कर सकते हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
+                        yield speak("जी बिल्कुल, हम हिंदी में बात कर सकते हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
                     return
 
                 if any(w in clean_norm for w in marathi_switch_kws):
                     self.switch_language("mr")
                     if self.selected_bhk is None:
-                        yield speak("नमस्कार, मी गायत्री बोलतेय साई गार्डन मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        if len(user_msgs) > 1:
+                            yield speak("हो नक्कीच, आपण मराठीत बोलू शकतो. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        else:
+                            yield speak("नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?")
                     elif self.selected_possession is None:
-                        yield speak("हो नक्कीच, आपण मराठीत बोलू शकतो. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        bhk_part = f"आपण {self.selected_bhk} पाहत आहात ना? " if self.selected_bhk else ""
+                        yield speak(f"हो नक्कीच, आपण मराठीत बोलू शकतो. {bhk_part}आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                     else:
                         yield speak("हो नक्कीच, आपण मराठीत बोलू शकतो. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
                     return
@@ -2292,16 +2320,41 @@ STT_KEYWORDS = [
     ("डाउन पेमेंट", 2.5),
     ("down payment", 2.5),
     ("home loan", 2.5),
-    ("flat", 1.5),
-    ("carpet", 1.5),
-    ("amenities", 2.0),
-    ("lakh", 1.5),
-    ("crore", 1.5),
-    ("budget", 1.5),
-    ("visit", 2.5),
-    ("Ready to move", 2.5),
-    ("Possession", 2.0),
-    ("Price", 2.0),
+    ("flat", 2.0),
+    ("carpet", 2.0),
+    ("amenities", 3.5),
+    ("ॲमेनिटीज", 3.5),
+    ("gym", 3.0),
+    ("swimming pool", 3.0),
+    ("स्विमिंग पूल", 3.0),
+    ("क्लबहाऊस", 3.0),
+    ("अकरा वाजता", 3.5),
+    ("बारा वाजता", 3.5),
+    ("दोन वाजता", 3.5),
+    ("तीन वाजता", 3.5),
+    ("चार वाजता", 3.5),
+    ("ग्यारह बजे", 3.5),
+    ("बारह बजे", 3.5),
+    ("दो बजे", 3.5),
+    ("तीन बजे", 3.5),
+    ("चार बजे", 3.5),
+    ("शनिवार", 3.5),
+    ("रविवार", 3.5),
+    ("सोमवार", 3.0),
+    ("वीकेंड", 3.0),
+    ("weekend", 3.0),
+    ("lakh", 2.0),
+    ("crore", 2.0),
+    ("budget", 2.0),
+    ("visit", 3.0),
+    ("साईट व्हिजिट", 3.5),
+    ("साइट विजिट", 3.5),
+    ("Ready to move", 3.0),
+    ("रेडि टू मूव्ह", 3.0),
+    ("under construction", 3.0),
+    ("अंडर कन्स्ट्रक्शन", 3.0),
+    ("Possession", 2.5),
+    ("Price", 2.5),
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
@@ -2455,10 +2508,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 120ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 180ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "120"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2475,14 +2528,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 220ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.22,
-        min_speech_duration=0.04,
-        activation_threshold=0.20,
-        deactivation_threshold=0.15,
-        prefix_padding_duration=0.25,
+        min_silence_duration=0.28,
+        min_speech_duration=0.05,
+        activation_threshold=0.25,
+        deactivation_threshold=0.20,
+        prefix_padding_duration=0.30,
         sample_rate=16000
     )
 
@@ -2871,7 +2924,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "120"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -3013,16 +3066,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 220ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.22s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.28s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.22,
-            min_speech_duration=0.04,
-            activation_threshold=0.20,
-            deactivation_threshold=0.15,
-            prefix_padding_duration=0.25,
+            min_silence_duration=0.28,
+            min_speech_duration=0.05,
+            activation_threshold=0.25,
+            deactivation_threshold=0.20,
+            prefix_padding_duration=0.30,
             sample_rate=16000
         )
     
@@ -3048,7 +3101,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.08,
+                "min_delay": 0.22,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3057,7 +3110,7 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.10,
+                "min_duration": 0.12,
                 "resume_false_interruption": False,  # NEVER discard caller speech as false interruption!
                 "false_interruption_timeout": 3.0,
             }
@@ -3714,8 +3767,8 @@ async def entrypoint(ctx: JobContext):
                     t_user_stop = 0.0
             elif ev.new_state in ["listening", "idle"]:
                 agent_is_speaking = False
-                t_last_activity = time.time()
-                last_prompt_time = time.time()
+                t_last_activity = time.time() + 2.5
+                last_prompt_time = time.time() + 2.5
         except Exception as err:
             logger.debug(f"Agent state changed error: {err}")
 
@@ -4277,9 +4330,9 @@ async def entrypoint(ctx: JobContext):
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
 
-            # 2. If caller stays silent for 20.0 seconds total without response -> Terminate call
-            if silence_duration >= 20.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=20s). Terminating call in language '{active_lang}'...")
+            # 2. If caller stays silent for 24.0 seconds total without response -> Terminate call
+            if silence_duration >= 24.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=24s). Terminating call in language '{active_lang}'...")
                 if active_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, दिवस चांगला जावो, नमस्कार."
                 elif active_lang == "en":
@@ -4297,13 +4350,13 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 3. Say prompt after 8.5 seconds interval of genuine silence (Single 'हॅलो?' without repeating long lines)
-            if (now - last_prompt_time >= 8.5) and (silence_duration >= 8.5):
+            # 3. Say prompt after 12.0 seconds interval of genuine silence (Natural voice check)
+            if (now - last_prompt_time >= 12.0) and (silence_duration >= 12.0):
                 last_prompt_time = now
                 t_last_activity = now
-                logger.info(f"⏳ [SILENCE PROMPT] 8.5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 12.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
                 
-                if silence_prompt_count == 0:
+                if silence_prompt_count == 0 and not caller_has_spoken:
                     prompt_text = "हॅलो?"
                 else:
                     if active_lang == "mr":
@@ -4320,10 +4373,10 @@ async def entrypoint(ctx: JobContext):
                     handle = session.say(prompt_text, allow_interruptions=True)
                     if handle:
                         await handle.wait_for_playout()
-                    t_last_activity = time.time()
-                    last_prompt_time = time.time()
+                    t_last_activity = time.time() + 2.0
+                    last_prompt_time = time.time() + 2.0
                 except Exception as e:
-                    logger.warning(f"Error speaking 7.0s interval silence prompt: {e}")
+                    logger.warning(f"Error speaking 12.0s interval silence prompt: {e}")
 
     watchdog_task = asyncio.create_task(_silence_watchdog())
 
