@@ -665,7 +665,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     # 3. Numeric & Word Hour Detection
     if not detected_time:
         modifier = ""
-        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text_for_time)) or any(w in text_for_time for w in ["सकाळी", "सुबह"])
+        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text_for_time)) or any(w in text_for_time for w in ["सकाळी", "सुबह", "सरकारी"])
         is_afternoon = bool(re.search(r'\b(dopahar|afternoon)\b', text_for_time)) or any(w in text_for_time for w in ["दुपारी", "दोपहर"])
         is_evening = bool(re.search(r'\b(shaam|evening|night|raat|raatri|pm)\b', text_for_time)) or any(w in text_for_time for w in ["संध्याकाळी", "रात्री", "शाम", "रात"])
 
@@ -703,6 +703,27 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                 else:
                     modifier = "शाम " if is_hindi else "संध्याकाळी "
             detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
+
+        # Check standalone compound time words where hour + vajta are merged (e.g. अकरावसथा, दहावासता, बारावाजता)
+        if not detected_time:
+            standalone_times = {
+                "अकरावसथा": 11, "अकरावाजता": 11, "अकरावास": 11, "अकारावास": 11,
+                "दाहवासता": 10, "दहावासता": 10, "दहावाजता": 10, "दहावास": 10,
+                "बारावाजता": 12, "बारावासता": 12, "बारावास": 12,
+                "दोनवाजता": 2, "दोनवासता": 2, "दोनवास": 2,
+                "तीनवाजता": 3, "चारवाजता": 4, "पाचवाजता": 5, "सहावाजता": 6
+            }
+            for w_term, h_num in standalone_times.items():
+                if w_term in text_for_time:
+                    if not modifier:
+                        if 8 <= h_num <= 11:
+                            modifier = "सुबह " if is_hindi else "सकाळी "
+                        elif h_num == 12 or (1 <= h_num <= 3):
+                            modifier = "दोपहर " if is_hindi else "दुपारी "
+                        else:
+                            modifier = "शाम " if is_hindi else "संध्याकाळी "
+                    detected_time = f"{modifier}{h_num} बजे" if is_hindi else f"{modifier}{h_num} वाजता"
+                    break
 
         # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता)
         # Note: Time unit suffix is STRICTLY MANDATORY (no '?') to prevent matching property types like '2 BHK' or 'एक'
@@ -751,7 +772,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         # General time context fallback: evaluate longer words first (e.g. 'बारह' before 'दो')
         # Uses word boundaries so English words like 'amenities' containing 'am' NEVER trigger time context!
         if not detected_time:
-            time_words_devanagari = ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "o'clock"]
+            time_words_devanagari = ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "सकाळी", "सरकारी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "o'clock", "अकरावसथा", "दाहवासता", "दहावासता"]
             has_time_context = any(re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(w)}(?:$|[^\w\u0900-\u097F])', text_for_time) for w in time_words_devanagari) or bool(re.search(r'\b(am|pm)\b', text_for_time))
             if has_time_context:
                 sorted_num_words = sorted(num_words_map.items(), key=lambda x: len(str(x[0])), reverse=True)
@@ -937,6 +958,7 @@ class PriyaRealEstateAgent(Agent):
         self.site_visit_day: Optional[str] = None
         self.site_visit_time: Optional[str] = None
         self.awaiting_visit_confirmation: bool = False
+        self.site_visit_scheduled: bool = False
         self.referral_asked: bool = False
         
         now = get_current_ist_time()
@@ -1000,12 +1022,15 @@ class PriyaRealEstateAgent(Agent):
         # Guarantees consistent 1.0s - 1.4s response latency across ALL turns of the standard real estate conversation,
         # completely eliminating LLM round-trip delays (saving 1.2s-2.4s) while maintaining full Gemini intelligence fallback.
         def speak(text: str) -> str:
+            clean = text.strip()
+            if clean and not clean.endswith(('.', '?', '!', '।')):
+                clean += '.'
             if self._on_speech_captured:
                 try:
-                    self._on_speech_captured(text)
+                    self._on_speech_captured(clean)
                 except Exception as err:
                     logger.debug(f"Error in on_speech_captured: {err}")
-            return text
+            return clean
 
         try:
             user_msgs = [m for m in chat_ctx.items if getattr(m, "role", "") in ["user", "customer"]]
@@ -1172,8 +1197,22 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     # Context-Aware Affirmative Handling (Never blindly reset to 1 BHK or 2 BHK!)
-                    affirmative_words = ["um", "uh", "hmm", "haan", "ha", "yes", "ho", "hoy", "acha", "achha", "ji", "ok", "theek", "thik", "चालेल", "chalel", "होय", "हो चालेल"]
-                    if len(words) <= 2 and clean_norm in affirmative_words:
+                    affirmative_kws = [
+                        "um", "uh", "hmm", "haan", "ha", "yes", "ho", "hoy", "acha", "achha", "ji", "ok", "okay",
+                        "theek", "thik", "theek hai", "thik hai", "चालेल", "chalel", "chaalel", "होय", "हो चालेल",
+                        "हो", "हाँ", "हां", "जी", "जी हाँ", "जी हां", "होय", "नक्कीच", "हो नक्कीच", "कन्फर्म",
+                        "कन्फर्म करा", "कन्फर्म कर दो", "कर दो", "करा", "चालतं", "चालल", "चालणार", "चालता",
+                        "ओके", "chalega", "चलेगा", "chalega na", "chalel na", "barobar", "बरोबर", "बरोबर आहे",
+                        "sahi hai", "सही है", "done", "डन", "lock it", "confirm", "chalta"
+                    ]
+                    is_affirmative = (
+                        clean_norm in affirmative_kws or
+                        (len(words) <= 4 and any(kw in clean_norm for kw in [
+                            "हो", "हाँ", "हां", "yes", "चालेल", "chalel", "chalega", "चलेगा", "कन्फर्म", "confirm",
+                            "बरोबर", "theek", "ठीक", "चालतं", "चालल", "कर दो", "करा", "नक्कीच", "डन", "done"
+                        ]))
+                    )
+                    if is_affirmative:
                         logger.info(f"⚡ [AFFIRMATIVE PROMPT] Caller acknowledged with '{raw_text}', advancing based on state...")
                         if self.selected_bhk is None:
                             if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1187,19 +1226,35 @@ class PriyaRealEstateAgent(Agent):
                             else:
                                 yield speak("नक्कीच! आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                             return
-                        elif self.site_visit_day and self.site_visit_time:
+                        elif (self.site_visit_day and self.site_visit_time) or getattr(self, "awaiting_visit_confirmation", False):
+                            day = self.site_visit_day or "सांगितलेल्या दिवशी"
+                            t_val = self.site_visit_time or "ठरलेल्या वेळी"
                             asyncio.create_task(self.schedule_site_visit(
                                 customer_name=self.customer_name,
-                                preferred_day=self.site_visit_day,
-                                preferred_time=self.site_visit_time,
+                                preferred_day=day,
+                                preferred_time=t_val,
                                 flat_type=self.selected_bhk or "1BHK/2BHK"
                             ))
+                            self.site_visit_scheduled = True
+                            self.awaiting_visit_confirmation = False
                             if self._hangup_fnc:
                                 self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"मैंने आपकी {self.site_visit_day} को {self.site_visit_time} साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। बहुत-बहुत धन्यवाद, नमस्ते.")
+                                yield speak(f"मैंने आपकी {day} को {t_val} साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। बहुत-बहुत धन्यवाद, नमस्ते.")
                             else:
-                                yield speak(f"मी आपली {self.site_visit_day} रोजी {self.site_visit_time} वाजता साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. खूप खूप धन्यवाद, नमस्कार.")
+                                yield speak(f"मी आपली {day} रोजी {t_val} वाजता साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. खूप खूप धन्यवाद, नमस्कार.")
+                            return
+                        elif self.site_visit_day and not self.site_visit_time:
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak(f"बिल्कुल, {self.site_visit_day} को कौन सा समय सही रहेगा — सुबह या शाम?")
+                            else:
+                                yield speak(f"नक्कीच, {self.site_visit_day} रोजी कोणती वेळ सोयीची ठरेल — सकाळी की संध्याकाळी?")
+                            return
+                        elif self.site_visit_time and not self.site_visit_day:
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak(f"बिल्कुल, {self.site_visit_time} कौन से दिन या तारीख को आना पसंद करेंगे?")
+                            else:
+                                yield speak(f"नक्कीच, {self.site_visit_time} कोणत्या दिवशी किंवा तारखेला येणं सोयीचं पडेल?")
                             return
                         else:
                             if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1295,7 +1350,21 @@ class PriyaRealEstateAgent(Agent):
                     if any(kw in clean_norm for kw in greeting_kws) and len(words) <= 3:
                         logger.info(f"⚡ [FAST-PATH GREETING RECOVERY] Instant response for greeting '{raw_text}' (0ms LLM wait)!")
                         if getattr(self, "intro_delivered", False):
-                            if self.selected_bhk is None:
+                            if getattr(self, "site_visit_scheduled", False):
+                                day = self.site_visit_day or "सांगितलेल्या दिवशी"
+                                t_val = self.site_visit_time or "ठरलेल्या वेळी"
+                                if ACTIVE_TTS_LANGUAGE == "hi":
+                                    yield speak(f"जी, आवाज़ आ रही है! आपकी {day} को {t_val} साईट विजिट कन्फर्म हो चुकी है। सारी जानकारी व्हाट्सऐप पर भेज दी गई है। बहुत-बहुत धन्यवाद!")
+                                else:
+                                    yield speak(f"हो, आवाज येतोय! आपली {day} रोजी {t_val} वाजता साईट व्हिजिट निश्चित झाली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवली आहे. खूप खूप धन्यवाद!")
+                                return
+                            elif getattr(self, "awaiting_visit_confirmation", False) and self.site_visit_day and self.site_visit_time:
+                                if ACTIVE_TTS_LANGUAGE == "hi":
+                                    yield speak(f"जी, आवाज़ आ रही है! क्या {self.site_visit_day} को {self.site_visit_time} आपकी साईट विजिट कन्फर्म कर दूँ?")
+                                else:
+                                    yield speak(f"हो, आवाज येतोय! आपण {self.site_visit_day} रोजी {self.site_visit_time} वाजता साईट व्हिजिटसाठी येत आहात, हे कन्फर्म करू का?")
+                                return
+                            elif self.selected_bhk is None:
                                 if ACTIVE_TTS_LANGUAGE == "hi":
                                     yield speak("जी, मैं पूछ रही थी, क्या आप 1 BHK देख रहे हैं या 2 BHK?")
                                 else:
@@ -1305,6 +1374,18 @@ class PriyaRealEstateAgent(Agent):
                                     yield speak("जी, आवाज़ आ रही है! क्या आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
                                 else:
                                     yield speak("हो, आवाज येतोय! आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                            elif self.site_visit_day and not self.site_visit_time:
+                                if ACTIVE_TTS_LANGUAGE == "hi":
+                                    yield speak(f"जी, आवाज़ आ रही है! {self.site_visit_day} को कौन सा समय सही रहेगा — सुबह या शाम?")
+                                else:
+                                    yield speak(f"हो, आवाज येतोय! {self.site_visit_day} रोजी कोणती वेळ सोयीची ठरेल — सकाळी की संध्याकाळी?")
+                                return
+                            elif self.site_visit_time and not self.site_visit_day:
+                                if ACTIVE_TTS_LANGUAGE == "hi":
+                                    yield speak(f"जी, आवाज़ आ रही है! {self.site_visit_time} कौन से दिन या तारीख को आना पसंद करेंगे?")
+                                else:
+                                    yield speak(f"हो, आवाज येतोय! {self.site_visit_time} कोणत्या दिवशी किंवा तारखेला येणं सोयीचं पडेल?")
+                                return
                             else:
                                 if ACTIVE_TTS_LANGUAGE == "hi":
                                     yield speak("जी, आवाज़ आ रही है! आप साइट विजिट के लिए कब आ सकते हैं?")
@@ -2569,6 +2650,19 @@ STT_REPLACE = {
     "दाहवासता": "10 वाजता",
     "दहावास": "10 वाजता",
     "दहावाजता": "10 वाजता",
+    "सरकारी": "सकाळी",
+    "सरकारी अकरावसथा": "सकाळी 11 वाजता",
+    "सरकारी अकरा": "सकाळी 11 वाजता",
+    "सरकारी दहा": "सकाळी 10 वाजता",
+    "सरकारी दाह": "सकाळी 10 वाजता",
+    "बारावासता": "12 वाजता",
+    "बारावास": "12 वाजता",
+    "दोनवासता": "2 वाजता",
+    "दोनवास": "2 वाजता",
+    "तीनवासता": "3 वाजता",
+    "चारवासता": "4 वाजता",
+    "पाचवासता": "5 वाजता",
+    "सहावासता": "6 वाजता",
     # Times & Days
     "साडे आठ": "साडेआठ",
     "साडे सात": "साडेसात",
@@ -2679,19 +2773,19 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 150ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 300ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "300"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
         endpointing_ms=endpointing_ms,
-        utterance_end_ms=None,
+        utterance_end_ms=1000,
         smart_format=True,
         punctuate=True,
         filler_words=False,
-        vad_events=False,
+        vad_events=True,
         no_delay=True,
         interim_results=True,
         keyterm=STT_KEYTERMS,
@@ -2699,14 +2793,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Calibrated telephony: 0.35s silence bridges natural pauses, prevents chopping while enabling sub-second turns)
+    # 3. Pre-warm Silero VAD (Calibrated telephony: 0.45s silence bridges natural pauses, 0.35 threshold catches soft speech)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.08,
-        activation_threshold=0.45,
-        deactivation_threshold=0.30,
-        prefix_padding_duration=0.30,
+        min_silence_duration=0.45,
+        min_speech_duration=0.05,
+        activation_threshold=0.35,
+        deactivation_threshold=0.25,
+        prefix_padding_duration=0.50,
         sample_rate=16000
     )
 
@@ -3237,16 +3331,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 450ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.35s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.45s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.08,
-            activation_threshold=0.45,
-            deactivation_threshold=0.30,
-            prefix_padding_duration=0.30,
+            min_silence_duration=0.45,
+            min_speech_duration=0.05,
+            activation_threshold=0.35,
+            deactivation_threshold=0.25,
+            prefix_padding_duration=0.50,
             sample_rate=16000
         )
     
@@ -3272,7 +3366,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.15,
+                "min_delay": 0.40,  # Natural 400ms pause prevents cutting caller off between words
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3281,9 +3375,10 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.40,  # Eliminates mobile phone speaker echo false-interruption
-                "resume_false_interruption": True,  # Safely resumes speech if noise/echo did not produce words
-                "false_interruption_timeout": 3.0,
+                "min_duration": 0.85,  # Sustained human speech (>850ms) to interrupt; ignores acoustic echo & brief noise
+                "min_words": 1,        # Requires at least 1 actual word from STT before cutting Gayatri off
+                "resume_false_interruption": False, # Never pause audio & freeze for 3s on false interruptions
+                "discard_audio_if_uninterruptible": False, # Never discard caller speech if they speak while agent finishes
             }
         }
     )
