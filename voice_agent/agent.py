@@ -1125,10 +1125,12 @@ class PriyaRealEstateAgent(Agent):
                         logger.info(f"⚡ [TURN 1 ALREADY DELIVERED] Intro already spoken via fast accelerator, skipping duplicate for '{raw_text}'.")
                         return
 
-                    is_not_interested = any(kw in clean_norm for kw in [
-                        "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako", "garaj nahi",
-                        "nahi", "no", "nahin", "nahi sir", "no sir", "no thanks", "नको", "नाही"
-                    ]) and not any(kw in clean_norm for kw in ["1 bhk", "2 bhk", "bhk", "flat", "both", "dono"])
+                    is_not_interested = (
+                        any(kw in clean_norm for kw in [
+                            "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako", "garaj nahi",
+                            "nahi", "no", "nahin", "nahi sir", "no sir", "no thanks", "नको", "नाही", "नही", "नहीं", "नही है", "नहीं है", "नाहीये"
+                        ]) or (("interest" in clean_norm or "इंटरेस्ट" in clean_norm or "इन्टरेस्ट" in clean_norm) and ("nahi" in clean_norm or "नही" in clean_norm or "नहीं" in clean_norm or "no" in clean_norm or "not" in clean_norm))
+                    ) and not any(kw in clean_norm for kw in ["1 bhk", "2 bhk", "bhk", "flat", "both", "dono"])
                     if is_not_interested:
                         logger.info(f"⚡ [TURN 1 DECLINE -> AKSHAY SCRIPT TRIGGERED] for '{raw_text}'!")
                         if self._hangup_fnc:
@@ -1234,9 +1236,14 @@ class PriyaRealEstateAgent(Agent):
                         "mat lagao", "no interest", "koi interest nahi", "cut the call", "disconnect", "nako",
                         "garaj nahi", "flat nahi", "ghetla", "already purchased", "already bought",
                         "nahi", "no", "nahin", "nahi sir", "no sir", "no thanks", "no thank you", "nahi lagta",
-                        "नको", "नाही", "नाही पाहिजे"
+                        "नको", "नाही", "नाही पाहिजे", "नही", "नहीं", "नही है", "नही ह", "नहीं है", "नाहीये",
+                        "zarurat nahi", "jarurat nahi", "garaj nahiye", "nahi hamara", "hamara nahi", "interest nahi"
                     ]
-                    if any(kw in clean_norm for kw in not_interested_kws) and not is_1bhk and not is_2bhk:
+                    is_decline = (
+                        any(kw in clean_norm for kw in not_interested_kws) or
+                        (("interest" in clean_norm or "इंटरेस्ट" in clean_norm or "इन्टरेस्ट" in clean_norm) and ("nahi" in clean_norm or "नही" in clean_norm or "नहीं" in clean_norm or "no" in clean_norm or "not" in clean_norm))
+                    )
+                    if is_decline and not is_1bhk and not is_2bhk and not detected_day and not detected_time:
                         logger.info(f"⚡ [FAST-PATH DECLINE -> AKSHAY SCRIPT TRIGGERED] for '{raw_text}' (0ms LLM wait)!")
                         if self._hangup_fnc:
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=1.2)
@@ -1255,9 +1262,26 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार.")
                         return
 
+                    # Case Farewell / Caller saying goodbye
+                    farewell_kws = ["bye", "bye bye", "tata", "theek hai bye", "theek h bye", "chal bye", "chalo bye", "बाय", "बाय बाय", "अलविदा"]
+                    if any(kw in clean_norm for kw in farewell_kws):
+                        logger.info(f"⚡ [FAST-PATH FAREWELL] Instant polite goodbye for '{raw_text}' (0ms LLM wait)!")
+                        if self._hangup_fnc:
+                            self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
+                        else:
+                            yield speak("धन्यवाद सर, आपला दिवस चांगला जावो, नमस्कार.")
+                        return
+
                     # Case Identity: Who is speaking? / Project name
-                    identity_kws = ["kaun bol", "kon bol", "koni bol", "kuthun bol", "aap kaun", "tumhi kon", "who is this", "who is speaking", "kiska phone", "kisne phone", "koni phone", "aap ka naam", "tumche naav", "naam kya", "kaha se bol", "kidhar se bol"]
-                    if any(kw in clean_norm for kw in identity_kws):
+                    identity_kws = [
+                        "kaun hai", "kaun ho", "kaun h", "tum kaun", "kon ahe", "koni ahe", "kon aahe", "kon hai",
+                        "kaun bol", "kon bol", "koni bol", "kuthun bol", "aap kaun", "tumhi kon", "who is this",
+                        "who is speaking", "kiska phone", "kisne phone", "koni phone", "aap ka naam", "tumche naav",
+                        "naam kya", "kaha se bol", "kidhar se bol", "कौन", "कोण"
+                    ]
+                    if any(kw in clean_norm for kw in identity_kws) and not is_1bhk and not is_2bhk and not detected_day and not detected_time:
                         logger.info(f"⚡ [FAST-PATH IDENTITY] Instant identity response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak("जी, मैं गायत्री बात कर रही हूँ, साई गार्डन डोंबिवली ईस्ट से। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
@@ -1679,13 +1703,15 @@ class PriyaRealEstateAgent(Agent):
 
                     # Case H1: Upcoming possession confirmed
                     is_upcoming = any(kw in clean_norm for kw in [
-                        "upcoming", "position", "possession", "under construction", "construction", "future", "chalega upcoming", "upcoming chalega"
-                    ]) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant"])
+                        "upcoming", "position", "possession", "under construction", "under-construction", "construction", "future",
+                        "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन"
+                    ]) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह"])
 
                     # Case H2: Ready to move confirmed
                     is_ready = any(kw in clean_norm for kw in [
-                        "ready to move", "ready-to-move", "ready tomove", "ready", "immediate", "turant", "ready chalega", "chalega ready"
-                    ]) and not any(kw in clean_norm for kw in ["upcoming", "under construction"])
+                        "ready to move", "ready-to-move", "ready tomove", "ready", "immediate", "turant", "ready chalega", "chalega ready",
+                        "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"
+                    ]) and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन"])
 
                     # Case H3: Both / Either
                     is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
@@ -2527,10 +2553,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 250ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 150ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "250"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2547,14 +2573,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Natural telephony speech: 0.45s silence bridges natural pauses, prevents sentence chopping)
+    # 3. Pre-warm Silero VAD (Calibrated telephony: 0.35s silence bridges natural pauses, prevents chopping while enabling sub-second turns)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.45,
+        min_silence_duration=0.35,
         min_speech_duration=0.08,
-        activation_threshold=0.35,
-        deactivation_threshold=0.25,
-        prefix_padding_duration=0.35,
+        activation_threshold=0.45,
+        deactivation_threshold=0.30,
+        prefix_padding_duration=0.30,
         sample_rate=16000
     )
 
@@ -2943,7 +2969,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "250"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -3088,13 +3114,13 @@ async def entrypoint(ctx: JobContext):
     # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.45s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.35s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.45,
+            min_silence_duration=0.35,
             min_speech_duration=0.08,
-            activation_threshold=0.35,
-            deactivation_threshold=0.25,
-            prefix_padding_duration=0.35,
+            activation_threshold=0.45,
+            deactivation_threshold=0.30,
+            prefix_padding_duration=0.30,
             sample_rate=16000
         )
     
@@ -3120,7 +3146,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.20,
+                "min_delay": 0.15,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3129,7 +3155,7 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.38,  # Eliminates mobile phone speaker echo false-interruption
+                "min_duration": 0.40,  # Eliminates mobile phone speaker echo false-interruption
                 "resume_false_interruption": True,  # Safely resumes speech if noise/echo did not produce words
                 "false_interruption_timeout": 3.0,
             }
@@ -3759,30 +3785,6 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
-
-                # Turn 1 Instant Accelerator: Deliver intro pitch immediately upon caller greeting (<100ms)
-                if not intro_delivered:
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_delivered = True
-                    raw_tr = latest_caller_transcript.strip().lower()
-                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                    logger.info(f"⚡ [TURN 1 ACCELERATOR] Caller finished speaking '{raw_tr}'! Delivering intro pitch instantly (<100ms)...")
-
-                    is_hi = (active_lang == "hi") or ("namaste" in raw_tr) or ("hindi" in raw_tr)
-                    if "2 bhk" in raw_tr or "2bhk" in raw_tr or "don bhk" in raw_tr or "do bhk" in raw_tr or "२" in raw_tr:
-                        if agent: agent.selected_bhk = "2 BHK"
-                        pitch = "2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if is_hi else "2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-                    elif "1 bhk" in raw_tr or "1bhk" in raw_tr or "ek bhk" in raw_tr or "one bhk" in raw_tr or "१" in raw_tr:
-                        if agent: agent.selected_bhk = "1 BHK"
-                        pitch = "1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if is_hi else "1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
-                    elif any(w in raw_tr for w in ["not interested", "nahi chahiye", "wrong number", "nako", "garaj nahi"]):
-                        pitch = DECLINE_SCRIPT_HI if is_hi else DECLINE_SCRIPT_MR
-                    else:
-                        pitch = "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?" if is_hi else "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-
-                    record_dialogue_turn("agent", pitch)
-                    session.say(pitch, allow_interruptions=True)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
@@ -4395,8 +4397,13 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
+            if _hangup_scheduled:
+                break
+
             # 3. Say prompt after 12.0 seconds interval of genuine silence (Natural voice check)
             if (now - last_prompt_time >= 12.0) and (silence_duration >= 12.0):
+                if _hangup_scheduled:
+                    break
                 last_prompt_time = now
                 t_last_activity = now
                 logger.info(f"⏳ [SILENCE PROMPT] 12.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
