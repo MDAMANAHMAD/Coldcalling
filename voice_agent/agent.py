@@ -1113,7 +1113,9 @@ class PriyaRealEstateAgent(Agent):
                         raw_text = " ".join(str(c) for c in content if c)
                     else:
                         raw_text = str(content or "")
+                raw_text = apply_stt_replacements(raw_text)
                 clean_norm = re.sub(r'[^\w\s\u0900-\u097F]', ' ', raw_text).strip().lower()
+                clean_norm = apply_stt_replacements(clean_norm)
                 words = clean_norm.split()
 
                 # Guard against empty or noise triggers:
@@ -3049,6 +3051,21 @@ STT_REPLACE = {
     "jupiter hospital": "Jupiter Hospital",
 }
 
+CORE_STT_KEYTERMS = [
+    "Sai Garden", "2 BHK", "1 BHK", "Dombivli", "Shilphata",
+    "Xperia", "Nilje", "Kalyan", "Thane", "amenities",
+    "site visit", "possession", "दोन बीएचके", "एक बीएचके"
+]
+
+def apply_stt_replacements(text: str) -> str:
+    if not text:
+        return text
+    res = text
+    for k, v in STT_REPLACE.items():
+        if k in res:
+            res = res.replace(k, v)
+    return res
+
 
 # ==============================================================================
 # 3. PREWARMING FUNCTION (Pre-Loads All AI Engines in Idle Memory)
@@ -3124,8 +3141,7 @@ def prewarm_fnc(proc: JobProcess):
         vad_events=True,
         no_delay=True,
         interim_results=True,
-        keyterm=STT_KEYTERMS,
-        replace=STT_REPLACE,
+        keyterm=CORE_STT_KEYTERMS,
         api_key=deepgram_key
     )
 
@@ -3538,8 +3554,7 @@ async def entrypoint(ctx: JobContext):
             vad_events=True,
             no_delay=True,
             interim_results=True,
-            keyterm=STT_KEYTERMS,
-            replace=STT_REPLACE,
+            keyterm=CORE_STT_KEYTERMS,
             api_key=deepgram_key
         )
         ctx.proc.userdata["stt"] = stt
@@ -4431,15 +4446,16 @@ async def entrypoint(ctx: JobContext):
         last_prompt_time = time.time()
         has_prompted_silence = False
         if ev.transcript:
-            latest_caller_transcript = ev.transcript.strip()
+            processed_tr = apply_stt_replacements(ev.transcript.strip())
+            latest_caller_transcript = processed_tr
             if t_user_stop > 0:
                 transcribed_after = (time.perf_counter() - t_user_stop) * 1000
-                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{ev.transcript}'")
+                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{processed_tr}'")
             else:
-                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
+                logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{processed_tr}'")
 
             # Early Language Detection on Turn 1 & all turns:
-            clean_tr = ev.transcript.strip().lower()
+            clean_tr = processed_tr.lower()
             if len(clean_tr) >= 2:
                 det_lang = resolve_language(clean_tr, ACTIVE_TTS_LANGUAGE or "mr")
                 if det_lang != ACTIVE_TTS_LANGUAGE:
