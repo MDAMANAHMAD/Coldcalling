@@ -517,28 +517,28 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     
     # 1. Day Detection
     days_map_mr = [
-        (["आज", "aaj", "today", "आता", "atta"], "आज"),
+        (["आज", "aaj", "today"], "आज"),
         (["उद्या", "udya", "kal", "tomorrow"], "उद्या"),
         (["परवा", "parva", "parso"], "परवा"),
-        (["सोमवार", "somwar", "somvar", "monday", "सोमवारी"], "सोमवार"),
-        (["मंगळवार", "mangalwar", "mangalvar", "tuesday", "मंगळवारी"], "मंगळवार"),
-        (["बुधवार", "budhwar", "budhvar", "wednesday", "बुधवारी"], "बुधवार"),
-        (["गुरुवार", "guruwar", "guruvar", "thursday", "गुरुवारी"], "गुरुवार"),
-        (["शुक्रवार", "shukrawar", "shukravar", "friday", "शुक्रवारी"], "शुक्रवार"),
-        (["शनिवार", "shaniwar", "shanivar", "saturday", "sat", "शनिवारी"], "शनिवार"),
-        (["रविवार", "raviwar", "ravivar", "sunday", "sun", "etvar", "weekend", "रविवारी"], "रविवार"),
+        (["सोमवार", "somwar", "somvar", "monday", "सोमवारी", "सोमरी", "somwari", "somri"], "सोमवार"),
+        (["मंगळवार", "mangalwar", "mangalvar", "tuesday", "मंगळवारी", "मंगलवार", "mangalwari"], "मंगळवार"),
+        (["बुधवार", "budhwar", "budhvar", "wednesday", "बुधवारी", "बुधरी", "budhwari"], "बुधवार"),
+        (["गुरुवार", "guruwar", "guruvar", "thursday", "गुरुवारी", "गुरुरी", "guruwari"], "गुरुवार"),
+        (["शुक्रवार", "shukrawar", "shukravar", "friday", "शुक्रवारी", "शुक्ररी", "shukrawari"], "शुक्रवार"),
+        (["शनिवार", "shaniwar", "shanivar", "saturday", "sat", "शनिवारी", "shaniwari"], "शनिवार"),
+        (["रविवार", "raviwar", "ravivar", "sunday", "sun", "etvar", "itvar", "aitwar", "weekend", "रविवारी", "raviwari"], "रविवार"),
     ]
     days_map_hi = [
-        (["आज", "aaj", "today", "atta"], "आज"),
+        (["आज", "aaj", "today"], "आज"),
         (["कल", "kal", "udya", "tomorrow"], "कल"),
         (["परसों", "parso", "parva"], "परसों"),
-        (["सोमवार", "somwar", "somvar", "monday"], "सोमवार"),
-        (["मंगलवार", "mangalwar", "mangalvar", "tuesday"], "मंगलवार"),
-        (["बुधवार", "budhwar", "budhvar", "wednesday"], "बुधवार"),
-        (["गुरुवार", "guruwar", "guruvar", "thursday"], "गुरुवार"),
-        (["शुक्रवार", "shukrawar", "shukravar", "friday"], "शुक्रवार"),
-        (["शनिवार", "shaniwar", "shanivar", "saturday", "sat"], "शनिवार"),
-        (["रविवार", "raviwar", "ravivar", "sunday", "sun", "etvar", "weekend"], "रविवार"),
+        (["सोमवार", "somwar", "somvar", "monday", "सोमवारी", "सोमरी", "somwari", "somri"], "सोमवार"),
+        (["मंगलवार", "mangalwar", "mangalvar", "tuesday", "मंगळवार", "मंगळवारी", "mangalwari"], "मंगलवार"),
+        (["बुधवार", "budhwar", "budhvar", "wednesday", "बुधवारी", "budhwari"], "बुधवार"),
+        (["गुरुवार", "guruwar", "guruvar", "thursday", "गुरुवारी", "guruwari"], "गुरुवार"),
+        (["शुक्रवार", "shukrawar", "shukravar", "friday", "शुक्रवारी", "shukrawari"], "शुक्रवार"),
+        (["शनिवार", "shaniwar", "shanivar", "saturday", "sat", "शनिवारी", "shaniwari"], "शनिवार"),
+        (["रविवार", "raviwar", "ravivar", "sunday", "sun", "etvar", "itvar", "aitwar", "weekend", "रविवारी", "raviwari"], "रविवार"),
     ]
     days_map = days_map_hi if is_hindi else days_map_mr
     detected_day = None
@@ -1121,6 +1121,10 @@ class PriyaRealEstateAgent(Agent):
 
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
                 if len(user_msgs) == 1:
+                    if getattr(self, "intro_delivered", False):
+                        logger.info(f"⚡ [TURN 1 ALREADY DELIVERED] Intro already spoken via fast accelerator, skipping duplicate for '{raw_text}'.")
+                        return
+
                     is_not_interested = any(kw in clean_norm for kw in [
                         "not interested", "nahi chahiye", "nahi lena", "wrong number", "mat karo", "cut", "nako", "garaj nahi",
                         "nahi", "no", "nahin", "nahi sir", "no sir", "no thanks", "नको", "नाही"
@@ -1640,6 +1644,21 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"साई गार्डन ही G+22 मजली भव्य इमारत असून यात gym, swimming pool, open garden आणि clubhouse अशा 35 पेक्षा जास्त modern amenities आहेत. {cq}")
                         return
 
+                    # Case Overview / How is the project ("kasa ahe", "kasa raha", "kaisa hai", "kaisa project", "kaisi building")
+                    overview_kws = [
+                        "kasa ahe", "kasa raha", "kasa project", "kaisa hai", "kaisa project",
+                        "kaisi building", "kasa building", "kaisa tower", "kasa ahe building", "kasa ahe project",
+                        "kasa aahe", "kase ahe", "kase aahe", "kaisa laga", "kasa ahet", "kaisa h"
+                    ]
+                    if any(kw in clean_norm for kw in overview_kws) and not is_1bhk and not is_2bhk and not detected_day and not detected_time:
+                        logger.info(f"⚡ [FAST-PATH PROJECT OVERVIEW] for '{raw_text}' (0ms LLM wait)!")
+                        cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak(f"साई गार्डन G+22 मंजिला भव्य लक्ज़री टावर है, जिसमें जिम, स्विमिंग पूल और क्लबहाउस जैसी 35 से ज्यादा modern amenities हैं। {cq}")
+                        else:
+                            yield speak(f"साई गार्डन ही G+22 मजली भव्य लक्झरी इमारत असून यात जिम, स्विमिंग पूल आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक amenities आहेत. {cq}")
+                        return
+
                     # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
                     if any(kw in clean_norm for kw in ["question", "questions", "sawal", "doubt", "puchna", "puchu", "vicharu", "janna"]):
                         logger.info(f"⚡ [FAST-PATH GENERAL QUESTIONS] Instant prompt for '{raw_text}' (0ms LLM wait)!")
@@ -1708,19 +1727,19 @@ class PriyaRealEstateAgent(Agent):
             _lang_now = ACTIVE_TTS_LANGUAGE
             if _lang_now == "mr":
                 _lang_instruction = (
-                    "STRICT LANGUAGE LOCK — MANDATORY: Speak fluent conversational Marathi with natural real estate terms (1 BHK, 2 BHK, amenities, gym, garden, 30 लाख, 45 लाख). "
-                    "Keep your response under 15 words. Use 'सर' at most ONCE. Never repeat 'सर'. "
+                    "STRICT LANGUAGE LOCK & DIRECT ANSWER FIRST: Speak fluent conversational Marathi with natural real estate terms (1 BHK, 2 BHK, amenities, gym, garden, 30 लाख, 45 लाख). "
+                    "Always directly and factually answer the caller's question or remark in 1 short sentence FIRST, then gently follow up. Keep your response under 20 words. Use 'सर' at most ONCE. Never repeat 'सर'. "
                     "Only switch language if the caller explicitly asks for Hindi or English."
                 )
             elif _lang_now == "en":
                 _lang_instruction = (
-                    "STRICT LANGUAGE LOCK — MANDATORY: Speak fluent English. "
-                    "Keep your response under 15 words. Use 'Sir' at most ONCE."
+                    "STRICT LANGUAGE LOCK & DIRECT ANSWER FIRST: Speak fluent English. "
+                    "Always directly and factually answer the caller's question or remark in 1 short sentence FIRST, then gently follow up. Keep your response under 20 words. Use 'Sir' at most ONCE."
                 )
             else:
                 _lang_instruction = (
-                    "STRICT LANGUAGE LOCK — MANDATORY: Speak fluent conversational Hindi with natural real estate terms (1 BHK, 2 BHK, amenities, gym, garden, 30 लाख, 45 लाख). "
-                    "Keep your response under 15 words. Use 'सर' at most ONCE. NEVER say 'भारतीय रुपया'. "
+                    "STRICT LANGUAGE LOCK & DIRECT ANSWER FIRST: Speak fluent conversational Hindi with natural real estate terms (1 BHK, 2 BHK, amenities, gym, garden, 30 लाख, 45 लाख). "
+                    "Always directly and factually answer the caller's question or remark in 1 short sentence FIRST, then gently follow up. Keep your response under 20 words. Use 'सर' at most ONCE. NEVER say 'भारतीय रुपया'. "
                     "Only switch language if the caller explicitly asks for Marathi or English."
                 )
             chat_ctx = chat_ctx.copy()
@@ -3101,7 +3120,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.35,
+                "min_delay": 0.20,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3110,8 +3129,8 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.18,
-                "resume_false_interruption": False,  # NEVER discard caller speech as false interruption!
+                "min_duration": 0.38,  # Eliminates mobile phone speaker echo false-interruption
+                "resume_false_interruption": True,  # Safely resumes speech if noise/echo did not produce words
                 "false_interruption_timeout": 3.0,
             }
         }
@@ -3715,6 +3734,7 @@ async def entrypoint(ctx: JobContext):
     agent = None
     t_user_speaking_start = 0.0
     current_lang = ACTIVE_TTS_LANGUAGE or "mr"
+    latest_caller_transcript = ""
 
     @session.on("error")
     def _on_session_error(ev):
@@ -3722,7 +3742,7 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang, latest_caller_transcript
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
@@ -3739,6 +3759,30 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
+
+                # Turn 1 Instant Accelerator: Deliver intro pitch immediately upon caller greeting (<100ms)
+                if not intro_delivered:
+                    intro_delivered = True
+                    if agent:
+                        agent.intro_delivered = True
+                    raw_tr = latest_caller_transcript.strip().lower()
+                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+                    logger.info(f"⚡ [TURN 1 ACCELERATOR] Caller finished speaking '{raw_tr}'! Delivering intro pitch instantly (<100ms)...")
+
+                    is_hi = (active_lang == "hi") or ("namaste" in raw_tr) or ("hindi" in raw_tr)
+                    if "2 bhk" in raw_tr or "2bhk" in raw_tr or "don bhk" in raw_tr or "do bhk" in raw_tr or "२" in raw_tr:
+                        if agent: agent.selected_bhk = "2 BHK"
+                        pitch = "2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if is_hi else "2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक ॲमेनिटीज मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
+                    elif "1 bhk" in raw_tr or "1bhk" in raw_tr or "ek bhk" in raw_tr or "one bhk" in raw_tr or "१" in raw_tr:
+                        if agent: agent.selected_bhk = "1 BHK"
+                        pitch = "1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if is_hi else "1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
+                    elif any(w in raw_tr for w in ["not interested", "nahi chahiye", "wrong number", "nako", "garaj nahi"]):
+                        pitch = DECLINE_SCRIPT_HI if is_hi else DECLINE_SCRIPT_MR
+                    else:
+                        pitch = "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?" if is_hi else "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+
+                    record_dialogue_turn("agent", pitch)
+                    session.say(pitch, allow_interruptions=True)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
@@ -3815,13 +3859,14 @@ async def entrypoint(ctx: JobContext):
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         global ACTIVE_TTS_LANGUAGE
-        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent
+        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript
         caller_has_spoken = True
         caller_is_speaking = not ev.is_final
         t_last_activity = time.time()
         last_prompt_time = time.time()
         has_prompted_silence = False
         if ev.transcript:
+            latest_caller_transcript = ev.transcript.strip()
             if t_user_stop > 0:
                 transcribed_after = (time.perf_counter() - t_user_stop) * 1000
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{ev.transcript}'")
