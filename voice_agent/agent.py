@@ -1112,6 +1112,7 @@ class PriyaRealEstateAgent(Agent):
                 if not clean_norm or len(words) == 0:
                     logger.info(f"⚡ [EMPTY INPUT DETECTED] Ignoring empty speech frame for '{raw_text}'")
                     return
+                logger.info(f"📥 [DECISION ENGINE] Evaluating Caller Input: '{raw_text}' | Normalized: '{clean_norm}'")
 
                 # 0. Instant Multilingual switch triggers (Locks language & syncs Cartesia TTS / STT immediately)
                 is_explain_all = any(kw in clean_norm for kw in [
@@ -1129,10 +1130,11 @@ class PriyaRealEstateAgent(Agent):
                     was_hi = (ACTIVE_TTS_LANGUAGE == "hi")
                     self.switch_language("hi")
                     if is_explain_all:
-                        logger.info(f"⚡ [EXPLAIN ALL PROJECT DETAILS IN HINDI] for '{raw_text}'")
+                        logger.info(f"⚡ [FAST-PATH EXPLAIN ALL (HINDI)] for '{raw_text}' (0ms LLM wait)!")
                         yield speak("साई गार्डन डोंबिवली ईस्ट में एक्सपेरिया मॉल के ठीक सामने 22 मंज़िला भव्य इमारत है। इसमें 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप 1 BHK देखना चाहेंगे या 2 BHK?")
                         return
                     elif not was_hi:
+                        logger.info(f"⚡ [FAST-PATH LANGUAGE SWITCH TO HINDI] for '{raw_text}' (0ms LLM wait)!")
                         if self.selected_bhk is None:
                             if len(user_msgs) > 1:
                                 yield speak("जी बिल्कुल, हम हिंदी में बात कर सकते हैं। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
@@ -1149,10 +1151,11 @@ class PriyaRealEstateAgent(Agent):
                     was_mr = (ACTIVE_TTS_LANGUAGE == "mr")
                     self.switch_language("mr")
                     if is_explain_all:
-                        logger.info(f"⚡ [EXPLAIN ALL PROJECT DETAILS IN MARATHI] for '{raw_text}'")
+                        logger.info(f"⚡ [FAST-PATH EXPLAIN ALL (MARATHI)] for '{raw_text}' (0ms LLM wait)!")
                         yield speak("साई गार्डन डोंबिवली ईस्ट मध्ये एक्सपेरिया मॉल समोर 22 मजली भव्य इमारत आहे. यात 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध असून 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
                     elif not was_mr:
+                        logger.info(f"⚡ [FAST-PATH LANGUAGE SWITCH TO MARATHI] for '{raw_text}' (0ms LLM wait)!")
                         if self.selected_bhk is None:
                             if len(user_msgs) > 1:
                                 yield speak("हो नक्कीच, आपण मराठीत बोलू शकतो. आपण 1 BHK शोधत आहात की 2 BHK?")
@@ -2184,6 +2187,7 @@ class PriyaRealEstateAgent(Agent):
 
         collected_chunks = []
         try:
+            logger.info(f"🧠 [ROUTING TO BRAIN / GEMINI] Predefined keywords not matched -> Dispatched to Gemini LLM Brain for text: '{raw_text}'")
             res = Agent.default.llm_node(self, chat_ctx, tools, model_settings)
             if hasattr(res, "__aiter__"):
                 aiter = res.__aiter__()
