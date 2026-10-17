@@ -543,7 +543,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     days_map = days_map_hi if is_hindi else days_map_mr
     detected_day = None
     for kws, d_name in days_map:
-        if any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in kws):
+        if any(re.search(rf"(?:^|[^\w\u0900-\u097F]){re.escape(kw)}(?:$|[^\w\u0900-\u097F])", text) for kw in kws):
             detected_day = d_name
             break
 
@@ -622,19 +622,21 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                     modifier = "शाम " if is_hindi else "संध्याकाळी "
             detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
 
-        # Check explicit baje/vajta context (e.g. 11 baje, 11 vajta, at 11)
+        # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता)
         if not detected_time:
-            m_explicit = re.search(r'\b(1[0-2]|[1-9])\s*(baje|vajta|vaje|बजे|वाजता|am|pm|o\'clock)\b', text)
+            m_explicit = re.search(r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|ग्यारह|बारा|बारह|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|am|pm|o\'clock)(?:$|[^\w\u0900-\u097F])', text)
             if m_explicit:
-                h_val = int(m_explicit.group(1))
-                if not modifier:
-                    if 8 <= h_val <= 11:
-                        modifier = "सुबह " if is_hindi else "सकाळी "
-                    elif h_val == 12 or (1 <= h_val <= 3):
-                        modifier = "दोपहर " if is_hindi else "दुपारी "
-                    else:
-                        modifier = "शाम " if is_hindi else "संध्याकाळी "
-                detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
+                raw_h = m_explicit.group(1)
+                h_val = int(raw_h) if raw_h.isdigit() else num_words_map.get(raw_h, 0)
+                if 1 <= h_val <= 12:
+                    if not modifier:
+                        if 8 <= h_val <= 11:
+                            modifier = "सुबह " if is_hindi else "सकाळी "
+                        elif h_val == 12 or (1 <= h_val <= 3):
+                            modifier = "दोपहर " if is_hindi else "दुपारी "
+                        else:
+                            modifier = "शाम " if is_hindi else "संध्याकाळी "
+                    detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
 
         # If day is present (e.g. "monday 11", "kal 11", "sunday eleven"), ANY isolated 1-12 or number word is the hour!
         if not detected_time and detected_day:
@@ -660,12 +662,13 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                         modifier = "शाम " if is_hindi else "संध्याकाळी "
                 detected_time = f"{modifier}{found_h} बजे" if is_hindi else f"{modifier}{found_h} वाजता"
 
-        # General time context fallback
+        # General time context fallback: evaluate longer words first (e.g. 'बारह' before 'दो') to avoid sub-word false matches
         if not detected_time:
-            has_time_context = any(w in text for w in ["वाजता", "vajta", "vaje", "baje", "बजे", "am", "pm", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "time", "वेळ", "वेळेत", "समय", "at", "around", "ko", "roji"])
+            has_time_context = any(w in text for w in ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "am", "pm", "सकाळी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "time", "वेळ", "वेळेत", "समय", "at", "around", "ko", "roji"])
             if has_time_context:
-                for pat_word, h_val in num_words_map.items():
-                    if re.search(rf'\b{re.escape(str(pat_word))}\b', text):
+                sorted_num_words = sorted(num_words_map.items(), key=lambda x: len(str(x[0])), reverse=True)
+                for pat_word, h_val in sorted_num_words:
+                    if re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(str(pat_word))}(?:$|[^\w\u0900-\u097F])', text):
                         if not modifier:
                             if 8 <= h_val <= 11:
                                 modifier = "सुबह " if is_hindi else "सकाळी "
@@ -966,7 +969,7 @@ class PriyaRealEstateAgent(Agent):
                 ]
                 is_2bhk_kws = [
                     "2 bhk", "2bhk", "two bhk", "do bhk", "second bhk", "don bhk", "done bhk", "dawn bhk", "2 bk", "two bk",
-                    "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk", "don", "दोन", "do", "दो",
+                    "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk",
                     "2 flat", "two flat", "do flat", "2nd", "second", "दुसरा", "dusra", "2 number", "do number", "don number",
                     "टू बीएचके", "टू bhk", "टूbhk", "टु बीएचके"
                 ]
@@ -996,12 +999,20 @@ class PriyaRealEstateAgent(Agent):
                     is_both_bhk = any(kw in clean_norm for kw in [
                         "both", "dono", "donhi", "दोन्ही", "दोनो", "either", "konta pan", "koi bhi", "1 and 2", "1 aur 2", "dono dekh", "donhi dakhva"
                     ])
-                    if not is_both_bhk:
+                    # Guard: If caller is responding with visit time/day, do NOT treat numbers as BHK selection!
+                    is_time_answering = bool(
+                        detected_time or detected_day or any(w in clean_norm for w in [
+                            "वाजता", "vajta", "vaje", "baje", "बजे", "बज", "am", "pm",
+                            "दुपारी", "दोपहर", "सकाळी", "सुबह", "संध्याकाळी", "शाम",
+                            "सोमवार", "मंगळवार", "बुधवार", "गुरुवार", "शुक्रवार", "शनिवार", "रविवार"
+                        ])
+                    )
+                    if not is_both_bhk and not is_time_answering:
                         is_2bhk = any(kw in clean_norm for kw in is_2bhk_kws) or (
-                            any(w in words for w in ["two", "2", "do", "don", "twobhk", "दोन", "दो", "२", "dusra"]) and not any(w in words for w in ["one", "1", "ek", "एक", "१", "dono", "donhi", "both"])
+                            self.selected_bhk is None and any(w in words for w in ["two", "2", "do", "don", "twobhk", "दोन", "दो", "२", "dusra"]) and not any(w in words for w in ["one", "1", "ek", "एक", "१", "dono", "donhi", "both"])
                         )
                         is_1bhk = any(kw in clean_norm for kw in is_1bhk_kws) or (
-                            any(w in words for w in ["one", "1", "ek", "onebhk", "एक", "१", "pehla", "pahila"]) and not any(w in words for w in ["two", "2", "do", "don", "दोन", "दो", "२", "dono", "donhi", "both"])
+                            self.selected_bhk is None and any(w in words for w in ["one", "1", "ek", "onebhk", "एक", "१", "pehla", "pahila"]) and not any(w in words for w in ["two", "2", "do", "don", "दोन", "दो", "२", "dono", "donhi", "both"])
                         )
 
                 if is_2bhk and not is_1bhk:
@@ -1247,6 +1258,71 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("माफ़ कीजियेगा, हमारे प्रोजेक्ट में सिर्फ 1 BHK और 2 BHK के ऑप्शन्स उपलब्ध हैं। क्या आप 2 BHK देखना चाहेंगे?")
                         else:
                             yield speak("माफ करा, आपल्या प्रोजेक्टमध्ये फक्त 1 BHK आणि 2 BHK चे पर्याय उपलब्ध आहेत. आपण 2 BHK पाहू इच्छिता का?")
+                        return
+
+                    # Case Site Visit Scheduling (Prioritized over property pitches so visit days/times are never misidentified)
+                    explicit_confirm = any(kw in clean_norm for kw in [
+                        "confirm", "confirm kar do", "confirm kara", "kara confirm", "lock kar do", "lock kara", "book kar do", "book kara"
+                    ])
+
+                    # 1. Caller provided BOTH day and time in this turn or cumulatively
+                    target_day = detected_day or self.site_visit_day
+                    target_time = detected_time or self.site_visit_time
+
+                    if (detected_day and detected_time) or (explicit_confirm and target_day and target_time) or (target_day and target_time and (detected_day or detected_time)):
+                        final_day = target_day
+                        final_time = target_time
+                        
+                        is_valid_slot, reject_msg = validate_site_visit_slot(final_day, final_time, lang=ACTIVE_TTS_LANGUAGE)
+                        if not is_valid_slot and reject_msg:
+                            logger.info(f"⚡ [VISITING SLOT REJECTED] {final_day} at {final_time}: {reject_msg}")
+                            yield speak(reject_msg)
+                            return
+
+                        logger.info(f"⚡ [FAST-PATH SITE VISIT CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
+                        asyncio.create_task(self.schedule_site_visit(
+                            customer_name=self.customer_name,
+                            preferred_day=final_day,
+                            preferred_time=final_time,
+                            flat_type=self.selected_bhk or "1BHK/2BHK"
+                        ))
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak(f"बिल्कुल! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
+                        else:
+                            time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
+                            yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
+                        return
+
+                    # 2. Caller provided ONLY day (e.g. "शनिवार", "उद्या", "आज")
+                    if detected_day and not target_time:
+                        logger.info(f"⚡ [FAST-PATH DAY SELECTED: {detected_day}] Asking for preferred time (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak(f"बिल्कुल, {detected_day} को कौन सा समय सुविधाजनक रहेगा — सुबह या शाम?")
+                        else:
+                            yield speak(f"नक्कीच, {detected_day} रोजी कोणती वेळ सोयीची ठरेल — सकाळी की संध्याकाळी?")
+                        return
+
+                    # 3. Caller provided ONLY time (e.g. "सकाळी 10 वाजता", "4 वाजता")
+                    if detected_time and not target_day:
+                        is_valid_slot, reject_msg = validate_site_visit_slot(None, detected_time, lang=ACTIVE_TTS_LANGUAGE)
+                        if not is_valid_slot and reject_msg:
+                            logger.info(f"⚡ [VISITING TIME REJECTED] {detected_time}: {reject_msg}")
+                            yield speak(reject_msg)
+                            return
+                        logger.info(f"⚡ [FAST-PATH TIME SELECTED: {detected_time}] Asking for preferred day (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak(f"बिल्कुल, {detected_time} कौन से दिन आना सुविधाजनक रहेगा — आज, कल या वीकेंड पर?")
+                        else:
+                            time_phrase = detected_time if "वाजता" in detected_time else f"{detected_time} वाजता"
+                            yield speak(f"नक्कीच, {time_phrase} कोणत्या दिवशी येणं सोयीचं पडेल — आज, उद्या किंवा वीकेंडला?")
+                        return
+
+                    # 4. Caller asked to confirm without specifying any day/time yet
+                    if explicit_confirm and not target_day and not target_time:
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("बिल्कुल. प्रत्यक्ष साईट विजिट के लिए कौन से दिन आना सुविधाजनक रहेगा — आज, कल या इस वीकेंड?")
+                        else:
+                            yield speak("नक्कीच. प्रत्यक्ष साईट व्हिजिटसाठी कोणत्या दिवशी येणं सोयीचं ठरेल — आज, उद्या किंवा या वीकेंडला?")
                         return
 
                     # Case Both: Both 1 BHK & 2 BHK
@@ -1543,70 +1619,6 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
                         return
 
-                    # Case Site Visit Scheduling (Completely Flexible & Adaptive)
-                    explicit_confirm = any(kw in clean_norm for kw in [
-                        "confirm", "confirm kar do", "confirm kara", "kara confirm", "lock kar do", "lock kara", "book kar do", "book kara"
-                    ])
-
-                    # 1. Caller provided BOTH day and time in this turn or cumulatively
-                    target_day = detected_day or self.site_visit_day
-                    target_time = detected_time or self.site_visit_time
-
-                    if (detected_day and detected_time) or (explicit_confirm and target_day and target_time) or (target_day and target_time and (detected_day or detected_time)):
-                        final_day = target_day
-                        final_time = target_time
-                        
-                        is_valid_slot, reject_msg = validate_site_visit_slot(final_day, final_time, lang=ACTIVE_TTS_LANGUAGE)
-                        if not is_valid_slot and reject_msg:
-                            logger.info(f"⚡ [VISITING SLOT REJECTED] {final_day} at {final_time}: {reject_msg}")
-                            yield speak(reject_msg)
-                            return
-
-                        logger.info(f"⚡ [FAST-PATH SITE VISIT CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
-                        asyncio.create_task(self.schedule_site_visit(
-                            customer_name=self.customer_name,
-                            preferred_day=final_day,
-                            preferred_time=final_time,
-                            flat_type=self.selected_bhk or "1BHK/2BHK"
-                        ))
-                        if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
-                        else:
-                            time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
-                            yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
-                        return
-
-                    # 2. Caller provided ONLY day (e.g. "शनिवार", "उद्या", "आज")
-                    if detected_day and not target_time:
-                        logger.info(f"⚡ [FAST-PATH DAY SELECTED: {detected_day}] Asking for preferred time (0ms LLM wait)!")
-                        if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल, {detected_day} को कौन सा समय सही रहेगा? (सुबह 9 से रात 9 के बीच)")
-                        else:
-                            yield speak(f"नक्कीच, {detected_day} रोजी कोणती वेळ सोयीची ठरेल? (सकाळी 9 ते रात्री 9 च्या दरम्यान)")
-                        return
-
-                    # 3. Caller provided ONLY time (e.g. "सकाळी 10 वाजता", "4 वाजता")
-                    if detected_time and not target_day:
-                        is_valid_slot, reject_msg = validate_site_visit_slot(None, detected_time, lang=ACTIVE_TTS_LANGUAGE)
-                        if not is_valid_slot and reject_msg:
-                            logger.info(f"⚡ [VISITING TIME REJECTED] {detected_time}: {reject_msg}")
-                            yield speak(reject_msg)
-                            return
-                        logger.info(f"⚡ [FAST-PATH TIME SELECTED: {detected_time}] Asking for preferred day (0ms LLM wait)!")
-                        if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल, {detected_time} कौन से दिन आना सुविधाजनक रहेगा — आज, कल या वीकेंड पर?")
-                        else:
-                            time_phrase = detected_time if "वाजता" in detected_time else f"{detected_time} वाजता"
-                            yield speak(f"नक्कीच, {time_phrase} कोणत्या दिवशी येणं सोयीचं पडेल — आज, उद्या किंवा वीकेंडला?")
-                        return
-
-                    # 4. Caller asked to confirm without specifying any day/time yet
-                    if explicit_confirm and not target_day and not target_time:
-                        if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("बिल्कुल. प्रत्यक्ष साईट विजिट के लिए कौन से दिन आना सुविधाजनक रहेगा — आज, कल या इस वीकेंड?")
-                        else:
-                            yield speak("नक्कीच. प्रत्यक्ष साईट व्हिजिटसाठी कोणत्या दिवशी येणं सोयीचं ठरेल — आज, उद्या किंवा या वीकेंडला?")
-                        return
 
                     # Case K: WhatsApp brochure & Project details inquiry
                     details_kws = ["whatsapp", "brochure", "detail", "details", "pdf", "photo", "माहिती", "डिटेल्स", "सांगा", "bhejo", "batao", "pathva", "पाठवा"]
@@ -2393,10 +2405,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 150ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 50ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "50"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2413,10 +2425,10 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 250ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 150ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
+        min_silence_duration=0.15,
         min_speech_duration=0.04,
         activation_threshold=0.20,
         deactivation_threshold=0.15,
@@ -2809,7 +2821,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "50"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -2951,12 +2963,12 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 250ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 150ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.25s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.15s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.25,
+            min_silence_duration=0.15,
             min_speech_duration=0.04,
             activation_threshold=0.20,
             deactivation_threshold=0.15,
@@ -2986,7 +2998,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.15,
+                "min_delay": 0.05,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
