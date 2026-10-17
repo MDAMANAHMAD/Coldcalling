@@ -855,7 +855,6 @@ class PriyaRealEstateAgent(Agent):
         self._custom_session = session
         self.off_topic_count = 0
         self.intro_delivered = False
-        self.intro_already_spoken = False
         
         # Stateful conversation tracking across turns
         self.selected_bhk: Optional[str] = None
@@ -1131,10 +1130,6 @@ class PriyaRealEstateAgent(Agent):
                         if self._hangup_fnc:
                             self._hangup_fnc(wait_for_speech=True, delay_seconds=1.2)
                         yield speak(DECLINE_SCRIPT_HI if ACTIVE_TTS_LANGUAGE == "hi" else DECLINE_SCRIPT_MR)
-                        return
-
-                    if getattr(self, "intro_already_spoken", False):
-                        logger.info(f"⚡ [TURN 1 INTRO ALREADY DELIVERED] Direct playback handled Turn 1. Skipping redundant LLM speak for '{raw_text}'.")
                         return
 
                     if is_both_bhk:
@@ -3713,8 +3708,6 @@ async def entrypoint(ctx: JobContext):
     agent_is_speaking = False
     intro_finished = False
     intro_delivered = False
-    intro_already_spoken = False
-    initial_hello_done = False
     caller_has_spoken = False
     caller_is_speaking = False
     watchdog_task = None
@@ -3729,7 +3722,7 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, intro_already_spoken, initial_hello_done, agent, t_user_speaking_start, current_lang
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
@@ -3746,26 +3739,6 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
-
-                # ZERO-BRAIN INSTANT INTRODUCTION:
-                # As soon as caller responds to the initial "हॅलो?", launch the introduction immediately (<100ms)
-                if not intro_already_spoken and not getattr(agent, "intro_already_spoken", False) and not _hangup_scheduled:
-                    intro_already_spoken = True
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_already_spoken = True
-                        agent.intro_delivered = True
-                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                    if active_lang == "hi":
-                        intro_pitch = "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                    else:
-                        intro_pitch = "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-                    logger.info(f"🚀 [ZERO-BRAIN INSTANT INTRO] Caller voice detected & stopped speaking. Launching introduction in {active_lang} (0ms LLM wait)!")
-                    record_dialogue_turn("agent", intro_pitch)
-                    try:
-                        session.say(intro_pitch, allow_interruptions=True)
-                    except Exception as e:
-                        logger.warning(f"Error launching instant intro: {e}")
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
@@ -4277,7 +4250,7 @@ async def entrypoint(ctx: JobContext):
     await asyncio.sleep(0.15)
 
     # Snappy Multi-Stage Natural Greeting Loop:
-    # Guarantee Gayatri initiates the call immediately upon pickup with "हॅलो?" so the caller never hears silence!
+    # Guarantee Gayatri initiates the call immediately with "Hello?" so the caller never hears silence!
     if not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
@@ -4289,23 +4262,16 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        logger.info("🎙️ [IMMEDIATE PICKUP GREETING] Caller picked up call. Gayatri instantly saying 'हॅलो?'...")
-        t_user_stop = 0.0
-        record_dialogue_turn("agent", "हॅलो?")
-        try:
-            session.say("हॅलो?", allow_interruptions=True)
-            initial_hello_done = True
-        except Exception as e:
-            logger.warning(f"Error speaking immediate hello: {e}")
+        logger.info("🎙️ [CALL CONNECTED] Ready! Gayatri listening for caller greeting/voice to deliver predefined intro...")
         intro_finished = True
 
-    # Silence Watchdog: 12s Intervals -> 24s (Auto Hangup)
+    # Silence Watchdog: 0.8s (Initial Hello) -> 10s Intervals -> 20s (Auto Hangup)
     t_last_activity = time.time()
     last_prompt_time = time.time()
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered, initial_hello_done, intro_already_spoken
+        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing!
@@ -4315,10 +4281,11 @@ async def entrypoint(ctx: JobContext):
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (12s intervals, 24s auto-terminate)...")
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.8s initial hello, 10s intervals, 20s auto-terminate)...")
         
         t_call_pickup = time.time()
         last_prompt_time = t_call_pickup
+        initial_hello_done = False
         silence_prompt_count = 0
 
         while not _hangup_scheduled:
