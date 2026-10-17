@@ -1189,6 +1189,55 @@ class PriyaRealEstateAgent(Agent):
                     if detected_time:
                         self.site_visit_time = detected_time
 
+                # Priority 0: Immediate Visit Confirmation Handling (Highest Priority on any turn where a slot is pending confirmation)
+                if getattr(self, "awaiting_visit_confirmation", False):
+                    is_yes = any(kw in clean_norm for kw in [
+                        "ho", "hoy", "barobar", "chalel", "chalega", "chaleel", "ha", "haa", "haan",
+                        "yes", "theek", "thik", "ok", "okay", "confirm", "kara", "kardo", "kar do", "lock",
+                        "book", "done", "right", "correct", "perfect",
+                        "हो", "होय", "बरोबर", "चालेल", "हा", "हां", "हाँ", "ठीक", "कन्फर्म", "नक्की",
+                        "कर दो", "करदो", "कर दीजिए", "करदीजिए", "करदे", "करा", "हो करा", "नक्की करा",
+                        "बुक कर दो", "कन्फर्म कर दो", "लॉक कर दो"
+                    ]) and not any(kw in clean_norm for kw in ["nahi", "nako", "नाही", "नको", "dusra", "change", "badla"])
+
+                    is_no = any(kw in clean_norm for kw in [
+                        "nahi", "nako", "नाही", "नको", "dusra", "change", "badla", "wrong", "chuka", "चुकीची", "नकोय"
+                    ])
+
+                    final_day = self.site_visit_day
+                    final_time = self.site_visit_time
+
+                    if is_yes and not (detected_day and detected_day != final_day) and not (detected_time and detected_time != final_time):
+                        self.awaiting_visit_confirmation = False
+                        self.site_visit_scheduled = True
+                        logger.info(f"⚡ [FAST-PATH SITE VISIT VERIFIED & CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
+                        asyncio.create_task(self.schedule_site_visit(
+                            customer_name=self.customer_name,
+                            preferred_day=final_day,
+                            preferred_time=final_time,
+                            flat_type=self.selected_bhk or "1BHK/2BHK"
+                        ))
+                        if self._hangup_fnc:
+                            self._hangup_fnc(wait_for_speech=True, delay_seconds=2.0)
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            time_phrase = final_time if "बजे" in final_time else f"{final_time} बजे"
+                            yield speak(f"बहुत बढ़िया! {final_day} को {time_phrase} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज दी है। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
+                        else:
+                            time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
+                            yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवली आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
+                        return
+
+                    elif is_no and not detected_day and not detected_time:
+                        self.awaiting_visit_confirmation = False
+                        self.site_visit_day = None
+                        self.site_visit_time = None
+                        logger.info(f"⚡ [SITE VISIT RE-PROMPT REQUESTED] Caller wants different slot for '{raw_text}'")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("कोई बात नहीं, आपके लिए कौन सा नया दिन या समय सही रहेगा?")
+                        else:
+                            yield speak("काही हरकत नाही, आपल्याला कोणता नवीन दिवस किंवा कोणती वेळ सोयीची ठरेल?")
+                        return
+
                 # Negation-aware & Comprehensive BHK Matching Across Languages
                 is_1bhk_kws = [
                     "1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk", "एक बीएचके", "१ बीएचके", "१bhk", "1 bk", "one bk", "ek bk",
@@ -1249,7 +1298,14 @@ class PriyaRealEstateAgent(Agent):
                         "one", "1", "ek", "aik", "aek", "onebhk", "एक", "१", "वन", "pehla", "pahila",
                         "पहिला", "first", "1st"
                     ]
-                    if not is_both_bhk and not is_time_answering:
+                    # Guard against common Hindi verbs ending in 'do' / 'दो' (kar do, bhej do, bata do, dikha do, lock kar do)
+                    is_verb_do = any(kw in clean_norm for kw in [
+                        "kar do", "kardo", "kar de", "karde", "kar dya", "bhej do", "bata do", "de do", "rehne do",
+                        "jaane do", "aane do", "bol do", "dekhne do", "sochne do", "kar dijiye", "kardijiye",
+                        "कर दो", "करदो", "कर दे", "करदे", "कर दीजिए", "करदीजिए", "भेज दो", "बता दो", "दे दो",
+                        "रहने दो", "जाने दो", "आने दो", "बोल दो", "देखने दो", "सोचने दो", "बुक कर दो", "कन्फर्म कर दो"
+                    ])
+                    if not is_both_bhk and not is_time_answering and not is_verb_do:
                         is_2bhk = any(kw in clean_norm for kw in is_2bhk_kws) or (
                             any(w in words for w in two_single_words) and not any(w in words for w in one_single_words)
                         )
@@ -1275,7 +1331,8 @@ class PriyaRealEstateAgent(Agent):
                     self.selected_bhk = "Both"
 
                 # Immediate BHK Selection Handler on Subsequent Turns (Zero risk of false unclear speech or intermediate misrouting)
-                if len(user_msgs) >= 2 and not is_reasoning_or_objection:
+                # Only runs if BHK was not already chosen, and caller is not confirming site visit
+                if len(user_msgs) >= 2 and not is_reasoning_or_objection and self.selected_bhk is None and not getattr(self, "awaiting_visit_confirmation", False):
                     if is_both_bhk:
                         self.selected_bhk = "Both"
                         logger.info(f"⚡ [FAST-PATH BOTH BHK] Instant both BHK response for '{raw_text}' (0ms LLM wait)!")
@@ -1682,47 +1739,7 @@ class PriyaRealEstateAgent(Agent):
                         "confirm", "confirm kar do", "confirm kara", "kara confirm", "lock kar do", "lock kara", "book kar do", "book kara"
                     ])
 
-                    # Stage A: Caller is currently confirming or modifying a pending visit confirmation
-                    if getattr(self, "awaiting_visit_confirmation", False):
-                        is_yes = any(kw in clean_norm for kw in [
-                            "ho", "hoy", "barobar", "chalel", "chalega", "chaleel", "ha", "haa", "haan",
-                            "yes", "theek", "thik", "ok", "okay", "confirm", "kara", "kardo", "kar do", "lock",
-                            "हो", "होय", "बरोबर", "चालेल", "हां", "हाँ", "ठीक", "कन्फर्म", "नक्की"
-                        ]) and not any(kw in clean_norm for kw in ["nahi", "nako", "नाही", "नको", "dusra", "change", "badla"])
 
-                        is_no = any(kw in clean_norm for kw in [
-                            "nahi", "nako", "नाही", "नको", "dusra", "change", "badla", "wrong", "chuka", "चुकीची", "नकोय"
-                        ])
-
-                        final_day = self.site_visit_day
-                        final_time = self.site_visit_time
-
-                        if is_yes and not (detected_day and detected_day != final_day) and not (detected_time and detected_time != final_time):
-                            self.awaiting_visit_confirmation = False
-                            logger.info(f"⚡ [FAST-PATH SITE VISIT VERIFIED & CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
-                            asyncio.create_task(self.schedule_site_visit(
-                                customer_name=self.customer_name,
-                                preferred_day=final_day,
-                                preferred_time=final_time,
-                                flat_type=self.selected_bhk or "1BHK/2BHK"
-                            ))
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"बहुत बढ़िया! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
-                            else:
-                                time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
-                                yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
-                            return
-
-                        elif is_no and not detected_day and not detected_time:
-                            self.awaiting_visit_confirmation = False
-                            self.site_visit_day = None
-                            self.site_visit_time = None
-                            logger.info(f"⚡ [SITE VISIT RE-PROMPT REQUESTED] Caller wants different slot for '{raw_text}'")
-                            if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("कोई बात नहीं, आपके लिए कौन सा नया दिन या समय सही रहेगा?")
-                            else:
-                                yield speak("काही हरकत नाही, आपल्याला कोणता नवीन दिवस किंवा कोणती वेळ सोयीची ठरेल?")
-                            return
 
                     # Stage B: Caller provided BOTH day and time in this turn or cumulatively -> Ask Verification First!
                     target_day = detected_day or self.site_visit_day
