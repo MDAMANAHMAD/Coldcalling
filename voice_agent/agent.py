@@ -1108,6 +1108,11 @@ class PriyaRealEstateAgent(Agent):
                 clean_norm = re.sub(r'[^\w\s\u0900-\u097F]', ' ', raw_text).strip().lower()
                 words = clean_norm.split()
 
+                # Guard against empty or noise triggers:
+                if not clean_norm or len(words) == 0:
+                    logger.info(f"⚡ [EMPTY INPUT DETECTED] Ignoring empty speech frame for '{raw_text}'")
+                    return
+
                 # 0. Instant Multilingual switch triggers (Locks language & syncs Cartesia TTS / STT immediately)
                 is_explain_all = any(kw in clean_norm for kw in [
                     "sab kuch batao", "phir se batao", "fir se batao", "puri jankari", "poori jankari",
@@ -1125,7 +1130,7 @@ class PriyaRealEstateAgent(Agent):
                     self.switch_language("hi")
                     if is_explain_all:
                         logger.info(f"⚡ [EXPLAIN ALL PROJECT DETAILS IN HINDI] for '{raw_text}'")
-                        yield speak("साई गार्डन डोंबिवली ईस्ट में एक्सपेरिया मॉल के ठीक सामने G+22 मंजिला भव्य टावर है। इसमें 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में जिम और स्विमिंग पूल जैसी 35 से ज्यादा modern amenities मिलती हैं। आप 1 BHK देखना चाहेंगे या 2 BHK?")
+                        yield speak("साई गार्डन डोंबिवली ईस्ट में एक्सपेरिया मॉल के ठीक सामने 22 मंज़िला भव्य इमारत है। इसमें 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप 1 BHK देखना चाहेंगे या 2 BHK?")
                         return
                     elif not was_hi:
                         if self.selected_bhk is None:
@@ -1145,7 +1150,7 @@ class PriyaRealEstateAgent(Agent):
                     self.switch_language("mr")
                     if is_explain_all:
                         logger.info(f"⚡ [EXPLAIN ALL PROJECT DETAILS IN MARATHI] for '{raw_text}'")
-                        yield speak("साई गार्डन डोंबिवली ईस्ट मध्ये एक्सपेरिया मॉल समोर G+22 मजली लक्झरी टॉवर आहे. यात 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध असून स्विमिंग पूल आणि जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण 1 BHK शोधत आहात की 2 BHK?")
+                        yield speak("साई गार्डन डोंबिवली ईस्ट मध्ये एक्सपेरिया मॉल समोर 22 मजली भव्य इमारत आहे. यात 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध असून 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
                     elif not was_mr:
                         if self.selected_bhk is None:
@@ -1166,12 +1171,23 @@ class PriyaRealEstateAgent(Agent):
                     self.switch_language(det_lang)
                     logger.info(f"🗣️ [LLM NODE LANGUAGE LOCK] Updated ACTIVE_TTS_LANGUAGE to '{ACTIVE_TTS_LANGUAGE}' from text: '{raw_text}'")
 
-                # Parse day and time from the caller's text
-                detected_day, detected_time = parse_day_and_time(clean_norm, lang=ACTIVE_TTS_LANGUAGE)
-                if detected_day:
-                    self.site_visit_day = detected_day
-                if detected_time:
-                    self.site_visit_time = detected_time
+                # Parse day and time from the caller's text ONLY when in site visit booking context:
+                # If caller has not yet confirmed BHK or asked for a visit, do NOT treat numbers/words as a visit time!
+                in_visit_context = (
+                    (self.selected_bhk is not None and self.selected_possession is not None)
+                    or getattr(self, "awaiting_visit_confirmation", False)
+                    or any(w in clean_norm for w in [
+                        "visit", "व्हिजिट", "विजिट", "बघायला", "पाहायला", "येणार", "येतो", "आएंगे", "आऊंगा",
+                        "अपॉइंटमेंट", "appointment", "booking", "बुक", "साईट व्हिजिट", "साइट विजिट"
+                    ])
+                )
+                detected_day, detected_time = (None, None)
+                if in_visit_context:
+                    detected_day, detected_time = parse_day_and_time(clean_norm, lang=ACTIVE_TTS_LANGUAGE)
+                    if detected_day:
+                        self.site_visit_day = detected_day
+                    if detected_time:
+                        self.site_visit_time = detected_time
 
                 # Negation-aware & Comprehensive BHK Matching Across Languages
                 is_1bhk_kws = [
@@ -1392,6 +1408,11 @@ class PriyaRealEstateAgent(Agent):
                         logger.info(f"⚡ [TURN 1 ALREADY DELIVERED] Pitch already delivered for '{raw_text}'. Skipping to prevent repetition.")
                         return
 
+                    # Ignore short noise / tap / click on Turn 1 (must be real speech >= 2 chars)
+                    if len(clean_norm) < 2:
+                        logger.info(f"⚡ [TURN 1 NOISE FILTER] Transcript '{clean_norm}' too short (<2 chars). Waiting for caller greeting.")
+                        return
+
                     has_inquiry_intent_turn1 = any(kw in clean_norm for kw in [
                         "detail", "details", "janna", "janana", "batao", "bataiye", "bol", "bola", "sanga",
                         "mahiti", "kasa", "kaisa", "kyu", "kyun", "ka", "kashala", "question", "sawal",
@@ -1590,19 +1611,40 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("धन्यवाद सर, आपला दिवस चांगला जावो, नमस्कार.")
                         return
 
+                    # Case Amenities / Facilities / Features Inquiry (Positioned before Identity to prevent any false match)
+                    amenities_inquiry_kws = [
+                        "amenities", "amenity", "gym", "swimming pool", "swimming", "clubhouse", "floors", "building",
+                        "सुविधा", "सुविधाएं", "सुविधाए", "lift", "लिफ्ट", "garden", "गार्डन",
+                        "facilities", "facility", "features", "feature", "काय काय आहे", "काय काय मिळेल",
+                        "काय सुविधा", "काय सोयी", "सोयी सुविधा", "क्या क्या है", "क्या क्या मिलेगा",
+                        "क्या सुविधाएं", "क्या सुविधा", "amneties", "amneti", "aminiti", "aminities", "eminities",
+                        "eminity", "amenitees", "amenitis", "aminites", "ameniti", "amenites",
+                        "suvidha", "suvidhaye", "suvidhaen", "suvidhas", "soyi",
+                        "एमिनिटी", "एमिनिटीज", "अमेनिटी", "अमेनिटीज", "अमिनिटी", "अमिनिटीज"
+                    ]
+                    if fuzzy_contains(clean_norm, amenities_inquiry_kws, threshold=0.65) and not is_1bhk and not is_2bhk:
+                        logger.info(f"⚡ [FAST-PATH AMENITIES INQUIRY] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
+                        cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak(f"साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम, क्लबहाउस, बच्चों के लिए प्ले एरिया और ओपन गार्डन जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। {cq}")
+                        else:
+                            yield speak(f"साई गार्डन ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम, क्लबहाऊस, मुलांसाठी प्ले एरिया आणि ओपन गार्डन अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. {cq}")
+                        return
+
                     # Case Identity: Who is speaking? / Project name
                     identity_kws = [
                         "kaun hai", "kaun ho", "kaun h", "tum kaun", "kon ahe", "koni ahe", "kon aahe", "kon hai",
                         "kaun bol", "kon bol", "koni bol", "kuthun bol", "aap kaun", "tumhi kon", "who is this",
                         "who is speaking", "kiska phone", "kisne phone", "koni phone", "aap ka naam", "tumche naav",
-                        "naam kya", "kaha se bol", "kidhar se bol", "कौन", "कोण"
+                        "naam kya", "kaha se bol", "kidhar se bol", "तुम्ही कोण", "आप कौन", "कोण बोलतंय", "कोण बोलतेय", "कौन बोल रहा"
                     ]
                     if any(kw in clean_norm for kw in identity_kws) and not is_1bhk and not is_2bhk and not detected_day and not detected_time:
                         logger.info(f"⚡ [FAST-PATH IDENTITY] Instant identity response for '{raw_text}' (0ms LLM wait)!")
+                        cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("जी, मैं गायत्री बात कर रही हूँ, साई गार्डन डोंबिवली ईस्ट से। क्या आप 1 BHK देख रहे हैं या 2 BHK?")
+                            yield speak(f"जी, मैं गायत्री बात कर रही हूँ, साई गार्डन डोंबिवली ईस्ट से। {cq}")
                         else:
-                            yield speak("हो, मी गायत्री बोलतेय, साई गार्डन डोंबिवली ईस्ट मधून. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            yield speak(f"हो, मी गायत्री बोलतेय, साई गार्डन डोंबिवली ईस्ट मधून. {cq}")
                         return
 
                     # Case Number Source: Where did you get my number?
@@ -2086,20 +2128,20 @@ class PriyaRealEstateAgent(Agent):
 
                         if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                             self.selected_possession = "Under Construction"
-                            logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & site visit invite for '{raw_text}' (0ms LLM wait)!")
+                            logger.info(f"⚡ [FAST-PATH UPCOMING POSSESSION] Instant upcoming response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("अंडर-कंस्ट्रक्शन में आसान पेमेंट प्लान उपलब्ध हैं और समय पर पजेशन मिल रहा है। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
+                                yield speak("बहुत बढ़िया! अंडर-कन्स्ट्रक्शन में आसान पेमेंट प्लान्स उपलब्ध हैं और समय पर पज़ेशन मिलेगा। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
                             else:
-                                yield speak("अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                                yield speak("खूप छान! अंडर-कन्स्ट्रक्शन फ्लॅट्समध्ये सोपे पेमेंट प्लॅन्स उपलब्ध आहेत आणि वेळेवर ताबा मिळेल. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
                             return
 
                         if (is_ready or is_both) and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                             self.selected_possession = "Ready to Move" if is_ready else "Both"
-                            logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & site visit invite for '{raw_text}' (0ms LLM wait)!")
+                            logger.info(f"⚡ [FAST-PATH READY POSSESSION] Instant ready response & amenities highlight for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("रेडी-टू-मूव फ्लैट्स में तुरंत पजेशन और सभी कानूनी मंजूरियां मिलती हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
+                                yield speak("बहुत बढ़िया! रेडी-टू-मूव फ्लैट्स में तुरंत पज़ेशन और सभी कानूनी मंजूरियां मिलती हैं। इस 22 मंज़िला इमारत में स्विमिंग पूल, जिम, क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। क्या आप प्रत्यक्ष साईट विजिट करना चाहेंगे, या और कोई जानकारी चाहिए?")
                             else:
-                                yield speak("रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                                yield speak("खूप छान! रेडी-टू-मूव्ह फ्लॅट्समध्ये त्वरित ताबा आणि सर्व कायदेशीर मंजुऱ्या मिळतात. या 22 मजली टॉवरमध्ये स्विमिंग पूल, जिम, क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत. आपण प्रत्यक्ष साईट व्हिजिट करायला आवडेल, की आणखी काही माहिती हवी आहे?")
                             return
 
                         # Case K: WhatsApp brochure & Project details inquiry
