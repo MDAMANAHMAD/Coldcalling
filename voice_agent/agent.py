@@ -605,7 +605,9 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
             'gyarah': 11, 'akra': 11, 'bara': 12, 'barah': 12,
             'एक': 1, 'दोन': 2, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाच': 5, 'पाँच': 5,
             'सहा': 6, 'छह': 6, 'सात': 7, 'आठ': 8, 'नऊ': 9, 'नौ': 9, 'दहा': 10, 'दस': 10,
-            'अकरा': 11, 'ग्यारह': 11, 'बारा': 12, 'बारह': 12,
+            'अकरा': 11, 'अकारा': 11, 'अकारावास': 11, 'अकरावास': 11, 'अकरावाजता': 11, 'ग्यारह': 11,
+            'बारा': 12, 'बारावाजता': 12, 'बारह': 12,
+            'दोनवाजता': 2, 'तीनवाजता': 3, 'चारवाजता': 4, 'पाचवाजता': 5, 'सहावाजता': 6,
             '१': 1, '२': 2, '३': 3, '४': 4, '५': 5, '६': 6, '७': 7, '८': 8, '९': 9, '१०': 10, '११': 11, '१२': 12
         }
 
@@ -622,9 +624,9 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
                     modifier = "शाम " if is_hindi else "संध्याकाळी "
             detected_time = f"{modifier}{h_val} बजे" if is_hindi else f"{modifier}{h_val} वाजता"
 
-        # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता)
+        # Check explicit baje/vajta context with digit OR number word (e.g. 11 baje, बारह बज, 12 बजे, 4 वाजता, अकारावास)
         if not detected_time:
-            m_explicit = re.search(r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|ग्यारह|बारा|बारह|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|am|pm|o\'clock)(?:$|[^\w\u0900-\u097F])', text)
+            m_explicit = re.search(r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|अकारा|अकारावास|अकरावास|ग्यारह|बारा|बारह|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|वाजे|वास|am|pm|o\'clock)?(?:$|[^\w\u0900-\u097F])', text)
             if m_explicit:
                 raw_h = m_explicit.group(1)
                 h_val = int(raw_h) if raw_h.isdigit() else num_words_map.get(raw_h, 0)
@@ -839,6 +841,7 @@ class PriyaRealEstateAgent(Agent):
         self.selected_possession: Optional[str] = None
         self.site_visit_day: Optional[str] = None
         self.site_visit_time: Optional[str] = None
+        self.awaiting_visit_confirmation: bool = False
         self.referral_asked: bool = False
         
         now = get_current_ist_time()
@@ -965,11 +968,11 @@ class PriyaRealEstateAgent(Agent):
                 is_1bhk_kws = [
                     "1 bhk", "1bhk", "one bhk", "ek bhk", "first bhk", "एक बीएचके", "१ बीएचके", "१bhk", "1 bk", "one bk",
                     "1 flat", "one flat", "ek flat", "1st", "first", "पहिला", "pahila", "pehla", "1 number", "ek number", "single",
-                    "वन बीएचके", "वन bhk", "वनbhk"
+                    "वन बीएचके", "वन bhk", "वनbhk", "एक bhk", "एकbhk", "एक flat", "एक रूम"
                 ]
                 is_2bhk_kws = [
                     "2 bhk", "2bhk", "two bhk", "do bhk", "second bhk", "don bhk", "done bhk", "dawn bhk", "2 bk", "two bk",
-                    "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk",
+                    "दोन बीएचके", "दोन bhk", "२ बीएचके", "२bhk", "दो bhk", "दोbhk", "दो बीएचके", "दो बी एच के", "दो flat", "दो रूम",
                     "2 flat", "two flat", "do flat", "2nd", "second", "दुसरा", "dusra", "2 number", "do number", "don number",
                     "टू बीएचके", "टू bhk", "टूbhk", "टु बीएचके"
                 ]
@@ -1265,7 +1268,49 @@ class PriyaRealEstateAgent(Agent):
                         "confirm", "confirm kar do", "confirm kara", "kara confirm", "lock kar do", "lock kara", "book kar do", "book kara"
                     ])
 
-                    # 1. Caller provided BOTH day and time in this turn or cumulatively
+                    # Stage A: Caller is currently confirming or modifying a pending visit confirmation
+                    if getattr(self, "awaiting_visit_confirmation", False):
+                        is_yes = any(kw in clean_norm for kw in [
+                            "ho", "hoy", "barobar", "chalel", "chalega", "chaleel", "ha", "haa", "haan",
+                            "yes", "theek", "thik", "ok", "okay", "confirm", "kara", "kardo", "kar do", "lock",
+                            "हो", "होय", "बरोबर", "चालेल", "हां", "हाँ", "ठीक", "कन्फर्म", "नक्की"
+                        ]) and not any(kw in clean_norm for kw in ["nahi", "nako", "नाही", "नको", "dusra", "change", "badla"])
+
+                        is_no = any(kw in clean_norm for kw in [
+                            "nahi", "nako", "नाही", "नको", "dusra", "change", "badla", "wrong", "chuka", "चुकीची", "नकोय"
+                        ])
+
+                        final_day = self.site_visit_day
+                        final_time = self.site_visit_time
+
+                        if is_yes and not (detected_day and detected_day != final_day) and not (detected_time and detected_time != final_time):
+                            self.awaiting_visit_confirmation = False
+                            logger.info(f"⚡ [FAST-PATH SITE VISIT VERIFIED & CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
+                            asyncio.create_task(self.schedule_site_visit(
+                                customer_name=self.customer_name,
+                                preferred_day=final_day,
+                                preferred_time=final_time,
+                                flat_type=self.selected_bhk or "1BHK/2BHK"
+                            ))
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak(f"बहुत बढ़िया! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
+                            else:
+                                time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
+                                yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
+                            return
+
+                        elif is_no and not detected_day and not detected_time:
+                            self.awaiting_visit_confirmation = False
+                            self.site_visit_day = None
+                            self.site_visit_time = None
+                            logger.info(f"⚡ [SITE VISIT RE-PROMPT REQUESTED] Caller wants different slot for '{raw_text}'")
+                            if ACTIVE_TTS_LANGUAGE == "hi":
+                                yield speak("कोई बात नहीं, आपके लिए कौन सा नया दिन या समय सही रहेगा?")
+                            else:
+                                yield speak("काही हरकत नाही, आपल्याला कोणता नवीन दिवस किंवा कोणती वेळ सोयीची ठरेल?")
+                            return
+
+                    # Stage B: Caller provided BOTH day and time in this turn or cumulatively -> Ask Verification First!
                     target_day = detected_day or self.site_visit_day
                     target_time = detected_time or self.site_visit_time
 
@@ -1279,18 +1324,15 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(reject_msg)
                             return
 
-                        logger.info(f"⚡ [FAST-PATH SITE VISIT CONFIRMED] {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
-                        asyncio.create_task(self.schedule_site_visit(
-                            customer_name=self.customer_name,
-                            preferred_day=final_day,
-                            preferred_time=final_time,
-                            flat_type=self.selected_bhk or "1BHK/2BHK"
-                        ))
+                        self.site_visit_day = final_day
+                        self.site_visit_time = final_time
+                        self.awaiting_visit_confirmation = True
+                        logger.info(f"⚡ [FAST-PATH SITE VISIT VERIFICATION PROMPT] Asking client to verify {final_day} at {final_time} for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak(f"बिल्कुल! {final_day} को {final_time} आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी और लोकेशन व्हाट्सऐप पर भेज रही हूँ। धन्यवाद सर, आपका दिन शुभ हो, नमस्ते.")
+                            yield speak(f"बिल्कुल! क्या {final_day} को {final_time} का समय आपके लिए बिल्कुल सही है? मैं इसे कन्फर्म कर दूँ?")
                         else:
                             time_phrase = final_time if "वाजता" in final_time else f"{final_time} वाजता"
-                            yield speak(f"नक्कीच! {final_day} रोजी {time_phrase} आपली साईट व्हिजिट निश्चित केली आहे. सर्व माहिती आणि लोकेशन व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद सर, दिवस चांगला जावो, नमस्कार.")
+                            yield speak(f"नक्कीच! आपण {final_day} रोजी {time_phrase} साईट व्हिजिटसाठी येऊ इच्छिता, ही वेळ बरोबर आहे का?")
                         return
 
                     # 2. Caller provided ONLY day (e.g. "शनिवार", "उद्या", "आज")
@@ -2272,6 +2314,10 @@ STT_REPLACE = {
     "done bhk": "2 BHK",
     "dawn bhk": "2 BHK",
     "do bhk": "2 BHK",
+    "दो bhk": "2 BHK",
+    "दोbhk": "2 BHK",
+    "दो बीएचके": "2 BHK",
+    "दो बी एच के": "2 BHK",
     "२ बीएचके": "2 BHK",
     "२bhk": "2 BHK",
     "2bhk": "2 BHK",
@@ -2284,6 +2330,7 @@ STT_REPLACE = {
     "ek bhk": "1 BHK",
     "एक बीएचके": "1 BHK",
     "एक bhk": "1 BHK",
+    "एकbhk": "1 BHK",
     "एक बी एच के": "1 BHK",
     "१ बीएचके": "1 BHK",
     "१bhk": "1 BHK",
@@ -2295,6 +2342,9 @@ STT_REPLACE = {
     "वनbhk": "1 BHK",
     "१ नंबर": "1 BHK",
     "२ नंबर": "2 BHK",
+    "अकारावास": "11 वाजता",
+    "अकारा": "अकरा",
+    "अकरावास": "11 वाजता",
     # Times & Days
     "साडे आठ": "साडेआठ",
     "साडे सात": "साडेसात",
@@ -2405,10 +2455,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 50ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 120ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "50"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "120"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2425,10 +2475,10 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 150ms silence)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 220ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.15,
+        min_silence_duration=0.22,
         min_speech_duration=0.04,
         activation_threshold=0.20,
         deactivation_threshold=0.15,
@@ -2821,7 +2871,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "50"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "120"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -2963,12 +3013,12 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 150ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.20 threshold, 40ms speech, 220ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.15s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 40ms min speech, 0.22s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.15,
+            min_silence_duration=0.22,
             min_speech_duration=0.04,
             activation_threshold=0.20,
             deactivation_threshold=0.15,
@@ -2998,7 +3048,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.05,
+                "min_delay": 0.08,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3606,6 +3656,7 @@ async def entrypoint(ctx: JobContext):
     intro_finished = False
     intro_delivered = False
     caller_has_spoken = False
+    caller_is_speaking = False
     watchdog_task = None
     last_agent_speech = ""
     agent = None
@@ -3618,15 +3669,18 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, intro_delivered, agent, t_user_speaking_start, current_lang
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
+                caller_is_speaking = True
+                t_user_stop = 0.0  # Reset so mid-sentence pauses never inflate STT latency
                 t_user_speaking_start = time.perf_counter()
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
+                caller_is_speaking = False
                 t_user_stop = time.perf_counter()
                 intro_finished = True
                 t_last_activity = time.time()
@@ -3708,9 +3762,11 @@ async def entrypoint(ctx: JobContext):
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         global ACTIVE_TTS_LANGUAGE
-        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken, intro_delivered, agent
+        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent
         caller_has_spoken = True
+        caller_is_speaking = not ev.is_final
         t_last_activity = time.time()
+        last_prompt_time = time.time()
         has_prompted_silence = False
         if ev.transcript:
             if t_user_stop > 0:
@@ -4162,7 +4218,7 @@ async def entrypoint(ctx: JobContext):
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken, intro_delivered
+        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing!
@@ -4188,6 +4244,13 @@ async def entrypoint(ctx: JobContext):
             if agent_is_speaking or (session.current_speech and not session.current_speech.done()) or (session.agent_state == "speaking"):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
+                continue
+
+            # If caller is currently speaking or VAD detects user speech, reset silence timer & prompt count
+            if caller_is_speaking or (getattr(session, "user_state", None) == "speaking"):
+                t_last_activity = time.time()
+                last_prompt_time = time.time()
+                silence_prompt_count = 0
                 continue
 
             now = time.time()
@@ -4234,11 +4297,11 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 3. Say prompt after 7.0 seconds interval of genuine silence (Single 'हॅलो?' without repeating long lines)
-            if (now - last_prompt_time >= 7.0) and (silence_duration >= 7.0):
+            # 3. Say prompt after 8.5 seconds interval of genuine silence (Single 'हॅलो?' without repeating long lines)
+            if (now - last_prompt_time >= 8.5) and (silence_duration >= 8.5):
                 last_prompt_time = now
                 t_last_activity = now
-                logger.info(f"⏳ [SILENCE PROMPT] 7.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 8.5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
                 
                 if silence_prompt_count == 0:
                     prompt_text = "हॅलो?"
