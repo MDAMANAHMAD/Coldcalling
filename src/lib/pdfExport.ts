@@ -22,9 +22,9 @@ export function exportLeadsToPdf({
   const filtered = calls.filter((call) => {
     const tag = getOutcomeTag(call).label;
     if (category === 'All') return true;
-    if (category === 'Interested') return tag === 'Interested';
-    if (category === 'Future Plan') return tag === 'Future Plan / Need Afterwards';
-    if (category === 'Site Visit') return tag === 'Site Visit Scheduled';
+    if (category === 'Interested') return tag === 'Interested' || tag === 'Future Plan / Need Afterwards';
+    if (category === 'Future Plan') return tag === 'Interested' || tag === 'Future Plan / Need Afterwards';
+    if (category === 'Site Visit') return tag === 'Site Visit' || tag === 'Site Visit Scheduled';
     if (category === 'Not Interested') return tag === 'Not Interested';
     return true;
   });

@@ -263,6 +263,53 @@ function resolveDbPath(): string {
   return DB_FILE;
 }
 
+const PERMANENT_LEDGER = path.join(process.cwd(), 'bookings', 'permanent_call_ledger.jsonl');
+
+function syncLedger(callLogs: CallLog[]): CallLog[] {
+  try {
+    const dir = path.dirname(PERMANENT_LEDGER);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const seenSids = new Set<string>();
+    const merged: CallLog[] = [];
+
+    // 1. Read existing from memory/passed logs
+    for (const log of callLogs || []) {
+      const key = log.callSid || log.id;
+      if (key && !seenSids.has(key)) {
+        seenSids.add(key);
+        merged.push(log);
+      }
+    }
+
+    // 2. Read existing from permanent ledger on disk to restore any missing history
+    if (fs.existsSync(PERMANENT_LEDGER)) {
+      const lines = fs.readFileSync(PERMANENT_LEDGER, 'utf8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line) as CallLog;
+          const key = item.callSid || item.id;
+          if (key && !seenSids.has(key)) {
+            seenSids.add(key);
+            merged.push(item);
+          }
+        } catch {}
+      }
+    }
+
+    // 3. Persist combined ledger to disk atomically
+    if (merged.length > 0) {
+      const serializedLines = merged.map(m => JSON.stringify(m)).join('\n') + '\n';
+      fs.writeFileSync(PERMANENT_LEDGER, serializedLines, 'utf8');
+    }
+
+    return merged;
+  } catch (err) {
+    console.warn('[Permanent Ledger Warning]:', err);
+    return callLogs || [];
+  }
+}
+
 export function getDb(): AppDatabase {
   if (global.__APP_DB_CACHE__) {
     return global.__APP_DB_CACHE__;
@@ -279,13 +326,16 @@ export function getDb(): AppDatabase {
         if (!seed.meetings) seed.meetings = [];
         if (!seed.leads) seed.leads = [];
         if (!seed.users) seed.users = [];
+        seed.callLogs = syncLedger(seed.callLogs);
         global.__APP_DB_CACHE__ = seed;
         return seed;
       } catch {}
     }
-    saveDb(INITIAL_DATA);
-    global.__APP_DB_CACHE__ = INITIAL_DATA;
-    return INITIAL_DATA;
+    const initData = { ...INITIAL_DATA };
+    initData.callLogs = syncLedger(initData.callLogs || []);
+    saveDb(initData);
+    global.__APP_DB_CACHE__ = initData;
+    return initData;
   }
 
   try {
@@ -295,12 +345,15 @@ export function getDb(): AppDatabase {
     if (!parsed.meetings) parsed.meetings = [];
     if (!parsed.leads) parsed.leads = [];
     if (!parsed.users) parsed.users = [];
+    parsed.callLogs = syncLedger(parsed.callLogs);
     global.__APP_DB_CACHE__ = parsed;
     return parsed;
   } catch (e) {
     console.error("[DB Error]: Reading database file failed, falling back to initial data:", e);
-    global.__APP_DB_CACHE__ = INITIAL_DATA;
-    return INITIAL_DATA;
+    const fallback = { ...INITIAL_DATA };
+    fallback.callLogs = syncLedger(fallback.callLogs || []);
+    global.__APP_DB_CACHE__ = fallback;
+    return fallback;
   }
 }
 
@@ -311,6 +364,11 @@ export function saveDb(data: AppDatabase): void {
   }
   if ((!data.leads || data.leads.length === 0) && global.__APP_DB_CACHE__?.leads && global.__APP_DB_CACHE__.leads.length > 0) {
     data.leads = global.__APP_DB_CACHE__.leads;
+  }
+
+  // Ensure permanent ledger is synced and updated
+  if (data.callLogs && data.callLogs.length > 0) {
+    data.callLogs = syncLedger(data.callLogs);
   }
 
   // Always update in-memory cache first

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const phoneNumber = body.phoneNumber || '+918693081506';
     const customerName = body.customerName || 'Aman';
     const userEmail = (body.userEmail || 'test@gmail.com').trim().toLowerCase();
-    const voiceSpeed = Number(body.voiceSpeed ?? body.voice_speed) || 1.05;
+    const voiceSpeed = 1.0;
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
