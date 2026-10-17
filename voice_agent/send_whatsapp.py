@@ -7,6 +7,7 @@ load_dotenv()
 
 # Twilio Credentials loaded from .env
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 API_KEY_SID = os.getenv("TWILIO_API_KEY_SID")
 API_KEY_SECRET = os.getenv("TWILIO_API_KEY_SECRET")
 
@@ -33,7 +34,8 @@ def send_whatsapp(to_phone, body, media_url=None):
         data["MediaUrl"] = media_url
 
     try:
-        r = requests.post(url, data=data, auth=(API_KEY_SID, API_KEY_SECRET), timeout=15)
+        auth = (ACCOUNT_SID, AUTH_TOKEN) if AUTH_TOKEN else (API_KEY_SID, API_KEY_SECRET)
+        r = requests.post(url, data=data, auth=auth, timeout=15)
         if r.status_code in [200, 201]:
             print(f"✅ Message sent successfully to {clean_phone}!")
             print(f"   Message SID: {r.json().get('sid')}")
