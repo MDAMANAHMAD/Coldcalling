@@ -518,14 +518,22 @@ def resolve_language(transcript: str, current_lang: str = "mr") -> str:
 
     # Natural language inference using whole-word boundary matching (only if not explicitly locked):
     if current_lang == "mr":
-        hi_distinctive = ["kya", "hum", "aap", "baat", "batao", "boliye", "chahiye", "kaun", "kidhar", "kahan", "kitna", "bataiye", "hoga"]
-        if any(re.search(rf"\b{w}\b", text) for w in hi_distinctive):
+        hi_distinctive_en = ["kya", "hum", "aap", "baat", "batao", "boliye", "chahiye", "kaun", "kidhar", "kahan", "kitna", "bataiye", "hoga"]
+        hi_distinctive_deva = [
+            "क्या", "कया", "है", "ह", "का", "की", "के", "कितना", "कितनी", "बताइए", "बताओ", "चाहिए",
+            "छोटा", "बड़ा", "वाला", "वाली", "हम", "आप", "बात", "किधर", "कहाँ", "होगा", "सकते", "सकती", "सकता"
+        ]
+        if any(re.search(rf"\b{w}\b", text) for w in hi_distinctive_en) or any(w in text for w in hi_distinctive_deva):
             return 'hi'
         if any(re.search(rf"\b{w}\b", text) for w in ["looking for", "tell me", "what is the price", "how much", "send details"]):
             return 'en'
     elif current_lang == "hi":
-        mr_distinctive = ["aamhi", "pahije", "kiti", "kuthe", "sangto", "baghto", "dakhva", "mahiti", "boltoy", "bolte", "kay", "aapan", "kashe", "kadhi"]
-        if any(re.search(rf"\b{w}\b", text) for w in mr_distinctive):
+        mr_distinctive_en = ["aamhi", "pahije", "kiti", "kuthe", "sangto", "baghto", "dakhva", "mahiti", "boltoy", "bolte", "kay", "aapan", "kashe", "kadhi"]
+        mr_distinctive_deva = [
+            "आम्ही", "पाहिजे", "किती", "कुठे", "सांगा", "दाखवा", "माहिती", "काय", "आपण", "कधी",
+            "चालेल", "दोन", "नाही", "होय", "सांगाल", "आहे", "आहात", "शोधत", "बोलतोय"
+        ]
+        if any(re.search(rf"\b{w}\b", text) for w in mr_distinctive_en) or any(w in text for w in mr_distinctive_deva):
             return 'mr'
 
     return current_lang
@@ -1864,12 +1872,18 @@ class PriyaRealEstateAgent(Agent):
                             return
 
                         # Case Possession: Under Construction / Ready to Move (Checked immediately so caller's possession answer is never hijacked)
+                        has_station_or_transit = any(w in clean_norm for w in [
+                            "station", "session", "railway", "train", "kalyan", "dombivli", "nilje", "diva",
+                            "metro", "स्टेशन", "कल्याण", "डोंबिवली", "निळजे", "दिवा", "मेट्रो", "दोमबली",
+                            "कलान", "कलयाण", "दूरी", "अंतर", "door", "kiti door", "kitna door"
+                        ])
+
                         upcoming_kws = [
                             "upcoming", "position", "possession", "under construction", "under-construction", "underconstruction",
                             "construction", "future", "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन",
                             "चालू", "चालू काम", "चालेल मला", "मला चालेल", "chalel"
                         ]
-                        is_upcoming = (
+                        is_upcoming = (not has_station_or_transit) and (
                             fuzzy_contains(clean_norm, upcoming_kws, threshold=0.72)
                             or (self.selected_possession is None and any(w in clean_norm for w in ["under", "chalel", "चालेल", "chalega", "चलेगा", "अंडर", "कन्स्ट्रक्शन"]))
                         ) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"])
@@ -1878,11 +1892,11 @@ class PriyaRealEstateAgent(Agent):
                             "ready to move", "ready-to-move", "ready tomove", "ready", "redy", "radi", "immediate", "turant",
                             "ready chalega", "chalega ready", "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"
                         ]
-                        is_ready = (
+                        is_ready = (not has_station_or_transit) and (
                             fuzzy_contains(clean_norm, ready_kws, threshold=0.72)
                             and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन", "अंडर"])
                         )
-                        is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
+                        is_both = (not has_station_or_transit) and any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
 
                         if is_upcoming and not any(kw in clean_norm for kw in ["kab tak", "date", "year", "loan", "bank"]):
                             self.selected_possession = "Under Construction"
@@ -1989,7 +2003,7 @@ class PriyaRealEstateAgent(Agent):
                             return
 
                         # Specific Landmark 1: Kalyan Station / Kalyan
-                        if any(kw in clean_norm for kw in ["kalyan", "kaliyan", "कल्याण"]):
+                        if any(kw in clean_norm for kw in ["kalyan", "kaliyan", "कल्याण", "कलान", "कलयाण", "काल्यान"]):
                             logger.info(f"⚡ [FAST-PATH KALYAN CONNECTIVITY] for '{raw_text}' (0ms LLM wait)!")
                             cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1999,7 +2013,7 @@ class PriyaRealEstateAgent(Agent):
                             return
 
                         # Specific Landmark 2: Dombivli Station / Dombivli
-                        if any(kw in clean_norm for kw in ["dombivli", "dombivali", "dombiwali", "डोंबिवली"]):
+                        if any(kw in clean_norm for kw in ["dombivli", "dombivali", "dombiwali", "डोंबिवली", "दोमबली", "दोमबवली", "डोमबली", "डोमबिवली"]):
                             logger.info(f"⚡ [FAST-PATH DOMBIVLI CONNECTIVITY] for '{raw_text}' (0ms LLM wait)!")
                             cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
@@ -2832,11 +2846,50 @@ STT_KEYWORDS = [
     ("अंडर कन्स्ट्रक्शन", 3.0),
     ("Possession", 2.5),
     ("Price", 2.5),
+    ("Kalyan station", 4.0),
+    ("Dombivli station", 4.0),
+    ("Nilje station", 4.0),
+    ("station", 3.5),
+    ("रेल्वे स्टेशन", 3.5),
+    ("स्टेशन", 3.5),
+    ("कल्याण", 3.5),
+    ("डोंबिवली", 3.5),
+    ("निळजे", 3.5),
+    ("दोन", 4.0),
+    ("तो उन", 3.5),
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
 STT_REPLACE = {
     # Marathi numbers & BHK fixes
+    "तो उन भी": "2 BHK",
+    "तो उन": "2",
+    "तो उन बी": "2 BHK",
+    "तो उन bhk": "2 BHK",
+    "तोउन": "दोन",
+    "तो उन चा": "दोन",
+    "दोन बी": "2 BHK",
+    "दोन bi": "2 BHK",
+    "दोन b": "2 BHK",
+    "दो bi": "2 BHK",
+    "दो b": "2 BHK",
+    "do bi": "2 BHK",
+    "don bi": "2 BHK",
+    "to un": "2",
+    "to un bhk": "2 BHK",
+    "to un bhi": "2 BHK",
+    # Stations and transit phonetic fixes
+    "session": "station",
+    "सेशन": "station",
+    "सेकशन": "station",
+    "सेशल": "station",
+    "दोमबली": "Dombivli",
+    "दोमबवली": "Dombivli",
+    "डोमबली": "Dombivli",
+    "डोमबिवली": "Dombivli",
+    "कलान": "Kalyan",
+    "कलयाण": "Kalyan",
+    "काल्यान": "Kalyan",
     "दोन बीएचके": "2 BHK",
     "दोन bhk": "2 BHK",
     "दोन बी एच के": "2 BHK",
@@ -3064,7 +3117,7 @@ def prewarm_fnc(proc: JobProcess):
         language=default_stt_lang,
         model="nova-3",
         endpointing_ms=endpointing_ms,
-        utterance_end_ms=None,
+        utterance_end_ms=1000,
         smart_format=True,
         punctuate=True,
         filler_words=False,
@@ -3076,13 +3129,13 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms min speech, 350ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.48 threshold filters line static/breathing, 180ms min speech, 450ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.08,
-        activation_threshold=0.38,
-        deactivation_threshold=0.28,
+        min_silence_duration=0.45,
+        min_speech_duration=0.18,
+        activation_threshold=0.48,
+        deactivation_threshold=0.35,
         prefix_padding_duration=0.40,
         sample_rate=16000
     )
@@ -3478,7 +3531,7 @@ async def entrypoint(ctx: JobContext):
             language=default_stt_lang,
             model="nova-3",
             endpointing_ms=endpointing_ms,
-            utterance_end_ms=None,
+            utterance_end_ms=1000,
             smart_format=True,
             punctuate=True,
             filler_words=False,
@@ -4285,16 +4338,16 @@ async def entrypoint(ctx: JobContext):
                 caller_is_speaking = True
                 t_user_stop = 0.0  # Reset so mid-sentence pauses never inflate STT latency
                 t_user_speaking_start = time.perf_counter()
-                t_last_activity = time.time()
-                last_prompt_time = time.time()
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
                 caller_is_speaking = False
                 t_user_stop = time.perf_counter()
                 intro_finished = True
-                t_last_activity = time.time()
-                last_prompt_time = time.time()
-                logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
+                duration = time.perf_counter() - t_user_speaking_start if t_user_speaking_start > 0 else 0.0
+                if duration >= 0.18:
+                    t_last_activity = time.time()
+                    last_prompt_time = time.time()
+                logger.info(f"🛑 [VAD] User stopped speaking (spoke {duration:.2f}s)! STT and turn pipeline proceeding.")
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
@@ -4913,13 +4966,13 @@ async def entrypoint(ctx: JobContext):
             if _hangup_scheduled:
                 break
 
-            # 3. Say prompt after 12.0 seconds interval of genuine silence (Natural voice check)
-            if (now - last_prompt_time >= 12.0) and (silence_duration >= 12.0):
+            # 3. Say prompt after 8.0 seconds interval of genuine silence (Natural voice check)
+            if (now - last_prompt_time >= 8.0) and (silence_duration >= 8.0):
                 if _hangup_scheduled:
                     break
                 last_prompt_time = now
                 t_last_activity = now
-                logger.info(f"⏳ [SILENCE PROMPT] 12.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 8.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
                 
                 if silence_prompt_count == 0 and not caller_has_spoken:
                     prompt_text = "हॅलो?"
