@@ -569,17 +569,17 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         "अठरा": 18, "अठारह": 18, "athra": 18, "atharah": 18, "eighteen": 18, "18": 18, "१८": 18, "18th": 18,
         "एकोणीस": 19, "उन्नीस": 19, "ekonis": 19, "unnis": 19, "nineteen": 19, "19": 19, "१९": 19, "19th": 19,
         "वीस": 20, "बीस": 20, "vis": 20, "bees": 20, "twenty": 20, "20": 20, "२०": 20, "20th": 20,
-        "एकवीस": 21, "इक्कीस": 21, "इककीस": 21, "ekvis": 21, "ikkis": 21, "twenty one": 21, "21": 21, "२१": 21, "21st": 21,
-        "बावीस": 22, "बाईस": 22, "bavis": 22, "baees": 22, "twenty two": 22, "22": 22, "२२": 22, "22nd": 22,
-        "तेवीस": 23, "तेईस": 23, "tevis": 23, "teees": 23, "twenty three": 23, "23": 23, "२३": 23, "23rd": 23,
-        "चोवीस": 24, "चौबीस": 24, "chovis": 24, "chaubis": 24, "twenty four": 24, "24": 24, "२४": 24, "24th": 24,
-        "पंचवीस": 25, "पच्चीस": 25, "panchvis": 25, "pachchis": 25, "twenty five": 25, "25": 25, "२५": 25, "25th": 25,
-        "सव्वीस": 26, "छब्बीस": 26, "savvis": 26, "chhabhis": 26, "twenty six": 26, "26": 26, "२६": 26, "26th": 26,
-        "सत्तावीस": 27, "सत्ताईस": 27, "sattavis": 27, "sattaees": 27, "twenty seven": 27, "27": 27, "२७": 27, "27th": 27,
-        "अठ्ठावीस": 28, "अट्ठाईस": 28, "atthavis": 28, "atthaees": 28, "twenty eight": 28, "28": 28, "२८": 28, "28th": 28,
-        "एकोणतीस": 29, "उनतीस": 29, "ekontis": 29, "untis": 29, "twenty nine": 29, "29": 29, "२९": 29, "29th": 29,
-        "तीस": 30, "tis": 30, "thirty": 30, "30": 30, "३०": 30, "30th": 30,
-        "एकतीस": 31, "इकत्तीस": 31, "ektis": 31, "ikkatis": 31, "thirty one": 31, "31": 31, "३१": 31, "31st": 31,
+        "एकवीस": 21, "इक्कीस": 21, "इककीस": 21, "इकीस": 21, "ekvis": 21, "ikkis": 21, "twenty one": 21, "21": 21, "२१": 21, "21st": 21,
+        "बावीस": 22, "बाईस": 22, "बाइस": 22, "बाएस": 22, "baais": 22, "bais": 22, "bavis": 22, "baees": 22, "twenty two": 22, "22": 22, "२२": 22, "22nd": 22,
+        "तेवीस": 23, "तेईस": 23, "तेइस": 23, "tevis": 23, "teees": 23, "teis": 23, "twenty three": 23, "23": 23, "२३": 23, "23rd": 23,
+        "चोवीस": 24, "चौबीस": 24, "चौबिस": 24, "chovis": 24, "chaubis": 24, "twenty four": 24, "24": 24, "२४": 24, "24th": 24,
+        "पंचवीस": 25, "पच्चीस": 25, "पच्चिस": 25, "पचिस": 25, "panchvis": 25, "pachchis": 25, "twenty five": 25, "25": 25, "२५": 25, "25th": 25,
+        "सव्वीस": 26, "छब्बीस": 26, "छब्बिस": 26, "छबिस": 26, "savvis": 26, "chhabhis": 26, "twenty six": 26, "26": 26, "२६": 26, "26th": 26,
+        "सत्तावीस": 27, "सत्ताईस": 27, "सत्तैस": 27, "सताइस": 27, "sattavis": 27, "sattaees": 27, "twenty seven": 27, "27": 27, "२७": 27, "27th": 27,
+        "अठ्ठावीस": 28, "अट्ठाईस": 28, "अठ्ठाइस": 28, "अठाइस": 28, "atthavis": 28, "atthaees": 28, "twenty eight": 28, "28": 28, "२८": 28, "28th": 28,
+        "एकोणतीस": 29, "उनतीस": 29, "उन्तीस": 29, "उन्नतीस": 29, "ekontis": 29, "untis": 29, "twenty nine": 29, "29": 29, "२९": 29, "29th": 29,
+        "तीस": 30, "तिस": 30, "tis": 30, "thirty": 30, "30": 30, "३०": 30, "30th": 30,
+        "एकतीस": 31, "इकत्तीस": 31, "इकतीस": 31, "ektis": 31, "ikkatis": 31, "thirty one": 31, "31": 31, "३१": 31, "31st": 31,
     }
 
     detected_date_str = None
@@ -712,14 +712,14 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
             'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
             'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12,
             'ek': 1, 'do': 2, 'don': 2, 'teen': 3, 'char': 4, 'paanch': 5, 'pach': 5,
-            'chha': 6, 'saha': 6, 'saat': 7, 'aath': 8, 'nau': 9, 'das': 10, 'daha': 10,
+            'chha': 6, 'saha': 6, 'saat': 7, 'aath': 8, 'nau': 9, 'das': 10, 'daha': 10, 'dha': 10,
             'gyarah': 11, 'akra': 11, 'bara': 12, 'barah': 12,
             'एक': 1, 'दोन': 2, 'दो': 2, 'तीन': 3, 'चार': 4, 'पाच': 5, 'पाँच': 5,
-            'सहा': 6, 'छह': 6, 'सात': 7, 'आठ': 8, 'नऊ': 9, 'नौ': 9, 'दहा': 10, 'दस': 10,
+            'सहा': 6, 'छह': 6, 'सात': 7, 'आठ': 8, 'नऊ': 9, 'नौ': 9, 'दहा': 10, 'दस': 10, 'दाह': 10,
             'अकरा': 11, 'अकारा': 11, 'अकारावास': 11, 'अकरावास': 11, 'अकरावाजता': 11, 'अकरावसथा': 11, 'ग्यारह': 11,
             'बारा': 12, 'बारावाजता': 12, 'बारावास': 12, 'बारावासता': 12, 'बारह': 12,
             'दोनवाजता': 2, 'दोनवास': 2, 'दोनवासता': 2, 'तीनवाजता': 3, 'चारवाजता': 4, 'पाचवाजता': 5, 'सहावाजता': 6,
-            'दाहवासता': 10, 'दहावास': 10, 'दहावाजता': 10,
+            'दाहवासता': 10, 'दाहवासतम': 10, 'दाहवाजता': 10, 'दहावास': 10, 'दहावाजता': 10,
             '१': 1, '२': 2, '३': 3, '४': 4, '५': 5, '६': 6, '७': 7, '८': 8, '९': 9, '१०': 10, '११': 11, '१२': 12
         }
 
@@ -740,7 +740,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         if not detected_time:
             standalone_times = {
                 "अकरावसथा": 11, "अकरावाजता": 11, "अकरावास": 11, "अकारावास": 11,
-                "दाहवासता": 10, "दहावासता": 10, "दहावाजता": 10, "दहावास": 10,
+                "दाहवासता": 10, "दाहवासतम": 10, "दाहवाजता": 10, "दहावासता": 10, "दहावाजता": 10, "दहावास": 10,
                 "बारावाजता": 12, "बारावासता": 12, "बारावास": 12,
                 "दोनवाजता": 2, "दोनवासता": 2, "दोनवास": 2,
                 "तीनवाजता": 3, "चारवाजता": 4, "पाचवाजता": 5, "सहावाजता": 6
@@ -761,7 +761,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         # Note: Time unit suffix is STRICTLY MANDATORY (no '?') to prevent matching property types like '2 BHK' or 'एक'
         # re.finditer takes the LAST match so caller self-corrections like "दो बज, बारह बज" correctly pick 12!
         if not detected_time:
-            pattern = r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|अकरा|अकारा|अकारावास|अकरावास|अकरावसथा|ग्यारह|बारा|बारह|दाहवासता|दहावास|दहावाजता|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|वाजे|वास|am|pm|o\'clock)(?:$|[^\w\u0900-\u097F])'
+            pattern = r'(?:^|[^\w\u0900-\u097F])(1[0-2]|[1-9]|एक|दोन|दो|तीन|चार|पाच|पाँच|सहा|छह|सात|आठ|नऊ|नौ|दहा|दस|दाह|dha|अकरा|अकारा|अकारावास|अकरावास|अकरावसथा|ग्यारह|बारा|बारह|दाहवासता|दाहवासतम|दहावास|दहावाजता|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(baje|vajta|vaje|बजे|बज|वाजता|वाजे|वास|am|pm|o\'clock)(?:$|[^\w\u0900-\u097F])'
             matches = list(re.finditer(pattern, text_for_time))
             if matches:
                 last_m = matches[-1]
@@ -1297,6 +1297,9 @@ class PriyaRealEstateAgent(Agent):
 
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
                 if len(user_msgs) == 1:
+                    if getattr(self, "intro_delivered", False) and getattr(session, "agent_state", None) == "speaking":
+                        logger.info(f"⚡ [TURN 1 ALREADY PLAYING] Introduction pitch already initiated by instant accelerator for '{raw_text}'.")
+                        return
 
                     is_not_interested = (
                         any(kw in clean_norm for kw in [
@@ -1619,10 +1622,16 @@ class PriyaRealEstateAgent(Agent):
                         self.site_visit_time = detected_time
                         logger.info(f"⚡ [FAST-PATH TIME SELECTED: {detected_time}] Asking for preferred day (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            time_phrase = detected_time if "बजे" in detected_time else f"{detected_time} बजे"
+                            if detected_time in ["सुबह", "दोपहर", "शाम"]:
+                                time_phrase = detected_time
+                            else:
+                                time_phrase = detected_time if "बजे" in detected_time else f"{detected_time} बजे"
                             yield speak(f"बिल्कुल, {time_phrase} कौन से दिन या तारीख को आना सुविधाजनक रहेगा — आज, कल या कौन सी तारीख?")
                         else:
-                            time_phrase = detected_time if "वाजता" in detected_time else f"{detected_time} वाजता"
+                            if detected_time in ["सकाळी", "दुपारी", "संध्याकाळी"]:
+                                time_phrase = detected_time
+                            else:
+                                time_phrase = detected_time if "वाजता" in detected_time else f"{detected_time} वाजता"
                             yield speak(f"नक्कीच, {time_phrase} कोणत्या दिवशी किंवा तारखेला येणं सोयीचं पडेल — आज, उद्या किंवा कोणती तारीख?")
                         return
 
@@ -2064,7 +2073,12 @@ class PriyaRealEstateAgent(Agent):
             return
 
         # Guarantee ZERO DEAD AIR: If no chunks were spoken, ask for clarification immediately!
-        if not collected_chunks:
+        # Strictly DO NOT prompt clarification if site visit was scheduled or awaiting confirmation!
+        if (
+            not collected_chunks
+            and not getattr(self, "site_visit_scheduled", False)
+            and not getattr(self, "awaiting_visit_confirmation", False)
+        ):
             logger.info(f"⚡ [NO CHUNKS / UNINTELLIGIBLE] LLM produced no spoken speech for '{raw_text}'. Prompting polite clarification...")
             if ACTIVE_TTS_LANGUAGE == "hi":
                 fb = "माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?"
@@ -2090,6 +2104,8 @@ class PriyaRealEstateAgent(Agent):
         flat_type: str = "2BHK",
         notes: str = ""
     ) -> str:
+        self.site_visit_scheduled = True
+        self.awaiting_visit_confirmation = False
         logger.info("=" * 60)
         logger.info("🏠 [HINDI REAL ESTATE SITE VISIT BOOKED]")
         logger.info(f"👤 Client Name     : {customer_name}")
@@ -2722,6 +2738,13 @@ STT_REPLACE = {
     "साकारी अकरा": "सकाळी 11 वाजता",
     "साकारी दहा": "सकाळी 10 वाजता",
     "साकारी दाह": "सकाळी 10 वाजता",
+    "दाह": "10",
+    "dha": "10",
+    "dha vajta": "10 वाजता",
+    "दाहवासतम": "10 वाजता",
+    "दाह वाजता": "10 वाजता",
+    "बाइस तारीख": "22 तारीख",
+    "बाइस": "22",
     "बारावासता": "12 वाजता",
     "बारावास": "12 वाजता",
     "दोनवासता": "2 वाजता",
@@ -4096,6 +4119,42 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
+
+                # TURN 1 INSTANT ACCELERATOR:
+                # Fires immediately when caller finishes speaking their initial greeting (e.g. "Hello")
+                # Eliminates the 3-4s Deepgram STT endpointing delay on Turn 1!
+                if not intro_delivered and (getattr(session, "agent_state", None) != "speaking") and caller_has_spoken:
+                    intro_delivered = True
+                    if agent:
+                        agent.intro_delivered = True
+                    clean_tr = (latest_caller_transcript or "").strip().lower()
+                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
+                    logger.info(f"⚡ [TURN 1 INSTANT ACCELERATOR] Caller finished speaking greeting '{clean_tr}'! Speaking introduction in {active_lang} (<200ms)!")
+
+                    if any(w in clean_tr for w in ["2 bhk", "2bhk", "don", "दोन", "दो", "two", "dusra", "second"]):
+                        if agent: agent.selected_bhk = "2 BHK"
+                        pitch = (
+                            "2 BHK 45 लाख से शुरू होता है। यह G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool और clubhouse जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
+                            if active_lang == "hi" else
+                            "2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही G+22 मजली भव्य इमारत असून यात gym, swimming pool आणि clubhouse अशा 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?"
+                        )
+                    elif any(w in clean_tr for w in ["1 bhk", "1bhk", "one", "ek", "एक", "पहिला", "first"]):
+                        if agent: agent.selected_bhk = "1 BHK"
+                        pitch = (
+                            "1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख down payment और easy bank home loan सुविधा उपलब्ध है। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
+                            if active_lang == "hi" else
+                            "1 BHK फ्लॅट 30 लाखांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख down payment आणि easy bank home loan ची सुविधा उपलब्ध आहे. आपण ready-to-move पाहताय की under-construction चालेल?"
+                        )
+                    elif any(w in clean_tr for w in ["not interested", "nahi chahiye", "wrong number", "nako", "garaj nahi"]):
+                        pitch = DECLINE_SCRIPT_HI if active_lang == "hi" else DECLINE_SCRIPT_MR
+                    else:
+                        pitch = (
+                            "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
+                            if active_lang == "hi" else
+                            "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
+                        )
+                    record_dialogue_turn("agent", pitch)
+                    session.say(pitch, allow_interruptions=True)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
