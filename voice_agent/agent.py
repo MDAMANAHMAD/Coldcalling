@@ -471,13 +471,11 @@ LANGUAGE_LOCKED_EXPLICITLY = False
 
 def resolve_language(transcript: str, current_lang: str = "mr") -> str:
     """
-    DYNAMIC MULTILINGUAL SWITCHING & STICKY LOCKING:
+    STRICT MULTILINGUAL SWITCHING:
     - Default is Marathi ('mr').
-    - If caller explicitly requests Hindi ("हिंदी में बोलो", "hindi mein baat karo", etc.) -> lock to 'hi'.
-    - If caller explicitly requests Marathi ("मराठीत बोला", "marathi bola", etc.) -> lock to 'mr'.
-    - If caller explicitly requests English ("speak in english", etc.) -> lock to 'en'.
-    - Once explicitly requested, the agent locks to that language and NEVER drifts or mixes languages.
-    - Word boundary regex ensures substrings (e.g. 'aap' in 'aapan', 'hum' in 'shubham') never cause false triggers.
+    - Only switch when the caller gives an EXPLICIT instruction or signal.
+    - Examples: "क्या आप हिंदी में बात कर सकते हैं", "hindi mein baat karo", "marathit bola", "can you speak english".
+    - NEVER switch automatically on casual words like "sir", "batao", "ek minute", or individual Hindi/Marathi words.
     """
     global LANGUAGE_LOCKED_EXPLICITLY
     text = transcript.strip().lower()
@@ -485,7 +483,8 @@ def resolve_language(transcript: str, current_lang: str = "mr") -> str:
     # 1. Explicit request to switch to English
     english_explicit = [
         r'\bin english\b', r'\benglish please\b', r'\bcan you speak english\b', r'\bcan we speak english\b',
-        r'\benglish mein\b', r'\benglish me\b', r'\benglish madhe\b', r'\benglish bola\b', r'\bइंग्लिश\b'
+        r'\benglish mein\b', r'\benglish me\b', r'\benglish madhe\b', r'\benglish bola\b', r'\bइंग्लिश\b',
+        r'\bspeak in english\b', r'\btalk in english\b', r'\bspeak english\b', r'\benglish\b'
     ]
     if any(re.search(pat, text) for pat in english_explicit):
         LANGUAGE_LOCKED_EXPLICITLY = True
@@ -494,8 +493,11 @@ def resolve_language(transcript: str, current_lang: str = "mr") -> str:
     # 2. Explicit request to switch to Hindi
     hindi_explicit = [
         r'\bhindi mein\b', r'\bhindi me\b', r'\bhindi please\b', r'\bspeak in hindi\b',
-        r'\btalk in hindi\b', r'\bhindi madhe bola\b', r'\bहिंदी में बोलो\b', r'\bहिंदी में बात\b',
-        r'\bहिंदी\b', r'\bhindi boliye\b', r'\bhindi bol\b'
+        r'\btalk in hindi\b', r'\bhindi madhe bola\b', r'\bhindi madhe\b', r'\bहिंदी में बोलो\b',
+        r'\bहिंदी में बात\b', r'\bहिंदी में\b', r'\bहिंदी मे\b', r'\bहिंदी बोला\b', r'\bहिंदी बोलिए\b',
+        r'\bहिंदी में बताइए\b', r'\bहिंदी बात\b', r'\bhindi boliye\b', r'\bhindi bol\b',
+        r'\bkya aap hindi\b', r'\bhindi aati hai\b', r'\bhindi bolte ho\b', r'\bhindi aati\b',
+        r'\bhindi chalega\b', r'\bहिंदी आती\b', r'\bहिंदी\b', r'\bhindi\b'
     ]
     if any(re.search(pat, text) for pat in hindi_explicit):
         LANGUAGE_LOCKED_EXPLICITLY = True
@@ -506,36 +508,14 @@ def resolve_language(transcript: str, current_lang: str = "mr") -> str:
         r'\bmarathi madhe\b', r'\bmarathit bola\b', r'\bmarathi bola\b', r'\bmarathi madhun\b',
         r'\bmarathi yete ka\b', r'\bmarathit sanga\b', r'\bmarathi sanga\b', r'\bmarathi please\b',
         r'\bmarathi mein\b', r'\bmarathi me\b', r'\bmarathi bhasha\b', r'\bमराठीत बोला\b',
-        r'\bमराठी बोला\b', r'\bमराठी मध्ये बोला\b', r'\bमराठी\b'
+        r'\bमराठी बोला\b', r'\bमराठी मध्ये बोला\b', r'\bमराठी\b', r'\bमराठीत\b', r'\bमराठी मध्ये\b',
+        r'\bmarathi\b'
     ]
     if any(re.search(pat, text) for pat in marathi_explicit):
         LANGUAGE_LOCKED_EXPLICITLY = True
         return 'mr'
 
-    # If the user explicitly locked the language, stick firmly to it without drifting
-    if LANGUAGE_LOCKED_EXPLICITLY:
-        return current_lang
-
-    # Natural language inference using whole-word boundary matching (only if not explicitly locked):
-    if current_lang == "mr":
-        hi_distinctive_en = ["kya", "hum", "aap", "baat", "batao", "boliye", "chahiye", "kaun", "kidhar", "kahan", "kitna", "bataiye", "hoga"]
-        hi_distinctive_deva = [
-            "क्या", "कया", "है", "ह", "का", "की", "के", "कितना", "कितनी", "बताइए", "बताओ", "चाहिए",
-            "छोटा", "बड़ा", "वाला", "वाली", "हम", "आप", "बात", "किधर", "कहाँ", "होगा", "सकते", "सकती", "सकता"
-        ]
-        if any(re.search(rf"\b{w}\b", text) for w in hi_distinctive_en) or any(w in text for w in hi_distinctive_deva):
-            return 'hi'
-        if any(re.search(rf"\b{w}\b", text) for w in ["looking for", "tell me", "what is the price", "how much", "send details"]):
-            return 'en'
-    elif current_lang == "hi":
-        mr_distinctive_en = ["aamhi", "pahije", "kiti", "kuthe", "sangto", "baghto", "dakhva", "mahiti", "boltoy", "bolte", "kay", "aapan", "kashe", "kadhi"]
-        mr_distinctive_deva = [
-            "आम्ही", "पाहिजे", "किती", "कुठे", "सांगा", "दाखवा", "माहिती", "काय", "आपण", "कधी",
-            "चालेल", "दोन", "नाही", "होय", "सांगाल", "आहे", "आहात", "शोधत", "बोलतोय"
-        ]
-        if any(re.search(rf"\b{w}\b", text) for w in mr_distinctive_en) or any(w in text for w in mr_distinctive_deva):
-            return 'mr'
-
+    # STRICT RULE: Maintain current language firmly without drifting on casual words
     return current_lang
 
 
@@ -622,6 +602,11 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     if not m_date:
         prefix_date_pat = r'(?:^|[^\w\u0900-\u097F])(?:tarikh|tarik|tareekh|तारीख|तारीखेला|दिनांक|date)\s*(' + '|'.join(re.escape(k) for k in date_keys_sorted) + r')(?:$|[^\w\u0900-\u097F])'
         m_date = re.search(prefix_date_pat, text)
+    if not m_date:
+        # Match standalone dates from 13 to 31 (e.g. "बावीस", "२२", "22", "बावीसला", "22ला") even when 'tarikh' is omitted
+        standalone_high_dates = [k for k in date_keys_sorted if date_words_1_to_31[k] >= 13 and (not k.isdigit() or 13 <= int(k) <= 31)]
+        standalone_pat = r'(?:^|[^\w\u0900-\u097F])(' + '|'.join(re.escape(k) for k in standalone_high_dates) + r')(?:ला|roji|ko)?(?:$|[^\w\u0900-\u097F])'
+        m_date = re.search(standalone_pat, text)
 
     if m_date:
         raw_val = m_date.group(1).strip()
@@ -1093,6 +1078,10 @@ class PriyaRealEstateAgent(Agent):
         # completely eliminating LLM round-trip delays (saving 1.2s-2.4s) while maintaining full Gemini intelligence fallback.
         def speak(text: str) -> str:
             clean = text.strip()
+            # Clean duplicate time/date words (e.g. "वाजता वाजता", "बजे बजे", "तारीख तारीख")
+            clean = re.sub(r'(\bवाजता\s*)+वाजता\b', 'वाजता', clean)
+            clean = re.sub(r'(\bबजे\s*)+बजे\b', 'बजे', clean)
+            clean = re.sub(r'(\bतारीख\s*)+तारीख\b', 'तारीख', clean)
             if clean and not clean.endswith(('.', '?', '!', '।')):
                 clean += '.'
             if self._on_speech_captured:
@@ -1449,9 +1438,11 @@ class PriyaRealEstateAgent(Agent):
                             if self._hangup_fnc:
                                 self._hangup_fnc(wait_for_speech=True, delay_seconds=0.8)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"मैंने आपकी {day} को {t_val} साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। बहुत-बहुत धन्यवाद, नमस्ते.")
+                                time_phrase = t_val if "बजे" in t_val else f"{t_val} बजे"
+                                yield speak(f"मैंने आपकी {day} को {time_phrase} साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। बहुत-बहुत धन्यवाद, नमस्ते.")
                             else:
-                                yield speak(f"मी आपली {day} रोजी {t_val} वाजता साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. खूप खूप धन्यवाद, नमस्कार.")
+                                time_phrase = t_val if "वाजता" in t_val else f"{t_val} वाजता"
+                                yield speak(f"मी आपली {day} रोजी {time_phrase} साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. खूप खूप धन्यवाद, नमस्कार.")
                             return
                         elif self.site_visit_day and not self.site_visit_time:
                             if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1577,15 +1568,19 @@ class PriyaRealEstateAgent(Agent):
                                 day = self.site_visit_day or "सांगितलेल्या दिवशी"
                                 t_val = self.site_visit_time or "ठरलेल्या वेळी"
                                 if ACTIVE_TTS_LANGUAGE == "hi":
-                                    yield speak(f"जी, आवाज़ आ रही है! आपकी {day} को {t_val} साईट विजिट कन्फर्म हो चुकी है। सारी जानकारी व्हाट्सऐप पर भेज दी गई है। बहुत-बहुत धन्यवाद!")
+                                    time_phrase = t_val if "बजे" in t_val else f"{t_val} बजे"
+                                    yield speak(f"जी, आवाज़ आ रही है! आपकी {day} को {time_phrase} साईट विजिट कन्फर्म हो चुकी है। सारी जानकारी व्हाट्सऐप पर भेज दी गई है। बहुत-बहुत धन्यवाद!")
                                 else:
-                                    yield speak(f"हो, आवाज येतोय! आपली {day} रोजी {t_val} वाजता साईट व्हिजिट निश्चित झाली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवली आहे. खूप खूप धन्यवाद!")
+                                    time_phrase = t_val if "वाजता" in t_val else f"{t_val} वाजता"
+                                    yield speak(f"हो, आवाज येतोय! आपली {day} रोजी {time_phrase} साईट व्हिजिट निश्चित झाली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवली आहे. खूप खूप धन्यवाद!")
                                 return
                             elif getattr(self, "awaiting_visit_confirmation", False) and self.site_visit_day and self.site_visit_time:
                                 if ACTIVE_TTS_LANGUAGE == "hi":
-                                    yield speak(f"जी, आवाज़ आ रही है! क्या {self.site_visit_day} को {self.site_visit_time} आपकी साईट विजिट कन्फर्म कर दूँ?")
+                                    time_phrase = self.site_visit_time if "बजे" in self.site_visit_time else f"{self.site_visit_time} बजे"
+                                    yield speak(f"जी, आवाज़ आ रही है! क्या {self.site_visit_day} को {time_phrase} आपकी साईट विजिट कन्फर्म कर दूँ?")
                                 else:
-                                    yield speak(f"हो, आवाज येतोय! आपण {self.site_visit_day} रोजी {self.site_visit_time} वाजता साईट व्हिजिटसाठी येत आहात, हे कन्फर्म करू का?")
+                                    time_phrase = self.site_visit_time if "वाजता" in self.site_visit_time else f"{self.site_visit_time} वाजता"
+                                    yield speak(f"हो, आवाज येतोय! आपण {self.site_visit_day} रोजी {time_phrase} साईट व्हिजिटसाठी येत आहात, हे कन्फर्म करू का?")
                                 return
                             elif self.selected_bhk is None:
                                 if ACTIVE_TTS_LANGUAGE == "hi":
@@ -2969,9 +2964,96 @@ STT_REPLACE = {
     "dha": "10",
     "dha vajta": "10 वाजता",
     "दाहवासतम": "10 वाजता",
-    "दाह वाजता": "10 वाजता",
+    # Site Visit Phonetic & STT Misinterpretation Fixes
+    "size builget": "site visit",
+    "buy size": "site visit",
+    "by size": "site visit",
+    "size visit": "site visit",
+    "size buil": "site visit",
+    "site wisit": "site visit",
+    "site whight": "site visit",
+    "site witchest": "site visit",
+    "fright visit": "site visit",
+    "fit bisis": "site visit",
+    "साईज व्हिजिट": "site visit",
+    "साईट व्हिजिट": "site visit",
+    "साईट व्हीझिट": "site visit",
+    "साईट विझिट": "site visit",
+    "साईड व्हिजिट": "site visit",
+    "साईड व्हीझिट": "site visit",
+    "साईड विझिट": "site visit",
+    "साईट व्हिसिट": "site visit",
+    "साईट व्हिसीट": "site visit",
+    "साईड व्हिसिट": "site visit",
+    "साईड व्हिसीट": "site visit",
+    "साईट व्हिजिटला": "site visit ला",
+    "साईड व्हिजिटला": "site visit ला",
+    "साईज व्हिजिटला": "site visit ला",
+    "साईट व्हिझिटला": "site visit ला",
+    "साईड व्हिझिटला": "site visit ला",
+    "साईटला": "site visit ला",
+    "साईडला": "site visit ला",
+
+    # Marathi standalone dates & numbers without 'तारीख'
+    "बावीस तारीख": "22 तारीख",
+    "बाविस तारीख": "22 तारीख",
     "बाइस तारीख": "22 तारीख",
-    "बाइस": "22",
+    "बावीस ला": "22 तारखेला",
+    "बावीसला": "22 तारखेला",
+    "बावीस": "22 तारीख",
+    "बाविस": "22 तारीख",
+    "बाइस": "22 तारीख",
+    "तेवीस तारीख": "23 तारीख",
+    "तेविस तारीख": "23 तारीख",
+    "तेवीस ला": "23 तारखेला",
+    "तेवीसला": "23 तारखेला",
+    "तेवीस": "23 तारीख",
+    "तेविस": "23 तारीख",
+    "चोवीस तारीख": "24 तारीख",
+    "चोविस तारीख": "24 तारीख",
+    "चोवीस ला": "24 तारखेला",
+    "चोवीसला": "24 तारखेला",
+    "चोवीस": "24 तारीख",
+    "चोविस": "24 तारीख",
+    "पंचवीस तारीख": "25 तारीख",
+    "पंचविस तारीख": "25 तारीख",
+    "पंचवीस ला": "25 तारखेला",
+    "पंचवीसला": "25 तारखेला",
+    "पंचवीस": "25 तारीख",
+    "पंचविस": "25 तारीख",
+    "सव्वीस तारीख": "26 तारीख",
+    "सव्विस तारीख": "26 तारीख",
+    "सव्वीस ला": "26 तारखेला",
+    "सव्वीसला": "26 तारखेला",
+    "सव्वीस": "26 तारीख",
+    "सव्विस": "26 तारीख",
+    "सत्तावीस तारीख": "27 तारीख",
+    "सत्ताविस तारीख": "27 तारीख",
+    "सत्तावीस ला": "27 तारखेला",
+    "सत्तावीसला": "27 तारखेला",
+    "सत्तावीस": "27 तारीख",
+    "सत्ताविस": "27 तारीख",
+    "अठ्ठावीस तारीख": "28 तारीख",
+    "अठ्ठाविस तारीख": "28 तारीख",
+    "अठ्ठावीस ला": "28 तारखेला",
+    "अठ्ठावीसला": "28 तारखेला",
+    "अठ्ठावीस": "28 तारीख",
+    "अठ्ठाविस": "28 तारीख",
+    "एकोणतीस तारीख": "29 तारीख",
+    "एकोनतीस तारीख": "29 तारीख",
+    "एकोणतीस": "29 तारीख",
+    "एकोनतीस": "29 तारीख",
+    "एकतीस तारीख": "31 तारीख",
+    "इकतीस तारीख": "31 तारीख",
+    "इकतीस": "31 तारीख",
+    "एकतीस": "31 तारीख",
+    "एकवीस तारीख": "21 तारीख",
+    "एकवीस ला": "21 तारखेला",
+    "एकवीसला": "21 तारखेला",
+    "एकवीस": "21 तारीख",
+    "वीस तारीख": "20 तारीख",
+    "वीस ला": "20 तारखेला",
+    "वीसला": "20 तारखेला",
     "बारावासता": "12 वाजता",
     "बारावास": "12 वाजता",
     "दोनवासता": "2 वाजता",
@@ -3064,6 +3146,10 @@ def apply_stt_replacements(text: str) -> str:
     for k, v in STT_REPLACE.items():
         if k in res:
             res = res.replace(k, v)
+    # Sanitize accidental double date/time tokens
+    res = re.sub(r'(\bतारीख\s*)+तारीख\b', 'तारीख', res)
+    res = re.sub(r'(\bवाजता\s*)+वाजता\b', 'वाजता', res)
+    res = re.sub(r'(\bबजे\s*)+बजे\b', 'बजे', res)
     return res
 
 
@@ -3261,16 +3347,25 @@ def log_system_diagnostics():
 # ==============================================================================
 # 3.5 POST-CALL INTELLIGENCE CLASSIFIER (Zero Live Latency Penalty)
 # ==============================================================================
+def normalize_3_category_outcome(raw_outcome: str) -> str:
+    """Strictly normalizes any call outcome to exactly one of 3 categories: 'site visit', 'interested', 'not interested'."""
+    val = (raw_outcome or "").strip().lower()
+    if "visit" in val or "scheduled" in val:
+        return "site visit"
+    if any(k in val for k in ["not", "decline", "cancel", "drop", "mismatch", "wrong", "off-topic", "nako", "nahi", "hangup", "hung", "cut", "no"]):
+        return "not interested"
+    if any(k in val for k in ["interest", "inquiry", "completed", "plan", "future"]):
+        return "interested"
+    return "not interested"
+
+
 def classify_call_intelligence(formatted_transcript: str, dialogue: list, customer_name: str) -> dict:
     """
     Enterprise Post-Call Intelligence Classifier.
-    Accurately classifies real-estate telephone calls into:
-    - Site Visit Scheduled
-    - Interested
-    - Not Interested
-    - Location Mismatch (Kalyan)
-    - Short / Call Dropped
-    - Inquiry Completed
+    Accurately classifies real-estate telephone calls into STRICTLY THREE categories:
+    1. 'site visit' - Exact details (day/time) agreed and site visit confirmed.
+    2. 'interested' - Showed positive interest, asked questions about pricing/amenities/brochure without booking.
+    3. 'not interested' - Declined, said no, hung up, not interested, or early drop.
     
     Supports Hindi, Devanagari Hindi, Marathi, and Hinglish.
     Uses Gemini (gemini-3.5-flash-lite) with Groq fallback and multilingual regex fallback.
@@ -3291,18 +3386,14 @@ Analyze this recorded telephone conversation between Gayatri (AI Property Adviso
 {formatted_transcript}
 --- END TRANSCRIPT ---
 
-STRICT CLASSIFICATION RULES:
-1. "Not Interested": Customer says no, nahi chahiye, not interested, don't call, wrong number, not looking, budget mismatch, refuses site visit/details, or persistently goes off-topic/trolls leading to call termination.
-2. "Future Plan / Need Afterwards": Customer is busy right now, says call later, after 2-3 months, next year, exploring for the future, or asks to follow up later.
-3. "Site Visit Scheduled": Customer EXPLICITLY agreed or confirmed a day/time (e.g., Sunday, tomorrow, weekend) to visit Sai Complex Dombivli East.
-4. "Interested": Customer asked about 1/2 BHK pricing, carpet area, possession, requested WhatsApp brochure, or showed positive interest without booking a visit.
-5. "Location Mismatch (Kalyan)": Customer specifically wanted Kalyan or another city where the project is not located.
-6. "Short / Call Dropped": Call ended within 1-2 short turns without meaningful discussion.
-7. "Inquiry Completed": Customer asked questions but did not confirm interest or book a visit.
+STRICT CLASSIFICATION: You MUST classify the outcome into EXACTLY ONE of these 3 categories:
+1. "site visit": Customer gave exact details (day/date/time) and agreed to or confirmed a site visit to Sai Garden Dombivli East.
+2. "interested": Customer engaged, showed genuine interest, asked questions about pricing, flats, amenities, possession, or requested WhatsApp brochure without booking a visit.
+3. "not interested": Customer declined, said no, nahi chahiye, not interested, wrong number, hung up, cut call early, or was looking for a completely different city.
 
 Respond ONLY with valid JSON:
 {{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Future Plan / Need Afterwards" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "outcome": "site visit" | "interested" | "not interested",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "Concise 1-sentence executive summary in English",
   "detectedQuestions": ["Topic 1", "Topic 2"]
@@ -3316,12 +3407,10 @@ Respond ONLY with valid JSON:
                     )
                 )
                 data = json.loads(resp.text)
-                if data.get("outcome") in [
-                    "Site Visit Scheduled", "Interested", "Future Plan / Need Afterwards", "Not Interested", 
-                    "Location Mismatch (Kalyan)", "Short / Call Dropped", "Inquiry Completed"
-                ]:
-                    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini {m_name})] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
-                    return data
+                final_out = normalize_3_category_outcome(data.get("outcome"))
+                data["outcome"] = final_out
+                logger.info(f"🧠 [POST-CALL INTELLIGENCE (Gemini {m_name})] Outcome: '{final_out}' | Sentiment: '{data.get('sentiment')}'")
+                return data
             except Exception as gemini_err:
                 logger.warning(f"Gemini {m_name} post-call classification fallback triggered: {gemini_err}")
 
@@ -3333,16 +3422,14 @@ Respond ONLY with valid JSON:
             groq_prompt = f"""Analyze this recorded phone call between Gayatri (AI Property Advisor) and {customer_name}:
 {formatted_transcript}
 
-Rules:
-- "Not Interested" if caller refuses, says nahi chahiye, wrong number, no interest, or persistently drifts off-topic/trolls.
-- "Future Plan / Need Afterwards" if caller is busy, says call later, after 2-3 months, or exploring for future.
-- "Site Visit Scheduled" ONLY if caller agreed to visit (e.g. Sunday/weekend).
-- "Interested" if caller asked for price/brochure/flats.
-- "Inquiry Completed" for general inquiries.
+STRICT CLASSIFICATION: You MUST classify into EXACTLY ONE of these 3 categories:
+- "site visit": Customer agreed to or confirmed a site visit with day/time.
+- "interested": Customer showed positive interest in flats, price, amenities, or requested details without visit confirmation.
+- "not interested": Customer refused, said no, nahi chahiye, wrong number, not interested, or hung up.
 
 Classify into valid JSON:
 {{
-  "outcome": "Site Visit Scheduled" | "Interested" | "Future Plan / Need Afterwards" | "Not Interested" | "Location Mismatch (Kalyan)" | "Inquiry Completed" | "Short / Call Dropped",
+  "outcome": "site visit" | "interested" | "not interested",
   "sentiment": "positive" | "neutral" | "negative",
   "aiSummary": "1 sentence executive summary in English",
   "detectedQuestions": ["topic1", "topic2"]
@@ -3366,7 +3453,9 @@ Return ONLY raw JSON."""
                 content = res_data["choices"][0]["message"]["content"]
                 data = json.loads(content)
                 if data.get("outcome"):
-                    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Groq)] Outcome: '{data.get('outcome')}' | Sentiment: '{data.get('sentiment')}'")
+                    final_out = normalize_3_category_outcome(data.get("outcome"))
+                    data["outcome"] = final_out
+                    logger.info(f"🧠 [POST-CALL INTELLIGENCE (Groq)] Outcome: '{final_out}' | Sentiment: '{data.get('sentiment')}'")
                     return data
         except Exception as groq_err:
             logger.warning(f"Groq post-call classification fallback triggered: {groq_err}")
@@ -3428,35 +3517,24 @@ Return ONLY raw JSON."""
     ]
     is_interested = any(re.search(pat, all_cust, re.IGNORECASE) for pat in int_patterns)
 
-    if is_off_topic_call:
-        outcome = "Not Interested"
-        sentiment = "negative"
-        ai_summary = f"{customer_name} went off-topic repeatedly during the call; call concluded after soft warning."
-    elif is_not_interested:
-        outcome = "Not Interested"
-        sentiment = "negative"
-        ai_summary = f"{customer_name} declined the offer and stated not interested."
-    elif has_location_mismatch:
-        outcome = "Location Mismatch (Kalyan)"
-        sentiment = "neutral"
-        ai_summary = f"{customer_name} was looking for property in Kalyan rather than Dombivli East."
+    if is_off_topic_call or is_not_interested or has_location_mismatch or len(dialogue) <= 2:
+        outcome = "not interested"
+        sentiment = "negative" if (is_not_interested or is_off_topic_call) else "neutral"
+        ai_summary = f"{customer_name} declined the offer, hung up early, or was not interested."
     elif cust_confirmed_visit:
-        outcome = "Site Visit Scheduled"
+        outcome = "site visit"
         sentiment = "positive"
-        ai_summary = f"{customer_name} agreed to visit Sai Complex Dombivli East. Site visit confirmed."
-    elif is_interested:
-        outcome = "Interested"
+        ai_summary = f"{customer_name} agreed to visit Sai Garden Dombivli East. Site visit confirmed."
+    elif is_interested or len(dialogue) > 2:
+        outcome = "interested"
         sentiment = "positive"
-        ai_summary = f"{customer_name} showed interest in project specifications and pricing. Follow up required."
-    elif len(dialogue) <= 2:
-        outcome = "Short / Call Dropped"
-        sentiment = "neutral"
-        ai_summary = f"Call with {customer_name} ended quickly before detailed discussion."
+        ai_summary = f"{customer_name} showed positive interest in project specifications and pricing. Follow up required."
     else:
-        outcome = "Inquiry Completed"
+        outcome = "not interested"
         sentiment = "neutral"
-        ai_summary = f"Call with {customer_name} completed. Discussed project details."
+        ai_summary = f"Call with {customer_name} concluded without confirmed interest."
 
+    outcome = normalize_3_category_outcome(outcome)
     q_str = f" Questions: {', '.join(detected_questions)}." if detected_questions else ""
     summary = f"Call with {customer_name}. Outcome: {outcome}.{q_str}"
     logger.info(f"🧠 [POST-CALL INTELLIGENCE (Fallback)] Outcome: '{outcome}' | Sentiment: '{sentiment}'")
@@ -3895,12 +3973,12 @@ async def entrypoint(ctx: JobContext):
             except Exception as classify_err:
                 logger.error(f"Error in classify_call_intelligence: {classify_err}", exc_info=True)
                 intel = {
-                    "outcome": "Inquiry Completed",
+                    "outcome": "interested",
                     "sentiment": "neutral",
-                    "aiSummary": f"Call with {customer_name}. Discussed Sai Complex project details.",
+                    "aiSummary": f"Call with {customer_name}. Discussed Sai Garden project details.",
                     "detectedQuestions": ["General Inquiry"]
                 }
-            call_outcome = intel.get("outcome", "Inquiry Completed")
+            call_outcome = normalize_3_category_outcome(intel.get("outcome", "interested"))
             sentiment = intel.get("sentiment", "neutral")
             ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")
             detected_questions = intel.get("detectedQuestions", [])
