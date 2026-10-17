@@ -665,7 +665,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
     # 3. Numeric & Word Hour Detection
     if not detected_time:
         modifier = ""
-        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text_for_time)) or any(w in text_for_time for w in ["सकाळी", "सुबह", "सरकारी"])
+        is_morning = bool(re.search(r'\b(am|subah|morning)\b', text_for_time)) or any(w in text_for_time for w in ["सकाळी", "सुबह", "सरकारी", "साकारी"])
         is_afternoon = bool(re.search(r'\b(dopahar|afternoon)\b', text_for_time)) or any(w in text_for_time for w in ["दुपारी", "दोपहर"])
         is_evening = bool(re.search(r'\b(shaam|evening|night|raat|raatri|pm)\b', text_for_time)) or any(w in text_for_time for w in ["संध्याकाळी", "रात्री", "शाम", "रात"])
 
@@ -772,7 +772,7 @@ def parse_day_and_time(clean_text: str, lang: str = "mr"):
         # General time context fallback: evaluate longer words first (e.g. 'बारह' before 'दो')
         # Uses word boundaries so English words like 'amenities' containing 'am' NEVER trigger time context!
         if not detected_time:
-            time_words_devanagari = ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "सकाळी", "सरकारी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "o'clock", "अकरावसथा", "दाहवासता", "दहावासता"]
+            time_words_devanagari = ["वाजता", "vajta", "vaje", "baje", "बजे", "बज", "सकाळी", "सरकारी", "साकारी", "subah", "सुबह", "morning", "दुपारी", "dopahar", "दोपहर", "संध्याकाळी", "shaam", "शाम", "evening", "night", "raat", "raatri", "o'clock", "अकरावसथा", "दाहवासता", "दहावासता"]
             has_time_context = any(re.search(rf'(?:^|[^\w\u0900-\u097F]){re.escape(w)}(?:$|[^\w\u0900-\u097F])', text_for_time) for w in time_words_devanagari) or bool(re.search(r'\b(am|pm)\b', text_for_time))
             if has_time_context:
                 sorted_num_words = sorted(num_words_map.items(), key=lambda x: len(str(x[0])), reverse=True)
@@ -1265,9 +1265,6 @@ class PriyaRealEstateAgent(Agent):
 
                 # 1. Turn 1 Fast Path (Greeting / Any Voice Detected from Caller)
                 if len(user_msgs) == 1:
-                    if getattr(self, "intro_delivered", False):
-                        logger.info(f"⚡ [TURN 1 ALREADY DELIVERED] Intro already spoken via fast accelerator, skipping duplicate for '{raw_text}'.")
-                        return
 
                     is_not_interested = (
                         any(kw in clean_norm for kw in [
@@ -2655,6 +2652,11 @@ STT_REPLACE = {
     "सरकारी अकरा": "सकाळी 11 वाजता",
     "सरकारी दहा": "सकाळी 10 वाजता",
     "सरकारी दाह": "सकाळी 10 वाजता",
+    "साकारी": "सकाळी",
+    "साकारी अकरावसथा": "सकाळी 11 वाजता",
+    "साकारी अकरा": "सकाळी 11 वाजता",
+    "साकारी दहा": "सकाळी 10 वाजता",
+    "साकारी दाह": "सकाळी 10 वाजता",
     "बारावासता": "12 वाजता",
     "बारावास": "12 वाजता",
     "दोनवासता": "2 वाजता",
@@ -2773,15 +2775,15 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 300ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 180ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "300"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
         endpointing_ms=endpointing_ms,
-        utterance_end_ms=1000,
+        utterance_end_ms=None,
         smart_format=True,
         punctuate=True,
         filler_words=False,
@@ -2793,14 +2795,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Calibrated telephony: 0.45s silence bridges natural pauses, 0.35 threshold catches soft speech)
+    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.25 threshold catches soft speech, 50ms speech, 280ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.45,
+        min_silence_duration=0.28,
         min_speech_duration=0.05,
-        activation_threshold=0.35,
-        deactivation_threshold=0.25,
-        prefix_padding_duration=0.50,
+        activation_threshold=0.25,
+        deactivation_threshold=0.20,
+        prefix_padding_duration=0.30,
         sample_rate=16000
     )
 
@@ -3189,7 +3191,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "150"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -3198,7 +3200,7 @@ async def entrypoint(ctx: JobContext):
             smart_format=True,
             punctuate=True,
             filler_words=False,
-            vad_events=False,
+            vad_events=True,
             no_delay=True,
             interim_results=True,
             keyterm=STT_KEYTERMS,
@@ -3331,16 +3333,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 50ms speech, 450ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold catches soft speech, 50ms speech, 280ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.45s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.28s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.45,
+            min_silence_duration=0.28,
             min_speech_duration=0.05,
-            activation_threshold=0.35,
-            deactivation_threshold=0.25,
-            prefix_padding_duration=0.50,
+            activation_threshold=0.25,
+            deactivation_threshold=0.20,
+            prefix_padding_duration=0.30,
             sample_rate=16000
         )
     
@@ -3366,7 +3368,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.40,  # Natural 400ms pause prevents cutting caller off between words
+                "min_delay": 0.22,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3375,10 +3377,9 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.85,  # Sustained human speech (>850ms) to interrupt; ignores acoustic echo & brief noise
-                "min_words": 1,        # Requires at least 1 actual word from STT before cutting Gayatri off
-                "resume_false_interruption": False, # Never pause audio & freeze for 3s on false interruptions
-                "discard_audio_if_uninterruptible": False, # Never discard caller speech if they speak while agent finishes
+                "min_duration": 0.50,
+                "resume_false_interruption": False,
+                "discard_audio_if_uninterruptible": False,
             }
         }
     )
@@ -4113,45 +4114,7 @@ async def entrypoint(ctx: JobContext):
                         except Exception as opt_err:
                             logger.debug(f"Early TTS language switch note: {opt_err}")
 
-                # Turn 1 Ultra-Fast Interim Accelerator:
-                # Delivers introduction pitch immediately (<200ms) upon caller saying "Hello" or speaking first words
-                ready_for_accelerator = (
-                    not intro_delivered and
-                    (getattr(session, "agent_state", None) != "speaking") and
-                    ((initial_hello_done and (time.time() - t_initial_hello_ended >= 0.20)) or
-                     (not initial_hello_done and caller_has_spoken and (time.time() - t_call_pickup >= 0.5)))
-                )
-                if ready_for_accelerator:
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_delivered = True
-                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                    logger.info(f"⚡ [TURN 1 ULTRA-FAST ACCELERATOR] Caller spoke '{ev.transcript}' (interim={not ev.is_final}). Speaking introduction pitch immediately (<200ms)!")
-                    
-                    if any(w in clean_tr for w in ["2 bhk", "2bhk", "don", "दोन", "दो", "two", "dusra", "second"]):
-                        if agent: agent.selected_bhk = "2 BHK"
-                        pitch = (
-                            "2 BHK 45 लाख से शुरू होता है। यह G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool और clubhouse जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
-                            if active_lang == "hi" else
-                            "2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही G+22 मजली भव्य इमारत असून यात gym, swimming pool आणि clubhouse अशा 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?"
-                        )
-                    elif any(w in clean_tr for w in ["1 bhk", "1bhk", "one", "ek", "एक", "पहिला", "first"]):
-                        if agent: agent.selected_bhk = "1 BHK"
-                        pitch = (
-                            "1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख down payment और easy bank home loan सुविधा उपलब्ध है। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
-                            if active_lang == "hi" else
-                            "1 BHK फ्लॅट 30 लाखांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख down payment आणि easy bank home loan ची सुविधा उपलब्ध आहे. आपण ready-to-move पाहताय की under-construction चालेल?"
-                        )
-                    elif any(w in clean_tr for w in ["not interested", "nahi chahiye", "wrong number", "nako", "garaj nahi"]):
-                        pitch = DECLINE_SCRIPT_HI if active_lang == "hi" else DECLINE_SCRIPT_MR
-                    else:
-                        pitch = (
-                            "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                            if active_lang == "hi" else
-                            "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-                        )
-                    record_dialogue_turn("agent", pitch)
-                    session.say(pitch, allow_interruptions=True)
+
 
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
