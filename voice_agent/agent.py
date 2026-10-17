@@ -2508,10 +2508,10 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 180ms endpointing)
+    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 250ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "250"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
         model="nova-3",
@@ -2520,7 +2520,7 @@ def prewarm_fnc(proc: JobProcess):
         smart_format=True,
         punctuate=True,
         filler_words=False,
-        vad_events=True,
+        vad_events=False,
         no_delay=True,
         interim_results=True,
         keyterm=STT_KEYTERMS,
@@ -2528,14 +2528,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
+    # 3. Pre-warm Silero VAD (Natural telephony speech: 0.45s silence bridges natural pauses, prevents sentence chopping)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.28,
-        min_speech_duration=0.05,
-        activation_threshold=0.25,
-        deactivation_threshold=0.20,
-        prefix_padding_duration=0.30,
+        min_silence_duration=0.45,
+        min_speech_duration=0.08,
+        activation_threshold=0.35,
+        deactivation_threshold=0.25,
+        prefix_padding_duration=0.35,
         sample_rate=16000
     )
 
@@ -2924,7 +2924,7 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "250"))
         stt = deepgram.STT(
             language=default_stt_lang,
             model="nova-3",
@@ -2933,7 +2933,7 @@ async def entrypoint(ctx: JobContext):
             smart_format=True,
             punctuate=True,
             filler_words=False,
-            vad_events=True,
+            vad_events=False,
             no_delay=True,
             interim_results=True,
             keyterm=STT_KEYTERMS,
@@ -3069,13 +3069,13 @@ async def entrypoint(ctx: JobContext):
     # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold, 50ms speech, 280ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.28s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.45s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.28,
-            min_speech_duration=0.05,
-            activation_threshold=0.25,
-            deactivation_threshold=0.20,
-            prefix_padding_duration=0.30,
+            min_silence_duration=0.45,
+            min_speech_duration=0.08,
+            activation_threshold=0.35,
+            deactivation_threshold=0.25,
+            prefix_padding_duration=0.35,
             sample_rate=16000
         )
     
@@ -3101,7 +3101,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.22,
+                "min_delay": 0.35,
             },
             "preemptive_generation": {
                 "enabled": True,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -3110,7 +3110,7 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.12,
+                "min_duration": 0.18,
                 "resume_false_interruption": False,  # NEVER discard caller speech as false interruption!
                 "false_interruption_timeout": 3.0,
             }
@@ -4309,13 +4309,13 @@ async def entrypoint(ctx: JobContext):
             now = time.time()
             silence_duration = now - t_last_activity
 
-            # 1. After 0.8s of picking up the call: If caller has not spoken yet, say "हॅलो?"
+            # 1. After 0.4s of picking up the call: If caller has not spoken yet, say "हॅलो?"
             if not initial_hello_done and not caller_has_spoken:
-                if now - t_call_pickup >= 0.8:
+                if now - t_call_pickup >= 0.4:
                     initial_hello_done = True
                     last_prompt_time = now
                     t_last_activity = now
-                    logger.info("🎙️ [INITIAL GREETING] 0.8s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
+                    logger.info("🎙️ [INITIAL GREETING] 0.4s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
                     try:
                         t_user_stop = 0.0
                         record_dialogue_turn("agent", "हॅलो?")
@@ -4325,7 +4325,7 @@ async def entrypoint(ctx: JobContext):
                         t_last_activity = time.time()
                         last_prompt_time = time.time()
                     except Exception as e:
-                        logger.warning(f"Error speaking initial 0.8s hello: {e}")
+                        logger.warning(f"Error speaking initial 0.4s hello: {e}")
                 continue
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"

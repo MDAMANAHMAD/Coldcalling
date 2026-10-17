@@ -7,24 +7,31 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 // ── Concurrency guard: max 4 simultaneous outbound calls (~1.2-1.4 GB RAM each on 8 GB VPS) ──
-let activeOutboundCalls = 0;
 const MAX_CONCURRENT_CALLS = 4;
 
 export async function POST(req: NextRequest) {
-  // ── Concurrency check ──
-  if (activeOutboundCalls >= MAX_CONCURRENT_CALLS) {
-    return NextResponse.json(
-      {
-        success: false,
-        message: `Server is busy: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
-        activeCount: activeOutboundCalls
-      },
-      { status: 429 }
+  // ── Concurrency check via real-time LiveKit rooms ──
+  let activeCallsCount = 0;
+  try {
+    const roomService = getRoomServiceClient(10);
+    const rooms = await roomService.listRooms();
+    const activeCalls = rooms.filter(
+      r => r.name.startsWith('call-') && r.numParticipants > 0
     );
+    activeCallsCount = activeCalls.length;
+    if (activeCallsCount >= MAX_CONCURRENT_CALLS) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Server is busy: ${activeCallsCount}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
+          activeCount: activeCallsCount
+        },
+        { status: 429 }
+      );
+    }
+  } catch (err) {
+    console.warn(`[CONCURRENCY] Could not query LiveKit active rooms, proceeding with call dispatch:`, err);
   }
-
-  activeOutboundCalls++;
-  console.log(`[CONCURRENCY] Slot acquired. Active outbound calls: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
 
   try {
     const body = await req.json();
@@ -64,12 +71,6 @@ export async function POST(req: NextRequest) {
     );
 
     console.log(`[API OUTBOUND CALL SUCCESS] Created participant:`, participant);
-
-    // Release the concurrency slot after 5 minutes (covers max ring time + typical call duration)
-    setTimeout(() => {
-      activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
-      console.log(`[CONCURRENCY] Slot released (5-min timeout). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
-    }, 300000);
 
     // Record call log in db.json immediately
     try {
@@ -159,12 +160,9 @@ export async function POST(req: NextRequest) {
       message: `Outbound call successfully ringing ${safePhone}!`,
       participantId: participant.participantId,
       roomName: uniqueRoom,
-      activeCount: activeOutboundCalls
+      activeCount: activeCallsCount + 1
     });
   } catch (error: any) {
-    // Release slot on failure
-    activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
-    console.log(`[CONCURRENCY] Slot released (error). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
     console.error(`[API OUTBOUND CALL ERROR]:`, error);
     return NextResponse.json(
       {
