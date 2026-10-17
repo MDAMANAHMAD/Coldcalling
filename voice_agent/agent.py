@@ -124,12 +124,24 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b760\b', 'सातशे साठ'),
             (r'\b375\b', 'तीनशे पंच्याहत्तर'),
             (r'\b520\b', 'पाचशे वीस'),
+            (r'G\+\s*22', 'जी प्लस बावीस'),
+            (r'\bgym\b', 'जिम'),
+            (r'\bswimming\s*pool\b', 'स्विमिंग पूल'),
+            (r'\bclubhouse\b', 'क्लबहाऊस'),
+            (r'\bmodern\s*amenities\b', 'आधुनिक सोयी'),
+            (r'\bamenities\b', 'सोयी'),
+            (r'\bdown\s*payment\b', 'डाऊन पेमेंट'),
+            (r'\beasy\s*(?:bank\s*)?home\s*loan\b', 'सोपे बँक होम लोन'),
+            (r'\bhome\s*loan\b', 'होम लोन'),
+            (r'\bloan\b', 'लोन'),
+            (r'\bbudget\b', 'बजेट'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वेअर फूट'),
-            (r'\b1\s*BHK\b', 'एक बीएचके'),
-            (r'\b2\s*BHK\b', 'दोन बीएचके'),
-            (r'\b1\s*RK\b', 'एक आरके'),
-            (r'\bRK\b', 'आरके'),
-            (r'\bBHK\b', 'बीएचके'),
+            (r'\b1\s*BHK\b', 'एक बी एच के'),
+            (r'\b2\s*BHK\b', 'दोन बी एच के'),
+            (r'\b1\s*RK\b', 'एक आर के'),
+            (r'\b1rk\b', 'एक आर के'),
+            (r'\bRK\b', 'आर के'),
+            (r'\bBHK\b', 'बी एच के'),
             (r'\bcarpet\s*area\b', 'कार्पेट एरिया'),
             (r'\bsite\s*visit\b', 'साईट व्हिजिट'),
             (r'\bflats\b', 'फ्लॅट्स'),
@@ -138,8 +150,8 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\bmaster\s*bedroom\b', 'मास्टर बेडरूम'),
             (r'\bwhatsapp\b', 'व्हॉट्सअॅप'),
             (r'\bbrochure\b', 'ब्रोशर'),
-            (r'\bready\s*to\s*move\b', 'रेडी टू मूव्ह'),
-            (r'\bunder\s*construction\b', 'अंडर कन्स्ट्रक्शन'),
+            (r'\bready[- ]*to[- ]*move\b', 'रेडी टू मूव्ह'),
+            (r'\bunder[- ]*construction\b', 'अंडर कन्स्ट्रक्शन'),
             (r'\bpossession\b', 'पझेशन'),
             (r'\bhello\b', 'हॅलो'),
             (r'\bbye\b', 'नमस्कार'),
@@ -221,15 +233,27 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b7[:.]30\b', 'साढ़े सात'),
             (r'\b8[:.]30\b', 'साढ़े आठ'),
             (r'\b9[:.]30\b', 'साढ़े नौ'),
-            (r'\b1\s*BHK\b', 'एक बीएचके'),
-            (r'\b2\s*BHK\b', 'दो बीएचके'),
-            (r'\b1\s*RK\b', 'एक आरके'),
-            (r'\b1rk\b', 'एक आरके'),
-            (r'\bBHK\b', 'बीएचके'),
-            (r'\bRK\b', 'आरके'),
+            (r'G\+\s*22', 'जी प्लस बाईस'),
+            (r'\bgym\b', 'जिम'),
+            (r'\bswimming\s*pool\b', 'स्विमिंग पूल'),
+            (r'\bclubhouse\b', 'क्लबहाउस'),
+            (r'\bmodern\s*amenities\b', 'आधुनिक सुविधाएँ'),
+            (r'\bamenities\b', 'सुविधाएँ'),
+            (r'\bdown\s*payment\b', 'डाउन पेमेंट'),
+            (r'\beasy\s*(?:bank\s*)?home\s*loan\b', 'आसान बैंक होम लोन'),
+            (r'\bhome\s*loan\b', 'होम लोन'),
+            (r'\bloan\b', 'लोन'),
+            (r'\bbudget\b', 'बजट'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'स्क्वायर फीट'),
-            (r'\bready\s*to\s*move\b', 'रेडी-टू-मूव'),
-            (r'\bunder\s*construction\b', 'अंडर-कन्स्ट्रक्शन'),
+            (r'\b1\s*BHK\b', 'एक बी एच के'),
+            (r'\b2\s*BHK\b', 'दो बी एच के'),
+            (r'\b1\s*RK\b', 'एक आर के'),
+            (r'\b1rk\b', 'एक आर के'),
+            (r'\bBHK\b', 'बी एच के'),
+            (r'\bRK\b', 'आर के'),
+            (r'\bcarpet\s*area\b', 'कार्पेट एरिया'),
+            (r'\bready[- ]*to[- ]*move\b', 'रेडी-टू-मूव'),
+            (r'\bunder[- ]*construction\b', 'अंडर-कन्स्ट्रक्शन'),
             (r'\bpossession\b', 'पज़ेशन'),
             (r'\bsite\s*visit\b', 'साईट विजिट'),
             (r'\bwhatsapp\b', 'व्हाट्सऐप'),
@@ -1030,7 +1054,7 @@ class PriyaRealEstateAgent(Agent):
         if self.selected_bhk is None:
             return "क्या आप 1 BHK देख रहे हैं या 2 BHK?" if lang == "hi" else "आपण 1 BHK शोधत आहात की 2 BHK?"
         elif self.selected_possession is None:
-            return "आप ready-to-move देख रहे हैं या under-construction चलेगा?" if lang == "hi" else "आपण ready-to-move पाहताय की under-construction चालेल?"
+            return "आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?" if lang == "hi" else "आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?"
         else:
             return "आप प्रत्यक्ष साइट विजिट के लिए कब आ सकते हैं?" if lang == "hi" else "आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?"
 
@@ -1217,12 +1241,51 @@ class PriyaRealEstateAgent(Agent):
                             any(w in words for w in one_single_words) and not any(w in words for w in two_single_words)
                         )
 
+                is_reasoning_or_objection = (
+                    any(w in words for w in ["why", "kyu", "kyun", "kashala", "कशाला", "क्यों", "क्यूं", "क्यू"]) or
+                    any(kw in clean_norm for kw in [
+                        "ka ahe", "ka aahe", "ka ahet", "ka mhanun", "itka", "itke", "itki", "itna", "itne", "itni",
+                        "mehenga", "mahag", "expensive", "costly", "too high", "so high", "jast ka", "jyada kyu", "itna jast",
+                        "discount", "offer", "kam hoga", "kam karo", "kam ho sakta", "kahi kami", "kami kara",
+                        "farak kya", "farak kay", "difference", "comparison", "quality", "problem"
+                    ])
+                )
+
                 if is_2bhk and not is_1bhk:
                     self.selected_bhk = "2 BHK"
                 elif is_1bhk and not is_2bhk:
                     self.selected_bhk = "1 BHK"
                 elif is_both_bhk:
                     self.selected_bhk = "Both"
+
+                # Immediate BHK Selection Handler on Subsequent Turns (Zero risk of false unclear speech or intermediate misrouting)
+                if len(user_msgs) >= 2 and not is_reasoning_or_objection:
+                    if is_both_bhk:
+                        self.selected_bhk = "Both"
+                        logger.info(f"⚡ [FAST-PATH BOTH BHK] Instant both BHK response for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
+                        else:
+                            yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        return
+
+                    if is_2bhk and not is_1bhk:
+                        self.selected_bhk = "2 BHK"
+                        logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
+                        else:
+                            yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        return
+
+                    if is_1bhk and not is_2bhk:
+                        self.selected_bhk = "1 BHK"
+                        logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
+                        if ACTIVE_TTS_LANGUAGE == "hi":
+                            yield speak("1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
+                        else:
+                            yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
+                        return
 
                 # Check for unintelligible / mumbled speech on subsequent turns
                 # Whitelist includes short affirmative words in Marathi, Hindi, and English so they NEVER get falsely flagged!
@@ -1234,7 +1297,10 @@ class PriyaRealEstateAgent(Agent):
                 ]
 
                 if len(user_msgs) >= 2:
-                    if len(words) == 0 or (len(clean_norm) <= 2 and clean_norm not in valid_short_words):
+                    if not clean_norm or len(words) == 0:
+                        logger.info(f"⚡ [EMPTY INPUT DETECTED] Ignoring empty speech frame for '{raw_text}'")
+                        return
+                    if len(clean_norm) <= 2 and clean_norm not in valid_short_words:
                         logger.info(f"⚡ [UNCLEAR SPEECH DETECTED] Prompting polite clarification for '{raw_text}'")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak("माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?")
@@ -1686,9 +1752,9 @@ class PriyaRealEstateAgent(Agent):
                     if is_explain_all:
                         logger.info(f"⚡ [FAST-PATH EXPLAIN ALL] Instant full project overview for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("साई गार्डन डोंबिवली ईस्ट में एक्सपेरिया मॉल के ठीक सामने G+22 मंजिला भव्य टावर है। इसमें 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज्यादा modern amenities जैसे स्विमिंग पूल और जिम मिलती हैं। आप 1 BHK देखना चाहेंगे या 2 BHK?")
+                            yield speak("साई गार्डन डोंबिवली ईस्ट में एक्सपेरिया मॉल के ठीक सामने 22 मंज़िला भव्य इमारत है। इसमें 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप 1 BHK देखना चाहेंगे या 2 BHK?")
                         else:
-                            yield speak("साई गार्डन डोंबिवली ईस्ट मध्ये एक्सपेरिया मॉल समोर G+22 मजली लक्झरी टॉवर आहे. यात 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध असून स्विमिंग पूल आणि जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण 1 BHK शोधत आहात की 2 BHK?")
+                            yield speak("साई गार्डन डोंबिवली ईस्ट मध्ये एक्सपेरिया मॉल समोर 22 मजली भव्य इमारत आहे. यात 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध असून 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण 1 BHK शोधत आहात की 2 BHK?")
                         return
 
                     # Detect Reasoning / Objection / Comparison intent -> Route to Gemini (the Brain)
@@ -1710,9 +1776,9 @@ class PriyaRealEstateAgent(Agent):
                             self.selected_bhk = "Both"
                             logger.info(f"⚡ [FAST-PATH BOTH BHK] Instant both BHK response for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में gym, swimming pool जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
+                                yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है, साथ में 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
                             else:
-                                yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये gym, swimming pool सारख्या 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?")
+                                yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. यामध्ये स्विमिंग पूल, जिम अशा 35 पेक्षा जास्त आधुनिक सुविधा मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                             return
 
                         # Case C: 2 BHK confirmed / chosen
@@ -1720,9 +1786,9 @@ class PriyaRealEstateAgent(Agent):
                             self.selected_bhk = "2 BHK"
                             logger.info(f"⚡ [FAST-PATH 2BHK] Instant 2 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("2 BHK 45 लाख से शुरू होता है। यह G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool और clubhouse जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
+                                yield speak("2 BHK 45 लाख से शुरू होता है। यह 22 मंज़िला भव्य इमारत है जिसमें स्विमिंग पूल, जिम और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ मिलती हैं। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
                             else:
-                                yield speak("2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही G+22 मजली भव्य इमारत असून यात gym, swimming pool आणि clubhouse अशा 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?")
+                                yield speak("2 BHK फ्लॅट 45 लाख रुपयांपासून सुरू होतो. ही 22 मजली भव्य इमारत असून यात स्विमिंग पूल, जिम आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी मिळतात. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                             return
 
                         # Case D: 1 BHK confirmed / chosen
@@ -1730,9 +1796,9 @@ class PriyaRealEstateAgent(Agent):
                             self.selected_bhk = "1 BHK"
                             logger.info(f"⚡ [FAST-PATH 1BHK] Instant 1 BHK pitch for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख down payment और easy bank home loan सुविधा उपलब्ध है। आप ready-to-move देख रहे हैं या under-construction चलेगा?")
+                                yield speak("1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख डाउन पेमेंट और आसान बैंक होम लोन की सुविधा उपलब्ध है। आप रेडी-टू-मूव देख रहे हैं या अंडर-कन्स्ट्रक्शन चलेगा?")
                             else:
-                                yield speak("1 BHK फ्लॅट 30 लाखांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख down payment आणि easy bank home loan ची सुविधा उपलब्ध आहे. आपण ready-to-move पाहताय की under-construction चालेल?")
+                                yield speak("1 BHK फ्लॅट 30 लाख रुपयांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख डाऊन पेमेंट आणि सोप्या बँक होम लोनची सुविधा उपलब्ध आहे. आपण रेडी-टू-मूव्ह पाहताय की अंडर-कन्स्ट्रक्शन चालेल?")
                             return
 
                         # Case Carpet Area / Flat Size
@@ -1806,9 +1872,9 @@ class PriyaRealEstateAgent(Agent):
                         if fuzzy_contains(clean_norm, loan_kws, threshold=0.70):
                             logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("जी हाँ, सिर्फ 3 से 5 लाख down payment और बाकी सभी major banks से easy home loan मिल जाएगा। आपका down payment का क्या budget है?")
+                                yield speak("जी हाँ, सिर्फ 3 से 5 लाख डाउन पेमेंट और बाकी सभी प्रमुख बैंकों से आसान होम लोन मिल जाएगा। आपका डाउन पेमेंट का क्या बजट है?")
                             else:
-                                yield speak("हो, फक्त 3 ते 5 लाख down payment आणि बाकी सर्व major banks कडून easy home loan उपलब्ध होईल. तुमचे down payment चे budget किती आहे?")
+                                yield speak("हो, फक्त 3 ते 5 लाख डाऊन पेमेंट आणि बाकी सर्व प्रमुख बँकांकडून सोपे होम लोन उपलब्ध होईल. तुमचे डाऊन पेमेंटचे बजेट किती आहे?")
                             return
 
                         # Case Possession Timeline / Ready Date
@@ -1816,9 +1882,9 @@ class PriyaRealEstateAgent(Agent):
                         if any(kw in clean_norm for kw in possession_timeline_kws):
                             logger.info(f"⚡ [FAST-PATH POSSESSION TIMELINE] Instant response for '{raw_text}' (0ms LLM wait)!")
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak("प्रोजेक्ट under-construction में timely possession के साथ उपलब्ध है, और ready-to-move ऑप्शन्स भी हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
+                                yield speak("प्रोजेक्ट अंडर-कन्स्ट्रक्शन में समय पर पज़ेशन के साथ उपलब्ध है, और रेडी-टू-मूव के विकल्प भी हैं। प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?")
                             else:
-                                yield speak("प्रोजेक्ट under-construction मध्ये वेळेवर ताब्यासह उपलब्ध आहे, तसेच ready-to-move चे पर्यायही आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
+                                yield speak("प्रोजेक्ट अंडर-कन्स्ट्रक्शन मध्ये वेळेवर ताब्यासह उपलब्ध आहे, तसेच रेडी-टू-मूव्ह चे पर्यायही आहेत. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
                             return
 
                         # Specific Landmark 1: Kalyan Station / Kalyan
@@ -1956,9 +2022,9 @@ class PriyaRealEstateAgent(Agent):
                             logger.info(f"⚡ [FAST-PATH AMENITIES (FUZZY MATCHED)] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                             cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"साई गार्डन G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool, open garden और clubhouse जैसी 35 से ज्यादा modern amenities हैं। {cq}")
+                                yield speak(f"साई गार्डन 22 मंज़िला भव्य इमारत है जिसमें जिम, स्विमिंग पूल, ओपन गार्डन और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। {cq}")
                             else:
-                                yield speak(f"साई गार्डन ही G+22 मजली भव्य इमारत असून यात gym, swimming pool, open garden आणि clubhouse अशा 35 पेक्षा जास्त modern amenities आहेत. {cq}")
+                                yield speak(f"साई गार्डन ही 22 मजली भव्य इमारत असून यात जिम, स्विमिंग पूल, ओपन गार्डन आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत। {cq}")
                             return
 
                         # Case Overview / How is the project ("kasa ahe", "kasa raha", "kaisa hai", "kaisa project", "kaisi building")
@@ -1971,9 +2037,9 @@ class PriyaRealEstateAgent(Agent):
                             logger.info(f"⚡ [FAST-PATH PROJECT OVERVIEW] for '{raw_text}' (0ms LLM wait)!")
                             cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                             if ACTIVE_TTS_LANGUAGE == "hi":
-                                yield speak(f"साई गार्डन G+22 मंजिला भव्य लक्ज़री टावर है, जिसमें जिम, स्विमिंग पूल और क्लबहाउस जैसी 35 से ज्यादा modern amenities हैं। {cq}")
+                                yield speak(f"साई गार्डन 22 मंज़िला भव्य लक्ज़री इमारत है, जिसमें जिम, स्विमिंग पूल और क्लबहाउस जैसी 35 से ज़्यादा आधुनिक सुविधाएँ हैं। {cq}")
                             else:
-                                yield speak(f"साई गार्डन ही G+22 मजली भव्य लक्झरी इमारत असून यात जिम, स्विमिंग पूल आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक amenities आहेत. {cq}")
+                                yield speak(f"साई गार्डन ही 22 मजली भव्य लक्झरी इमारत असून यात जिम, स्विमिंग पूल आणि क्लबहाऊस अशा 35 पेक्षा जास्त आधुनिक सोयी आहेत। {cq}")
                             return
 
                         # Case Q1: Caller wants to ask questions ("mere thode questions the", "sawal hai", "doubt")
@@ -2981,7 +3047,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.35"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.15"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
@@ -2993,7 +3059,7 @@ def prewarm_fnc(proc: JobProcess):
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume,
             word_timestamps=False,
-            text_pacing=True,
+            text_pacing=False,
             tokenizer=PhoneticSentenceTokenizer()
         )
     else:
@@ -3464,7 +3530,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.35"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.15"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
@@ -3482,7 +3548,7 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
                 volume=cartesia_volume,
                 word_timestamps=False,
-                text_pacing=True,
+                text_pacing=False,
                 tokenizer=PhoneticSentenceTokenizer()
             )
         else:
@@ -4182,42 +4248,6 @@ async def entrypoint(ctx: JobContext):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 logger.info("🛑 [VAD] User stopped speaking! STT and turn pipeline proceeding.")
-
-                # TURN 1 INSTANT ACCELERATOR:
-                # Fires immediately when caller finishes speaking their initial greeting (e.g. "Hello")
-                # Eliminates the 3-4s Deepgram STT endpointing delay on Turn 1!
-                if not intro_delivered and (getattr(session, "agent_state", None) != "speaking") and caller_has_spoken:
-                    intro_delivered = True
-                    if agent:
-                        agent.intro_delivered = True
-                    clean_tr = (latest_caller_transcript or "").strip().lower()
-                    active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "mr"
-                    logger.info(f"⚡ [TURN 1 INSTANT ACCELERATOR] Caller finished speaking greeting '{clean_tr}'! Speaking introduction in {active_lang} (<200ms)!")
-
-                    if any(w in clean_tr for w in ["2 bhk", "2bhk", "don", "दोन", "दो", "two", "dusra", "second"]):
-                        if agent: agent.selected_bhk = "2 BHK"
-                        pitch = (
-                            "2 BHK 45 लाख से शुरू होता है। यह G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool और clubhouse जैसी 35 से ज्यादा modern amenities मिलती हैं। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
-                            if active_lang == "hi" else
-                            "2 BHK फ्लॅट 45 लाखांपासून सुरू होतो. ही G+22 मजली भव्य इमारत असून यात gym, swimming pool आणि clubhouse अशा 35 पेक्षा जास्त modern amenities मिळतात. आपण ready-to-move पाहताय की under-construction चालेल?"
-                        )
-                    elif any(w in clean_tr for w in ["1 bhk", "1bhk", "one", "ek", "एक", "पहिला", "first"]):
-                        if agent: agent.selected_bhk = "1 BHK"
-                        pitch = (
-                            "1 BHK 30 लाख से शुरू होता है। इसमें सिर्फ 3 से 5 लाख down payment और easy bank home loan सुविधा उपलब्ध है। आप ready-to-move देख रहे हैं या under-construction चलेगा?"
-                            if active_lang == "hi" else
-                            "1 BHK फ्लॅट 30 लाखांपासून सुरू होतो. यामध्ये फक्त 3 ते 5 लाख down payment आणि easy bank home loan ची सुविधा उपलब्ध आहे. आपण ready-to-move पाहताय की under-construction चालेल?"
-                        )
-                    elif any(w in clean_tr for w in ["not interested", "nahi chahiye", "wrong number", "nako", "garaj nahi"]):
-                        pitch = DECLINE_SCRIPT_HI if active_lang == "hi" else DECLINE_SCRIPT_MR
-                    else:
-                        pitch = (
-                            "नमस्ते! मैं गायत्री बात कर रही हूँ साई गार्डन डोंबिवली से, एक्सपेरिया मॉल के सामने। क्या आप 1 BHK देख रहे हैं या 2 BHK?"
-                            if active_lang == "hi" else
-                            "नमस्कार! मी गायत्री बोलतेय साई गार्डन डोंबिवली मधून, एक्सपेरिया मॉल समोरून. आपण 1 BHK शोधत आहात की 2 BHK?"
-                        )
-                    record_dialogue_turn("agent", pitch)
-                    session.say(pitch, allow_interruptions=True)
         except Exception as err:
             logger.debug(f"User state changed error: {err}")
 
