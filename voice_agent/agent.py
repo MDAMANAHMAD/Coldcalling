@@ -26,6 +26,7 @@ import base64
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
+import difflib
 import requests
 from dotenv import load_dotenv
 
@@ -504,6 +505,37 @@ def resolve_language(transcript: str, current_lang: str = "mr") -> str:
             return 'mr'
 
     return current_lang
+
+
+def fuzzy_contains(text: str, targets: list[str], threshold: float = 0.68) -> bool:
+    """
+    Ultra-fast fuzzy & phonetic similarity matcher (0ms overhead).
+    Matches exact substrings, individual words with typos/misspellings,
+    and 2-word combinations against target intents across Hindi, Marathi, and English.
+    """
+    if not text:
+        return False
+    text_lower = text.lower()
+    # 1. Direct fast substring check (<1 microsecond)
+    for t in targets:
+        if t in text_lower:
+            return True
+    # 2. Tokenized word & ngram similarity check via difflib
+    words = re.sub(r'[^\w\s\u0900-\u097F]', ' ', text_lower).split()
+    for w in words:
+        if len(w) >= 3:
+            for t in targets:
+                if len(t) >= 3 and abs(len(w) - len(t)) <= 3:
+                    if difflib.SequenceMatcher(None, w, t).ratio() >= threshold:
+                        return True
+    # 3. Check 2-word combinations for multi-word targets
+    for i in range(len(words) - 1):
+        bigram = f"{words[i]} {words[i+1]}"
+        for t in targets:
+            if " " in t:
+                if difflib.SequenceMatcher(None, bigram, t).ratio() >= threshold:
+                    return True
+    return False
 
 
 def parse_day_and_time(clean_text: str, lang: str = "mr"):
@@ -1180,9 +1212,9 @@ class PriyaRealEstateAgent(Agent):
                     if len(words) == 0 or (len(clean_norm) <= 2 and clean_norm not in valid_short_words):
                         logger.info(f"⚡ [UNCLEAR SPEECH DETECTED] Prompting polite clarification for '{raw_text}'")
                         if ACTIVE_TTS_LANGUAGE == "hi":
-                            yield speak("माफ़ कीजियेगा, आपकी आवाज़ थोड़ी कट रही थी, क्या आप एक बार फिर बोलेंगे?")
+                            yield speak("माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?")
                         else:
-                            yield speak("माफ करा, आपला आवाज स्पष्ट आला नाही. आपण पुन्हा सांगू शकाल का?")
+                            yield speak("माफ करा, मला समजलं नाही. आपण पुन्हा सांगू शकाल का?")
                         return
 
                     # Handling if referral was already asked and customer responded to it
@@ -1655,8 +1687,9 @@ class PriyaRealEstateAgent(Agent):
                         return
 
                     # Case Parking
-                    parking_kws = ["parking", "car parking", "गाडी", "पार्किंग", "bike parking"]
-                    if any(kw in clean_norm for kw in parking_kws):
+                    # Case Parking (Fuzzy Tolerant)
+                    parking_kws = ["parking", "car parking", "गाडी", "पार्किंग", "bike parking", "parkin", "puzzle parking", "stack parking"]
+                    if fuzzy_contains(clean_norm, parking_kws, threshold=0.70):
                         logger.info(f"⚡ [FAST-PATH PARKING] Instant parking response for '{raw_text}' (0ms LLM wait)!")
                         cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1665,9 +1698,9 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"होय, प्रोजेक्टमध्ये ample stack आणि puzzle car parking ची उत्तम सुविधा उपलब्ध आहे. {cq}")
                         return
 
-                    # Case Balcony
-                    balcony_kws = ["balcony", "terrace", "gallery", "gellery", "गॅलरी", "बाल्कनी"]
-                    if any(kw in clean_norm for kw in balcony_kws):
+                    # Case Balcony (Fuzzy Tolerant)
+                    balcony_kws = ["balcony", "terrace", "gallery", "gellery", "गॅलरी", "बाल्कनी", "balconi", "balkani"]
+                    if fuzzy_contains(clean_norm, balcony_kws, threshold=0.70):
                         logger.info(f"⚡ [FAST-PATH BALCONY] Instant balcony response for '{raw_text}' (0ms LLM wait)!")
                         cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1676,9 +1709,9 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"होय, फ्लॅट्समध्ये सुंदर open balcony दिली आहे, जिथून छान निसर्गरम्य view मिळतो. {cq}")
                         return
 
-                    # Case S: Nearby Schools Inquiry
-                    schools_kws = ["school", "schools", "shala", "शाळा", "lodha world", "pawar public", "ira global", "guardian", "शिक्षण", "स्कुल", "स्कूल", "college"]
-                    if any(kw in clean_norm for kw in schools_kws):
+                    # Case S: Nearby Schools Inquiry (Fuzzy Tolerant)
+                    schools_kws = ["school", "schools", "shala", "शाळा", "lodha world", "pawar public", "ira global", "guardian", "शिक्षण", "स्कुल", "स्कूल", "college", "skool"]
+                    if fuzzy_contains(clean_norm, schools_kws, threshold=0.70):
                         logger.info(f"⚡ [FAST-PATH SCHOOLS] Instant schools response for '{raw_text}' (0ms LLM wait)!")
                         cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1687,9 +1720,9 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"जवळच Pawar Public School फक्त 1 मिनिट, Lodha World School 5 मिनिटे आणि Pendharkar College 15 मिनिटांवर आहे. {cq}")
                         return
 
-                    # Case M: Nearby Hospitals Inquiry
-                    hospitals_kws = ["hospital", "hospitals", "dawakhana", "दवाखाना", "हॉस्पिटल", "jupiter", "infinity", "mgm", "sai hospital", "doctor", "इस्पितळ", "neon", "vaze", "aims"]
-                    if any(kw in clean_norm for kw in hospitals_kws):
+                    # Case M: Nearby Hospitals Inquiry (Fuzzy Tolerant)
+                    hospitals_kws = ["hospital", "hospitals", "dawakhana", "दवाखाना", "हॉस्पिटल", "jupiter", "infinity", "mgm", "sai hospital", "doctor", "इस्पितळ", "neon", "vaze", "aims", "hospitl"]
+                    if fuzzy_contains(clean_norm, hospitals_kws, threshold=0.70):
                         logger.info(f"⚡ [FAST-PATH HOSPITALS] Instant hospitals response for '{raw_text}' (0ms LLM wait)!")
                         cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
@@ -1698,8 +1731,9 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"जवळच Neon Hospital 6 मिनिटे, Vaze Hospital 9 मिनिटे आणि AIMS Hospital 18 मिनिटांवर उपलब्ध आहेत. {cq}")
                         return
 
-                    # Case E: Down Payment / Home Loan Inquiry
-                    if any(kw in clean_norm for kw in ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन"]):
+                    # Case E: Down Payment / Home Loan Inquiry (Fuzzy Tolerant)
+                    loan_kws = ["down payment", "loan", "home loan", "emi", "bank", "पैसे", "कर्ज", "डाऊन पेमेंट", "लोन", "downpayment"]
+                    if fuzzy_contains(clean_norm, loan_kws, threshold=0.70):
                         logger.info(f"⚡ [FAST-PATH LOAN & DOWN PAYMENT] Instant response for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak("जी हाँ, सिर्फ 3 से 5 लाख down payment और बाकी सभी major banks से easy home loan मिल जाएगा। आपका down payment का क्या budget है?")
@@ -1837,9 +1871,19 @@ class PriyaRealEstateAgent(Agent):
                             yield speak(f"कनेक्टिव्हिटी उत्तम आहे. Nilje station फक्त 2 मिनिटांवर आहे, समोर upcoming Metro Line 12 येत आहे आणि Dombivli station 20 मिनिटांवर आहे. {cq}")
                         return
 
-                    # Case H: Amenities / Building Floors Inquiry
-                    if any(kw in clean_norm for kw in ["amenities", "amenity", "gym", "swimming pool", "clubhouse", "floors", "building", "माले", "मजली", "सुविधा", "lift"]):
-                        logger.info(f"⚡ [FAST-PATH AMENITIES] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
+                    # Case H: Amenities / Building Floors / Facilities Inquiry (Fuzzy & Phonetic Tolerant)
+                    amenities_kws = [
+                        "amenities", "amenity", "gym", "swimming pool", "swimming", "clubhouse", "floors", "building",
+                        "माले", "मजली", "सुविधा", "सुविधाएं", "सुविधाए", "lift", "लिफ्ट", "garden", "गार्डन",
+                        "facilities", "facility", "features", "feature", "काय काय आहे", "काय काय मिळेल",
+                        "काय सुविधा", "काय सोयी", "सोयी सुविधा", "क्या क्या है", "क्या क्या मिलेगा",
+                        "क्या सुविधाएं", "क्या सुविधा", "amneties", "amneti", "aminiti", "aminities", "eminities",
+                        "eminity", "amenitees", "amenitis", "aminites", "ameniti", "amenites",
+                        "suvidha", "suvidhaye", "suvidhaen", "suvidhas", "soyi",
+                        "एमिनिटी", "एमिनिटीज", "अमेनिटी", "अमेनिटीज", "अमिनिटी", "अमिनिटीज"
+                    ]
+                    if fuzzy_contains(clean_norm, amenities_kws, threshold=0.68):
+                        logger.info(f"⚡ [FAST-PATH AMENITIES (FUZZY MATCHED)] Instant amenities response for '{raw_text}' (0ms LLM wait)!")
                         cq = self.get_closing_question(ACTIVE_TTS_LANGUAGE)
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak(f"साई गार्डन G+22 मंजिला भव्य टावर है जिसमें gym, swimming pool, open garden और clubhouse जैसी 35 से ज्यादा modern amenities हैं। {cq}")
@@ -1871,8 +1915,9 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("हो नक्कीच, विचारा ना. काय माहिती हवी आहे?")
                         return
 
-                    # Case Q2: BHK types / Price / Budget inquiry ("kitna bhk hai", "price", "rate")
-                    if any(kw in clean_norm for kw in ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk", "price", "किंमत", "rate", "cost", "budget"]):
+                    # Case Q2: BHK types / Price / Budget inquiry ("kitna bhk hai", "price", "rate", fuzzy tolerant)
+                    price_kws = ["kitna bhk", "kitne bhk", "konsa bhk", "kon sa bhk", "konta bhk", "kiti bhk", "price", "किंमत", "rate", "cost", "budget", "kimat", "bhav", "दर", "लाख", "किमत", "prce"]
+                    if fuzzy_contains(clean_norm, price_kws, threshold=0.72):
                         logger.info(f"⚡ [FAST-PATH BHK OPTIONS] Instant options for '{raw_text}' (0ms LLM wait)!")
                         if ACTIVE_TTS_LANGUAGE == "hi":
                             yield speak("हमारे यहाँ 1 BHK 30 लाख से और 2 BHK 45 लाख से शुरू होता है। आप 1 BHK देखना चाहेंगे या 2 BHK?")
@@ -1880,17 +1925,25 @@ class PriyaRealEstateAgent(Agent):
                             yield speak("आपल्याकडे 1 BHK 30 लाखांपासून आणि 2 BHK 45 लाखांपासून उपलब्ध आहे. आपण 1 BHK पाहू इच्छिता की 2 BHK?")
                         return
 
-                    # Case H1: Upcoming possession confirmed
-                    is_upcoming = any(kw in clean_norm for kw in [
-                        "upcoming", "position", "possession", "under construction", "under-construction", "construction", "future",
-                        "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन"
-                    ]) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह"])
+                    # Case H1: Upcoming possession confirmed (Fuzzy Tolerant)
+                    upcoming_kws = [
+                        "upcoming", "position", "possession", "under construction", "under-construction", "underconstruction", "construction", "future",
+                        "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन", "चालू"
+                    ]
+                    is_upcoming = (
+                        fuzzy_contains(clean_norm, upcoming_kws, threshold=0.70)
+                        and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह", "रेडि"])
+                    )
 
-                    # Case H2: Ready to move confirmed
-                    is_ready = any(kw in clean_norm for kw in [
-                        "ready to move", "ready-to-move", "ready tomove", "ready", "immediate", "turant", "ready chalega", "chalega ready",
+                    # Case H2: Ready to move confirmed (Fuzzy Tolerant)
+                    ready_kws = [
+                        "ready to move", "ready-to-move", "ready tomove", "ready", "redy", "radi", "immediate", "turant", "ready chalega", "chalega ready",
                         "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"
-                    ]) and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन"])
+                    ]
+                    is_ready = (
+                        fuzzy_contains(clean_norm, ready_kws, threshold=0.70)
+                        and not any(kw in clean_norm for kw in ["upcoming", "under construction", "under-construction", "construction", "कन्स्ट्रक्शन"])
+                    )
 
                     # Case H3: Both / Either
                     is_both = any(kw in clean_norm for kw in ["dono", "dono chalega", "both", "koi bhi", "kuch bhi"])
@@ -1959,7 +2012,7 @@ class PriyaRealEstateAgent(Agent):
                 aiter = res.__aiter__()
                 while True:
                     try:
-                        chunk = await asyncio.wait_for(aiter.__anext__(), timeout=2.8)
+                        chunk = await asyncio.wait_for(aiter.__anext__(), timeout=3.2)
                     except StopAsyncIteration:
                         break
                     if isinstance(chunk, str):
@@ -1970,12 +2023,12 @@ class PriyaRealEstateAgent(Agent):
                         collected_chunks.append(str(chunk.text))
                     yield chunk
             elif asyncio.iscoroutine(res):
-                out = await asyncio.wait_for(res, timeout=2.8)
+                out = await asyncio.wait_for(res, timeout=3.2)
                 if hasattr(out, "__aiter__"):
                     aiter = out.__aiter__()
                     while True:
                         try:
-                            chunk = await asyncio.wait_for(aiter.__anext__(), timeout=2.8)
+                            chunk = await asyncio.wait_for(aiter.__anext__(), timeout=3.2)
                         except StopAsyncIteration:
                             break
                         if isinstance(chunk, str):
@@ -1994,19 +2047,29 @@ class PriyaRealEstateAgent(Agent):
                     collected_chunks.append(res)
                 yield res
         except asyncio.TimeoutError:
-            logger.warning("⏱️ [LLM NODE TIMEOUT] LLM response took >2.8s. Speaking polite fallback.")
+            logger.warning("⏱️ [LLM NODE TIMEOUT] LLM response took >3.2s. Speaking polite clarification.")
             if ACTIVE_TTS_LANGUAGE == "hi":
-                fb = "माफ़ कीजियेगा, क्या आप एक बार फिर बोलेंगे?"
+                fb = "माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?"
             else:
-                fb = "माफ करा, आपण पुन्हा सांगू शकाल का?"
+                fb = "माफ करा, मला समजलं नाही. आपण पुन्हा सांगू शकाल का?"
             yield speak(fb)
             return
         except Exception as llm_err:
             logger.error(f"Error in LLM node execution: {llm_err}")
             if ACTIVE_TTS_LANGUAGE == "hi":
-                fb = "माफ़ कीजियेगा, क्या आप एक बार फिर बोलेंगे?"
+                fb = "माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?"
             else:
-                fb = "माफ करा, आपण पुन्हा सांगू शकाल का?"
+                fb = "माफ करा, मला समजलं नाही. आपण पुन्हा सांगू शकाल का?"
+            yield speak(fb)
+            return
+
+        # Guarantee ZERO DEAD AIR: If no chunks were spoken, ask for clarification immediately!
+        if not collected_chunks:
+            logger.info(f"⚡ [NO CHUNKS / UNINTELLIGIBLE] LLM produced no spoken speech for '{raw_text}'. Prompting polite clarification...")
+            if ACTIVE_TTS_LANGUAGE == "hi":
+                fb = "माफ़ कीजियेगा, मैं समझ नहीं पाई। क्या आप एक बार फिर बोलेंगे?"
+            else:
+                fb = "माफ करा, मला समजलं नाही. आपण पुन्हा सांगू शकाल का?"
             yield speak(fb)
             return
 
@@ -2546,8 +2609,10 @@ STT_KEYWORDS = [
     ("home loan", 2.5),
     ("flat", 2.0),
     ("carpet", 2.0),
-    ("amenities", 3.5),
+    ("amenities", 4.0),
     ("ॲमेनिटीज", 3.5),
+    ("सुविधा", 3.5),
+    ("facilities", 3.0),
     ("gym", 3.0),
     ("swimming pool", 3.0),
     ("स्विमिंग पूल", 3.0),
@@ -2676,6 +2741,27 @@ STT_REPLACE = {
     "7.30": "७:३०",
     "aaj": "आज",
     "udya": "उद्या",
+    # Amenities variants & misspellings
+    "aminites": "amenities",
+    "aminitis": "amenities",
+    "eminities": "amenities",
+    "eminity": "amenities",
+    "aminities": "amenities",
+    "aminity": "amenities",
+    "amenitees": "amenities",
+    "amneties": "amenities",
+    "amnetis": "amenities",
+    "amneti": "amenities",
+    "ameniti": "amenities",
+    "amenites": "amenities",
+    "एमिनिटी": "amenities",
+    "एमिनिटीज": "amenities",
+    "अमेनिटी": "amenities",
+    "अमेनिटीज": "amenities",
+    "अमिनिटी": "amenities",
+    "अमिनिटीज": "amenities",
+    "सुविधाएं": "सुविधा",
+    "सुविधाए": "सुविधा",
     # 1 RK terms
     "१ आरके": "1 RK",
     "१आरके": "1 RK",
