@@ -2964,14 +2964,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Sensitive telephony calibration: 0.25 threshold catches soft speech, 50ms speech, 280ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms min speech, 350ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.28,
-        min_speech_duration=0.05,
-        activation_threshold=0.25,
-        deactivation_threshold=0.20,
-        prefix_padding_duration=0.30,
+        min_silence_duration=0.35,
+        min_speech_duration=0.08,
+        activation_threshold=0.38,
+        deactivation_threshold=0.28,
+        prefix_padding_duration=0.40,
         sample_rate=16000
     )
 
@@ -2979,20 +2979,21 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.35"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
             voice=kusha_voice_id,
             language="mr",
-            sample_rate=48000,
+            sample_rate=24000,
             model=cartesia_model,
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
             volume=cartesia_volume,
             word_timestamps=False,
+            text_pacing=True,
             tokenizer=PhoneticSentenceTokenizer()
         )
     else:
@@ -3457,13 +3458,13 @@ async def entrypoint(ctx: JobContext):
         cartesia_speed = custom_speed
     else:
         try:
-            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.0"))
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
         except Exception:
-            cartesia_speed = 1.0
+            cartesia_speed = 0.98
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.35"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
@@ -3475,12 +3476,13 @@ async def entrypoint(ctx: JobContext):
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="mr",
-                sample_rate=48000,
+                sample_rate=24000,
                 model=cartesia_model,
                 speed=cartesia_speed,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
                 volume=cartesia_volume,
                 word_timestamps=False,
+                text_pacing=True,
                 tokenizer=PhoneticSentenceTokenizer()
             )
         else:
@@ -3502,16 +3504,16 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.25 threshold catches soft speech, 50ms speech, 280ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms speech, 350ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 50ms min speech, 0.28s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.35s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.28,
-            min_speech_duration=0.05,
-            activation_threshold=0.25,
-            deactivation_threshold=0.20,
-            prefix_padding_duration=0.30,
+            min_silence_duration=0.35,
+            min_speech_duration=0.08,
+            activation_threshold=0.38,
+            deactivation_threshold=0.28,
+            prefix_padding_duration=0.40,
             sample_rate=16000
         )
     
@@ -3546,7 +3548,8 @@ async def entrypoint(ctx: JobContext):
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_duration": 0.50,
+                "min_duration": 0.80,  # Sustained human speech (>800ms) to interrupt; ignores line noise & brief echo
+                "min_words": 1,        # Requires at least 1 actual word from STT before interrupting
                 "resume_false_interruption": False,
                 "discard_audio_if_uninterruptible": False,
             }
