@@ -565,9 +565,6 @@ export default function ColdCallingHomePage() {
             const name = (item.customerName || item.leadName || '').toLowerCase();
             const sidLower = sid.toLowerCase();
             if (sidLower.includes('probe') || name.includes('probe') || sidLower === 'gayatri-persistent-storage') return false;
-            // Purge any corrupted dummy entries containing the fake fallback template
-            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Complex Dombivli East se. Humare paas premium one BHK'))) return false;
-            if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
             return true;
           });
         }
@@ -585,11 +582,6 @@ export default function ColdCallingHomePage() {
         if (deletedIds.has(item.id) || (item.callSid && deletedIds.has(item.callSid))) continue;
         const name = (item.customerName || item.leadName || '').toLowerCase();
         const sid = (item.callSid || item.id || '').toLowerCase();
-        if (sid.includes('probe') || name.includes('probe')) continue;
-        // Purge dummy corrupted records from server logs as well
-        if (item.transcript && item.transcript.includes('Haan boliye')) continue;
-        if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) continue;
-
         const key = item.callSid || item.id;
         if (!item.recordingUrl && item.callSid && !item.callSid.includes('probe')) {
           item.recordingUrl = `/api/recordings/${item.callSid}.mp3`;
