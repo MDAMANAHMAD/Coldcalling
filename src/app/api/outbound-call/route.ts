@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
+import { getRoomServiceClient, getSipClient, updateCachedPersistentCloudLogs } from '@/lib/livekit';
 import { getDb, saveDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -10,11 +10,14 @@ export const maxDuration = 60;
 const MAX_CONCURRENT_CALLS = 4;
 
 export async function POST(req: NextRequest) {
-  // ── Concurrency check via real-time LiveKit rooms ──
+  // ── Concurrency check via real-time LiveKit rooms (fast 2s timeout) ──
   let activeCallsCount = 0;
   try {
-    const roomService = getRoomServiceClient(10);
-    const rooms = await roomService.listRooms();
+    const roomService = getRoomServiceClient(2);
+    const rooms = await Promise.race([
+      roomService.listRooms(),
+      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+    ]);
     const activeCalls = rooms.filter(
       r => r.name.startsWith('call-') && r.numParticipants > 0
     );
@@ -30,7 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (err) {
-    console.warn(`[CONCURRENCY] Could not query LiveKit active rooms, proceeding with call dispatch:`, err);
+    console.warn(`[CONCURRENCY] Fast check bypassed, proceeding with call dispatch:`, err);
   }
 
   try {
@@ -114,43 +117,51 @@ export async function POST(req: NextRequest) {
 
       saveDb(db);
 
-      // Sync newly placed call to LiveKit Cloud 'gayatri-persistent-storage' room metadata
-      // so it shows up IMMEDIATELY across all connected devices (mobile, laptop, tablet)
-      try {
-        const roomClient = getRoomServiceClient(30);
-        const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-        let cloudMeta: any = {};
-        if (rooms.length > 0 && rooms[0].metadata) {
-          try { cloudMeta = JSON.parse(rooms[0].metadata); } catch {}
-        } else {
-          await roomClient.createRoom({
-            name: 'gayatri-persistent-storage',
-            emptyTimeout: 86400 * 30,
-          });
+      const newLiveLog = {
+        id: callLogId,
+        leadId: `lead-${cleanId}`,
+        callSid: uniqueRoom,
+        userEmail: userEmail,
+        durationSeconds: 0,
+        recordingUrl: '',
+        transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
+        aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
+        sentiment: 'neutral' as const,
+        calledAt: new Date().toISOString(),
+        outcome: 'Calling...',
+        customerName: customerName,
+        customerPhone: safePhone,
+        detectedQuestions: ['Outbound Initiation']
+      };
+
+      // Instantly update local memory cache
+      updateCachedPersistentCloudLogs(newLiveLog);
+
+      // Non-blocking background sync to LiveKit Cloud 'gayatri-persistent-storage' room metadata
+      (async () => {
+        try {
+          const roomClient = getRoomServiceClient(5);
+          const rooms = await Promise.race([
+            roomClient.listRooms(['gayatri-persistent-storage']),
+            new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+          ]);
+          let cloudMeta: any = {};
+          if (rooms.length > 0 && rooms[0].metadata) {
+            try { cloudMeta = JSON.parse(rooms[0].metadata); } catch {}
+          } else {
+            await roomClient.createRoom({
+              name: 'gayatri-persistent-storage',
+              emptyTimeout: 86400 * 30,
+            });
+          }
+          if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
+          cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
+          await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
+          console.log(`[API OUTBOUND CALL] Synced call ${uniqueRoom} to gayatri-persistent-storage in background.`);
+        } catch (cloudErr) {
+          console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
         }
-        if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
-        const newLiveLog = {
-          id: callLogId,
-          leadId: `lead-${cleanId}`,
-          callSid: uniqueRoom,
-          userEmail: userEmail,
-          durationSeconds: 0,
-          recordingUrl: '',
-          transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
-          aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
-          sentiment: 'neutral',
-          calledAt: new Date().toISOString(),
-          outcome: 'Calling...',
-          customerName: customerName,
-          customerPhone: safePhone,
-          detectedQuestions: ['Outbound Initiation']
-        };
-        cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
-        await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
-        console.log(`[API OUTBOUND CALL] Synced call ${uniqueRoom} to gayatri-persistent-storage across all devices.`);
-      } catch (cloudErr) {
-        console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
-      }
+      })().catch(() => {});
     } catch (dbErr) {
       console.warn('[DB Log Warning]:', dbErr);
     }

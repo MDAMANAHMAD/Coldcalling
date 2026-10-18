@@ -61,3 +61,42 @@ export function getSipClient(): { client: SipClient; trunkId: string } {
     trunkId,
   };
 }
+
+/**
+ * In-memory cache for LiveKit Cloud persistent storage metadata to keep
+ * dashboard polling latency < 50ms instead of waiting for cloud network roundtrips.
+ */
+let cachedCloudLogs: any[] = [];
+let lastCloudFetchTime = 0;
+const CLOUD_CACHE_TTL_MS = 20000; // 20 seconds cache
+
+export async function getCachedPersistentCloudLogs(): Promise<any[]> {
+  const now = Date.now();
+  if (now - lastCloudFetchTime < CLOUD_CACHE_TTL_MS && cachedCloudLogs.length > 0) {
+    return cachedCloudLogs;
+  }
+  try {
+    const roomClient = getRoomServiceClient(3);
+    const rooms = await Promise.race([
+      roomClient.listRooms(['gayatri-persistent-storage']),
+      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
+    ]);
+    if (rooms && rooms.length > 0 && rooms[0].metadata) {
+      const parsed = JSON.parse(rooms[0].metadata);
+      if (Array.isArray(parsed.callLogs)) {
+        cachedCloudLogs = parsed.callLogs;
+        lastCloudFetchTime = now;
+      }
+    }
+  } catch {
+    // Return stale cache on network blips or timeout
+  }
+  return cachedCloudLogs;
+}
+
+export function updateCachedPersistentCloudLogs(log: any) {
+  if (!log) return;
+  const key = log.callSid || log.id;
+  cachedCloudLogs = [log, ...cachedCloudLogs.filter(l => (l.callSid || l.id) !== key)].slice(0, 50);
+  lastCloudFetchTime = Date.now();
+}

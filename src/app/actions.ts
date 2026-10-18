@@ -3,7 +3,7 @@
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
+import { getRoomServiceClient, getSipClient, getCachedPersistentCloudLogs } from '@/lib/livekit';
 import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
 import fs from 'fs';
 import path from 'path';
@@ -104,10 +104,10 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
       }
     }
 
-    // Also scan bookings/transcripts directory for any individual call JSONs
+    // Also scan bookings/transcripts directory for recent individual call JSONs (limit to latest 25)
     const indTranscriptsDir = path.join(process.cwd(), 'bookings', 'transcripts');
     if (fs.existsSync(indTranscriptsDir)) {
-      const files = fs.readdirSync(indTranscriptsDir).filter(f => f.endsWith('.json'));
+      const files = fs.readdirSync(indTranscriptsDir).filter(f => f.endsWith('.json')).slice(-25);
       for (const file of files) {
         try {
           const rec = JSON.parse(fs.readFileSync(path.join(indTranscriptsDir, file), 'utf-8'));
@@ -126,27 +126,21 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     console.warn('Error augmenting call logs from disk:', err);
   }
 
-  // Also query LiveKit Cloud room metadata gayatri-persistent-storage
+  // Fast read from in-memory cached LiveKit Cloud room metadata
   try {
-    const roomClient = getRoomServiceClient(30);
-    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-    if (rooms.length > 0 && rooms[0].metadata) {
-      const parsed = JSON.parse(rooms[0].metadata);
-      if (Array.isArray(parsed.callLogs)) {
-        for (const cloudLog of parsed.callLogs) {
-          if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
-          const key = cloudLog.callSid || cloudLog.id;
-          const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
-          if (exIdx >= 0) {
-            dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
-          } else {
-            dbLogs.push(cloudLog);
-          }
-        }
+    const cloudLogs = await getCachedPersistentCloudLogs();
+    for (const cloudLog of cloudLogs) {
+      if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
+      const key = cloudLog.callSid || cloudLog.id;
+      const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
+      if (exIdx >= 0) {
+        dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
+      } else {
+        dbLogs.push(cloudLog);
       }
     }
   } catch (lkErr) {
-    console.warn('Error reading from LiveKit Cloud persistent metadata:', lkErr);
+    console.warn('Error reading from cached LiveKit Cloud metadata:', lkErr);
   }
 
   return dbLogs.map(log => {

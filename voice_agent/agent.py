@@ -1654,9 +1654,12 @@ class PriyaRealEstateAgent(Agent):
 
 
                     # Case Site Visit Scheduling (Prioritized over property pitches so visit days/times are never misidentified)
-                    explicit_confirm = any(kw in clean_norm for kw in [
-                        "confirm", "confirm kar do", "confirm kara", "kara confirm", "lock kar do", "lock kara", "book kar do", "book kara"
-                    ])
+                    confirm_patterns = [
+                        r"\bconfirm\b", r"\bconfirm kar\b", r"\bconfirm kara\b", r"\bkara confirm\b",
+                        r"\block kar\b", r"\block kara\b", r"\bbook kar\b", r"\bbook kara\b",
+                        r"\bकन्फर्म\b", r"\bकन्फर्म करा\b", r"\bकन्फर्म कर\b"
+                    ]
+                    explicit_confirm = any(re.search(pat, clean_norm) for pat in confirm_patterns)
 
 
 
@@ -1774,13 +1777,13 @@ class PriyaRealEstateAgent(Agent):
 
                         # Case Possession: Under Construction / Ready to Move (Checked immediately so caller's possession answer is never hijacked)
                         upcoming_kws = [
-                            "upcoming", "position", "possession", "under construction", "under-construction", "underconstruction",
-                            "construction", "future", "chalega upcoming", "upcoming chalega", "कन्स्ट्रक्शन", "अंडर", "अंडर कन्स्ट्रक्शन",
-                            "चालू", "चालू काम", "चालेल मला", "मला चालेल", "chalel"
+                            "under construction", "under-construction", "underconstruction",
+                            "upcoming chalega", "chalega upcoming", "कन्स्ट्रक्शन", "अंडर कन्स्ट्रक्शन",
+                            "चालू काम", "अंडर-कन्स्ट्रक्शन"
                         ]
                         is_upcoming = (
-                            fuzzy_contains(clean_norm, upcoming_kws, threshold=0.72)
-                            or (self.selected_possession is None and any(w in clean_norm for w in ["under", "chalel", "चालेल", "chalega", "चलेगा", "अंडर", "कन्स्ट्रक्शन"]))
+                            fuzzy_contains(clean_norm, upcoming_kws, threshold=0.75)
+                            or (self.selected_possession is None and any(w in words for w in ["under", "upcoming", "कन्स्ट्रक्शन"]) and any(w in words for w in ["chalega", "chalel", "चलेगा", "चालेल", "dekh", "pahata"]))
                         ) and not any(kw in clean_norm for kw in ["ready to move", "ready-to-move", "ready", "immediate", "turant", "move", "to move", "रेडी", "मूव्ह", "रेडि", "तयार"])
 
                         ready_kws = [
@@ -2709,15 +2712,15 @@ def prewarm_fnc(proc: JobProcess):
                 
         threading.Thread(target=compile_schemas_lazy, daemon=True).start()
 
-    # 2. Pre-warm Deepgram Nova-3 STT (Ultra-accurate Hindi/Marathi bilingual acoustic model calibrated to 180ms endpointing)
+    # 2. Pre-warm Deepgram Nova-2 STT (Accurate Hindi/English bilingual acoustic model calibrated to 350ms endpointing)
     deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
     default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+    endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "350"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
-        model="nova-3",
+        model="nova-2",
         endpointing_ms=endpointing_ms,
-        utterance_end_ms=None,
+        utterance_end_ms=1000,
         smart_format=True,
         punctuate=True,
         filler_words=False,
@@ -2729,14 +2732,14 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms min speech, 350ms silence)
+    # 3. Pre-warm Silero VAD (Calibrated: 0.38 threshold, 100ms min speech, 600ms silence so user is never cut off mid-sentence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.35,
-        min_speech_duration=0.08,
+        min_silence_duration=0.60,
+        min_speech_duration=0.10,
         activation_threshold=0.38,
         deactivation_threshold=0.28,
-        prefix_padding_duration=0.40,
+        prefix_padding_duration=0.35,
         sample_rate=16000
     )
 
@@ -3126,12 +3129,12 @@ async def entrypoint(ctx: JobContext):
         logger.info("⏱️ [STT] Initializing Deepgram STT dynamically on demand...")
         deepgram_key = os.getenv("DEEPGRAM_API_KEY", "3a657520e54772fc188dc619ebbcca895dd9366c")
         default_stt_lang = os.getenv("STT_LANGUAGE", "hi")
-        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "180"))
+        endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "350"))
         stt = deepgram.STT(
             language=default_stt_lang,
-            model="nova-3",
+            model="nova-2",
             endpointing_ms=endpointing_ms,
-            utterance_end_ms=None,
+            utterance_end_ms=1000,
             smart_format=True,
             punctuate=True,
             filler_words=False,
@@ -3272,13 +3275,13 @@ async def entrypoint(ctx: JobContext):
     # VAD is pre-warmed, but load as fallback if not present (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms speech, 350ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.35s silence)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 100ms min speech, 0.60s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.35,
-            min_speech_duration=0.08,
+            min_silence_duration=0.60,
+            min_speech_duration=0.10,
             activation_threshold=0.38,
             deactivation_threshold=0.28,
-            prefix_padding_duration=0.40,
+            prefix_padding_duration=0.35,
             sample_rate=16000
         )
     
@@ -3946,6 +3949,7 @@ async def entrypoint(ctx: JobContext):
     current_lang = ACTIVE_TTS_LANGUAGE or "hi"
     latest_caller_transcript = ""
     is_voicemail_detected = False
+    t_caller_last_spoke = time.time()
 
     @session.on("error")
     def _on_session_error(ev):
@@ -3953,11 +3957,12 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_state_changed")
     def _on_user_state_changed(ev: UserStateChangedEvent):
-        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang, latest_caller_transcript
+        nonlocal t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, t_user_speaking_start, current_lang, latest_caller_transcript, t_caller_last_spoke
         try:
             if ev.new_state == "speaking":
                 caller_has_spoken = True
                 caller_is_speaking = True
+                t_caller_last_spoke = time.time()
                 t_user_stop = 0.0  # Reset so mid-sentence pauses never inflate STT latency
                 t_user_speaking_start = time.perf_counter()
                 t_last_activity = time.time()
@@ -3965,6 +3970,7 @@ async def entrypoint(ctx: JobContext):
                 has_prompted_silence = False
             elif ev.old_state == "speaking" and ev.new_state == "listening":
                 caller_is_speaking = False
+                t_caller_last_spoke = time.time()
                 t_user_stop = time.perf_counter()
                 intro_finished = True
                 t_last_activity = time.time()
@@ -4046,9 +4052,10 @@ async def entrypoint(ctx: JobContext):
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         global ACTIVE_TTS_LANGUAGE
-        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript, initial_hello_done, t_initial_hello_ended, t_call_pickup, is_voicemail_detected
+        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript, initial_hello_done, t_initial_hello_ended, t_call_pickup, is_voicemail_detected, t_caller_last_spoke
         caller_has_spoken = True
         caller_is_speaking = not ev.is_final
+        t_caller_last_spoke = time.time()
         t_last_activity = time.time()
         last_prompt_time = time.time()
         has_prompted_silence = False
@@ -4523,7 +4530,7 @@ async def entrypoint(ctx: JobContext):
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered, initial_hello_done, t_initial_hello_ended, t_call_pickup
+        nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered, initial_hello_done, t_initial_hello_ended, t_call_pickup, t_caller_last_spoke
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
         # 1. Block and DO NOT count ANY silence while call is ringing!
@@ -4533,33 +4540,35 @@ async def entrypoint(ctx: JobContext):
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.8s initial hello, 10s intervals, 20s auto-terminate)...")
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.4s initial hello, 12s voice check, 30s auto-terminate)...")
         
         t_call_pickup = time.time()
+        t_caller_last_spoke = t_call_pickup
         last_prompt_time = t_call_pickup
         initial_hello_done = False
         silence_prompt_count = 0
 
         while not _hangup_scheduled:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.25)
             if _hangup_scheduled:
                 break
                 
-            # If agent is currently speaking or generating speech, reset caller silence timer
+            # If agent is currently speaking or generating speech, pause checks
             if agent_is_speaking or (session.current_speech and not session.current_speech.done()) or (session.agent_state == "speaking"):
                 t_last_activity = time.time()
-                last_prompt_time = time.time()
                 continue
 
             # If caller is currently speaking or VAD detects user speech, reset silence timer & prompt count
             if caller_is_speaking or (getattr(session, "user_state", None) == "speaking"):
+                t_caller_last_spoke = time.time()
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
                 silence_prompt_count = 0
                 continue
 
             now = time.time()
-            silence_duration = now - t_last_activity
+            caller_silence = now - t_caller_last_spoke
+            agent_idle = now - t_last_activity
 
             # 1. After 0.4s of picking up the call: If caller has not spoken yet, say "हॅलो?"
             if not initial_hello_done and not caller_has_spoken:
@@ -4583,9 +4592,9 @@ async def entrypoint(ctx: JobContext):
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "hi"
 
-            # 2. If caller stays silent for 24.0 seconds total without response -> Terminate call
-            if silence_duration >= 24.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=24s). Terminating call in language '{active_lang}'...")
+            # 2. If caller stays silent for 30.0 seconds total without speaking -> Speak polite farewell and hang up
+            if caller_silence >= 30.0 and agent_idle >= 6.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {caller_silence:.1f}s (>=30s). Terminating call in language '{active_lang}'...")
                 if active_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, दिवस चांगला जावो, नमस्कार."
                 elif active_lang == "en":
@@ -4606,15 +4615,15 @@ async def entrypoint(ctx: JobContext):
             if _hangup_scheduled:
                 break
 
-            # 3. Say prompt after 12.0 seconds interval of genuine silence (Natural voice check)
-            if (now - last_prompt_time >= 12.0) and (silence_duration >= 12.0):
+            # 3. Say prompt after 12.0 seconds of genuine silence (Natural voice check)
+            if (caller_silence >= 12.0) and (agent_idle >= 10.0) and (silence_prompt_count == 0):
                 if _hangup_scheduled:
                     break
+                silence_prompt_count += 1
                 last_prompt_time = now
-                t_last_activity = now
-                logger.info(f"⏳ [SILENCE PROMPT] 12.0s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{active_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 12.0s silence elapsed (caller silent: {caller_silence:.1f}s). Prompting in language '{active_lang}'...")
                 
-                if silence_prompt_count == 0 and not caller_has_spoken:
+                if not caller_has_spoken:
                     prompt_text = "हॅलो?"
                 else:
                     if active_lang == "mr":
@@ -4623,7 +4632,6 @@ async def entrypoint(ctx: JobContext):
                         prompt_text = "Hello? Are you able to hear me?"
                     else:
                         prompt_text = "हॅलो? क्या आपको मेरी आवाज़ आ रही है?"
-                silence_prompt_count += 1
 
                 try:
                     t_user_stop = 0.0
@@ -4631,8 +4639,7 @@ async def entrypoint(ctx: JobContext):
                     handle = session.say(prompt_text, allow_interruptions=True)
                     if handle:
                         await handle.wait_for_playout()
-                    t_last_activity = time.time() + 2.0
-                    last_prompt_time = time.time() + 2.0
+                    t_last_activity = time.time()
                 except Exception as e:
                     logger.warning(f"Error speaking 12.0s interval silence prompt: {e}")
 
