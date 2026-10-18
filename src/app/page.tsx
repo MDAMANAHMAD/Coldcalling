@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   getCallLogsWithLeads, 
   getColdCallingStats,
-  deleteCallLog 
+  deleteCallLog,
+  triggerLiveKitOutboundCall
 } from '@/app/actions';
 import { CallLog } from '@/lib/types';
 import { getCallTimestampMs, getCallPickedInfo, formatCallDuration } from '@/lib/callUtils';
@@ -47,7 +48,7 @@ import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
 import { exportLeadsToXlsx, XlsxReportCategory } from '@/lib/xlsxExport';
 
 // Helper to determine status tag styling and label with strict precedence
-export const getOutcomeTag = (call: CallLog) => {
+const getOutcomeTag = (call: CallLog) => {
   const outcome = (call.outcome || '').toLowerCase();
   const summary = (call.aiSummary || '').toLowerCase();
   const transcript = (call.transcript || '').toLowerCase();
@@ -179,7 +180,7 @@ export const getOutcomeTag = (call: CallLog) => {
   };
 };
 
-export const getSentimentTag = (call: CallLog) => {
+const getSentimentTag = (call: CallLog) => {
   const sentiment = (call.sentiment || '').toLowerCase();
   if (sentiment === 'positive') {
     return {
@@ -723,18 +724,41 @@ export default function ColdCallingHomePage() {
     const callerName = dialName.trim() || 'Valued Client';
 
     try {
-      const res = await fetch('/api/outbound-call', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber: safeTargetPhone,
-          customerName: callerName,
-          userEmail: currentUser?.email || 'test@gmail.com',
-          voiceSpeed: voiceSpeed
-        })
-      });
+      let data: any = null;
+      try {
+        const res = await fetch('/api/outbound-call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phoneNumber: safeTargetPhone,
+            customerName: callerName,
+            userEmail: currentUser?.email || 'test@gmail.com',
+            voiceSpeed: voiceSpeed
+          })
+        });
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          console.warn('[OUTBOUND] Non-JSON response from /api/outbound-call');
+        }
+      } catch (fetchErr) {
+        console.warn('[OUTBOUND] Fetch /api/outbound-call failed:', fetchErr);
+      }
 
-      const data = await res.json();
+      if (!data || !data.success) {
+        const fallbackRes = await triggerLiveKitOutboundCall(safeTargetPhone, callerName);
+        if (fallbackRes.success) {
+          data = fallbackRes;
+        } else {
+          setDialResult({
+            success: false,
+            message: fallbackRes.message || data?.message || 'Could not dispatch call. Please check credentials.'
+          });
+          return;
+        }
+      }
+
       if (data.success) {
         setDialResult({
           success: true,
@@ -1003,17 +1027,33 @@ export default function ColdCallingHomePage() {
       setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'calling' } : c));
 
       try {
-        const res = await fetch('/api/outbound-call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phoneNumber: contact.phone,
-            customerName: contact.name,
-            userEmail: currentUser?.email || 'test@gmail.com',
-            voiceSpeed: voiceSpeed
-          })
-        });
-        const data = await res.json();
+        let data: any = null;
+        try {
+          const res = await fetch('/api/outbound-call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phoneNumber: contact.phone,
+              customerName: contact.name,
+              userEmail: currentUser?.email || 'test@gmail.com',
+              voiceSpeed: voiceSpeed
+            })
+          });
+          const text = await res.text();
+          try {
+            data = JSON.parse(text);
+          } catch {
+            console.warn('[BATCH] Non-JSON response, using fallback');
+          }
+        } catch (fetchErr) {
+          console.warn('[BATCH] Fetch failed, using fallback:', fetchErr);
+        }
+
+        if (!data || !data.success) {
+          const fallbackRes = await triggerLiveKitOutboundCall(contact.phone, contact.name);
+          data = fallbackRes;
+        }
+
         if (data.success) {
           setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'done' } : c));
         } else {
