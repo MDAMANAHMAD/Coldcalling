@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import { CallLog } from '@/lib/types';
 import { getCallTimestampMs, formatCallDuration, getCallPickedInfo } from '@/lib/callUtils';
 
-export type XlsxReportCategory = 'Interested' | 'Site Visit' | 'Future Plan' | 'Not Interested' | 'All';
+export type XlsxReportCategory = 'Interested' | 'Site Visit' | 'Not Interested' | 'Picked Up' | 'Not Picked Up' | 'All';
 
 interface ExportXlsxOptions {
   category: XlsxReportCategory;
@@ -20,11 +20,15 @@ export function exportLeadsToXlsx({
   // 1. Filter calls based on category
   const filtered = calls.filter((call) => {
     const tag = getOutcomeTag(call).label;
+    const pickedInfo = getCallPickedInfo(call);
     if (category === 'All') return true;
-    if (category === 'Interested') return tag === 'Interested';
-    if (category === 'Future Plan') return tag === 'Future Plan / Need Afterwards';
+    if (category === 'Interested') {
+      return tag === 'Interested' || tag === 'Future Plan / Need Afterwards' || tag.toLowerCase().includes('interested');
+    }
     if (category === 'Site Visit') return tag === 'Site Visit Scheduled';
     if (category === 'Not Interested') return tag === 'Not Interested';
+    if (category === 'Picked Up') return pickedInfo.isPicked;
+    if (category === 'Not Picked Up') return !pickedInfo.isPicked && pickedInfo.status !== 'ringing';
     return true;
   });
 

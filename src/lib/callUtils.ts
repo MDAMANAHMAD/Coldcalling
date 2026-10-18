@@ -106,10 +106,21 @@ export function getCallPickedInfo(call: Partial<CallLog>): PickedBadgeInfo {
     };
   }
 
-  // Answered / Picked Up: Customer must have actually spoken real human dialogue
+  // Answered / Picked Up: Customer must have actually spoken real human dialogue or conversation connected
   const hasSpokenCustomerDialogue = 
-    (transcript.includes('customer:') || transcript.includes('raj:') || transcript.includes('suraj:') || transcript.includes('client:')) &&
-    !transcript.includes('[call was disconnected or unanswered');
+    (
+      transcript.includes('customer:') || 
+      transcript.includes('client:') || 
+      transcript.includes('user:') || 
+      transcript.includes('caller:') || 
+      transcript.includes('raj:') || 
+      transcript.includes('aman:') || 
+      transcript.includes('suraj:') ||
+      /\[\d+\.?\d*s\]\s*(?!gayatri|agent)[a-zA-Z\u0900-\u097F0-9_]+:/i.test(transcript) ||
+      (duration >= 10 && !outcome.includes('not picked') && !outcome.includes('missed') && !outcome.includes('dropped'))
+    ) &&
+    !transcript.includes('[call was disconnected or unanswered') &&
+    !transcript.includes('[call in progress]');
 
   if (hasSpokenCustomerDialogue && duration > 0) {
     return {

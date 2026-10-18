@@ -59,8 +59,28 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
       for (const line of lines) {
         try {
           const rec = JSON.parse(line);
-          const callId = rec.call_id || `call-${rec.timestamp || Math.random()}`;
-          if (!dbLogs.some(log => log.callSid === callId || log.calledAt === rec.timestamp)) {
+          const callId = rec.call_id || rec.room_name || `call-${rec.timestamp || Math.random()}`;
+          const transcriptText = rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : '');
+          const existingIdx = dbLogs.findIndex(log => log.callSid === callId || log.id === callId || log.calledAt === rec.timestamp);
+
+          if (existingIdx >= 0) {
+            // Augment existing log with authoritative full dialogue from disk
+            if (transcriptText && transcriptText.length > (dbLogs[existingIdx].transcript || '').length) {
+              dbLogs[existingIdx].transcript = transcriptText;
+            }
+            if (rec.duration_seconds && rec.duration_seconds > (dbLogs[existingIdx].durationSeconds || 0)) {
+              dbLogs[existingIdx].durationSeconds = Math.round(rec.duration_seconds);
+            }
+            if (rec.recording_url && !dbLogs[existingIdx].recordingUrl) {
+              dbLogs[existingIdx].recordingUrl = rec.recording_url;
+            }
+            if (rec.outcome && (!dbLogs[existingIdx].outcome || dbLogs[existingIdx].outcome.includes('Calling'))) {
+              dbLogs[existingIdx].outcome = rec.outcome;
+            }
+            if (rec.ai_summary && (!dbLogs[existingIdx].aiSummary || dbLogs[existingIdx].aiSummary.includes('ringing'))) {
+              dbLogs[existingIdx].aiSummary = rec.ai_summary;
+            }
+          } else {
             dbLogs.push({
               id: callId,
               leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
@@ -68,7 +88,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
               callSid: callId,
               durationSeconds: Math.round(rec.duration_seconds || 0),
               recordingUrl: rec.recording_url || '',
-              transcript: rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : ''),
+              transcript: transcriptText,
               aiSummary: rec.ai_summary || `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
               sentiment: rec.sentiment || (rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : (rec.outcome?.includes('Interested') ? 'positive' : 'neutral'))),
               calledAt: rec.timestamp || new Date().toISOString(),
@@ -81,6 +101,25 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
         } catch {
           // ignore malformed line
         }
+      }
+    }
+
+    // Also scan bookings/transcripts directory for any individual call JSONs
+    const indTranscriptsDir = path.join(process.cwd(), 'bookings', 'transcripts');
+    if (fs.existsSync(indTranscriptsDir)) {
+      const files = fs.readdirSync(indTranscriptsDir).filter(f => f.endsWith('.json'));
+      for (const file of files) {
+        try {
+          const rec = JSON.parse(fs.readFileSync(path.join(indTranscriptsDir, file), 'utf-8'));
+          const callId = file.replace('.json', '');
+          const transcriptText = rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : '');
+          const existing = dbLogs.find(l => l.callSid === callId || l.id === callId);
+          if (existing) {
+            if (transcriptText && transcriptText.length > (existing.transcript || '').length) {
+              existing.transcript = transcriptText;
+            }
+          }
+        } catch {}
       }
     }
   } catch (err) {
@@ -210,7 +249,8 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
     const metadata = JSON.stringify({
       customer_name: customerName,
       phone_number: safePhone,
-      phone: safePhone
+      phone: safePhone,
+      voice_speed: 1.05
     });
 
     console.log(`[LIVEKIT OUTBOUND CALL]: Dialing ${safePhone} in room ${uniqueRoom} with Trunk ${trunkId}`);
