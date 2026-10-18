@@ -77,12 +77,41 @@ export function getCallPickedInfo(call: Partial<CallLog>): PickedBadgeInfo {
     };
   }
 
-  // Answered / Picked Up: Has actual duration > 0 OR multiple dialogue turns
-  const hasSpokenDialogue = 
-    transcript.includes('gayatri:') && 
-    (transcript.includes('raj:') || transcript.includes('suraj:') || transcript.includes('customer:') || transcript.includes('akshay:') || transcript.includes('client:'));
+  // Voicemail / Telecom IVR Auto-Reply / Not picked up detection
+  const isVoicemailOrTelecomAutoReply = 
+    summary.includes('voicemail') || 
+    summary.includes('automated voicemail') || 
+    summary.includes('no actual conversation') ||
+    outcome.includes('not picked') ||
+    outcome.includes('voicemail') ||
+    transcript.includes('forwarded to voicemail') ||
+    transcript.includes('at the tone') ||
+    transcript.includes('leave a message') ||
+    transcript.includes('person you are trying to reach is not available') ||
+    transcript.includes('speaking to someone else') ||
+    transcript.includes('subscriber you have dialed') ||
+    transcript.includes('switched off') ||
+    transcript.includes('coverage area') ||
+    transcript.includes('temporarily unavailable');
 
-  if (duration > 0 || hasSpokenDialogue) {
+  if (isVoicemailOrTelecomAutoReply) {
+    return {
+      status: 'not_picked',
+      isPicked: false,
+      label: 'Not Picked Up',
+      bg: 'bg-rose-50 dark:bg-rose-950/40',
+      dot: 'bg-rose-500',
+      border: 'border-rose-200 dark:border-rose-800',
+      textColor: 'text-rose-700 dark:text-rose-300'
+    };
+  }
+
+  // Answered / Picked Up: Customer must have actually spoken real human dialogue
+  const hasSpokenCustomerDialogue = 
+    (transcript.includes('customer:') || transcript.includes('raj:') || transcript.includes('suraj:') || transcript.includes('client:')) &&
+    !transcript.includes('[call was disconnected or unanswered');
+
+  if (hasSpokenCustomerDialogue && duration > 0) {
     return {
       status: 'picked',
       isPicked: true,

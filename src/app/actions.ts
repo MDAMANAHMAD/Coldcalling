@@ -131,15 +131,42 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
 
 export async function deleteCallLog(id: string): Promise<boolean> {
   const db = getDb();
-  if (!db.callLogs) return false;
-  const initialLength = db.callLogs.length;
-  db.callLogs = db.callLogs.filter(c => c.id !== id);
-  if (db.callLogs.length < initialLength) {
-    saveDb(db);
-    revalidatePath('/');
-    return true;
+  let changed = false;
+
+  // 1. Delete from local db.json
+  if (db.callLogs) {
+    const initialLength = db.callLogs.length;
+    db.callLogs = db.callLogs.filter(c => c.id !== id && c.callSid !== id);
+    if (db.callLogs.length < initialLength) {
+      saveDb(db);
+      changed = true;
+    }
   }
-  return false;
+
+  // 2. Also delete from LiveKit Cloud metadata (gayatri-persistent-storage)
+  try {
+    const { getRoomServiceClient } = await import('@/lib/livekit');
+    const roomClient = getRoomServiceClient(30);
+    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+    if (rooms.length > 0 && rooms[0].metadata) {
+      const parsed = JSON.parse(rooms[0].metadata);
+      if (Array.isArray(parsed.callLogs)) {
+        const origLen = parsed.callLogs.length;
+        parsed.callLogs = parsed.callLogs.filter((c: any) => c.id !== id && c.callSid !== id);
+        if (parsed.callLogs.length < origLen) {
+          await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(parsed));
+          changed = true;
+        }
+      }
+    }
+  } catch (lkErr) {
+    console.warn('[deleteCallLog LiveKit Cloud Sync Warning]:', lkErr);
+  }
+
+  try {
+    revalidatePath('/');
+  } catch {}
+  return true;
 }
 
 export async function getColdCallingStats() {

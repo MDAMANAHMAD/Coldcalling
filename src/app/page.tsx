@@ -42,7 +42,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as XLSX from 'xlsx';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
+import { exportLeadsToXlsx, XlsxReportCategory } from '@/lib/xlsxExport';
 
 // Helper to determine status tag styling and label with strict precedence
 export const getOutcomeTag = (call: CallLog) => {
@@ -231,12 +233,16 @@ export default function ColdCallingHomePage() {
   const [campaignStopped, setCampaignStopped] = useState(false);
   const [manualList, setManualList] = useState('');
   const [showBatchPanel, setShowBatchPanel] = useState(false);
-  const csvFileRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const campaignStopRef = useRef(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Interested' | 'Future Plan' | 'Site Visit' | 'Not Interested'>('All');
+  const [pickedFilter, setPickedFilter] = useState<'All' | 'Picked Up' | 'Not Picked Up'>('All');
+
+  // Site Visit Schedule Filter State
+  const [visitTimeFilter, setVisitTimeFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
   // Selected Call Log for Modal Transcript
   const [selectedCall, setSelectedCall] = useState<(CallLog & { leadName: string; leadPhone?: string }) | null>(null);
@@ -266,14 +272,14 @@ export default function ColdCallingHomePage() {
     }
   }, []);
 
-  // PDF Export Dropdown State
-  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
-  const pdfDropdownRef = useRef<HTMLDivElement>(null);
+  // Export Dropdown State (PDF & XLSX)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(event.target as Node)) {
-        setPdfMenuOpen(false);
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setExportMenuOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -401,11 +407,25 @@ export default function ColdCallingHomePage() {
       originalCall: (CallLog & { leadName: string; leadPhone?: string });
     }[] = [];
 
-    const visitCalls = filteredCallsForAnalytics.filter(c => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday).getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    const visitCalls = callLogs.filter(c => {
       const tag = getOutcomeTag(c);
-      return tag.label === 'Site Visit Scheduled' || 
+      const isVisit = tag.label === 'Site Visit Scheduled' || 
              (c.aiSummary && c.aiSummary.toLowerCase().includes('site visit')) ||
              (c.transcript && c.transcript.toLowerCase().includes('site visit'));
+      if (!isVisit) return false;
+
+      const callMs = getCallTimestampMs(c);
+      if (visitTimeFilter === 'today') return callMs >= todayStart;
+      if (visitTimeFilter === 'week') return callMs >= weekStart;
+      if (visitTimeFilter === 'month') return callMs >= monthStart;
+      return true;
     });
 
     for (const c of visitCalls) {
@@ -460,11 +480,21 @@ export default function ColdCallingHomePage() {
     }
 
     return visits;
-  }, [filteredCallsForAnalytics]);
+  }, [callLogs, visitTimeFilter]);
 
   const handleDownloadPdf = (category: PdfReportCategory) => {
-    setPdfMenuOpen(false);
+    setExportMenuOpen(false);
     exportLeadsToPdf({
+      category,
+      calls: filteredCallsForAnalytics,
+      getOutcomeTag,
+      userEmail: currentUser?.email || 'test@gmail.com',
+    });
+  };
+
+  const handleDownloadXlsx = (category: XlsxReportCategory) => {
+    setExportMenuOpen(false);
+    exportLeadsToXlsx({
       category,
       calls: filteredCallsForAnalytics,
       getOutcomeTag,
@@ -512,6 +542,16 @@ export default function ColdCallingHomePage() {
         console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
       }
 
+      // Helper to read deleted call IDs blacklist
+      const getDeletedIds = (): Set<string> => {
+        try {
+          const raw = localStorage.getItem('gayatri_deleted_call_ids');
+          if (raw) return new Set(JSON.parse(raw));
+        } catch {}
+        return new Set();
+      };
+      const deletedIds = getDeletedIds();
+
       // 2. Read preserved call history from browser storage (purging corrupted fake templates)
       let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
       try {
@@ -519,9 +559,11 @@ export default function ColdCallingHomePage() {
         if (stored) {
           permanentHistory = JSON.parse(stored).filter((item: any) => {
             if (!item) return false;
+            const sid = item.callSid || item.id || '';
+            if (deletedIds.has(item.id) || (item.callSid && deletedIds.has(item.callSid))) return false;
             const name = (item.customerName || item.leadName || '').toLowerCase();
-            const sid = (item.callSid || item.id || '').toLowerCase();
-            if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
+            const sidLower = sid.toLowerCase();
+            if (sidLower.includes('probe') || name.includes('probe') || sidLower === 'gayatri-persistent-storage') return false;
             // Purge any corrupted dummy entries containing the fake fallback template
             if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Complex Dombivli East se. Humare paas premium one BHK'))) return false;
             if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
@@ -532,13 +574,14 @@ export default function ColdCallingHomePage() {
         console.warn('Could not read permanent call history:', err);
       }
 
-      // 3. Merge server and local history: SERVER LOGS ARE THE SINGLE SOURCE OF TRUTH
+      // 3. Merge server and local history
       const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
 
-      // First, seed with all authoritative server logs (LiveKit Cloud persistent storage)
+      // First, seed with all authoritative server logs
       const nowMs = Date.now();
       for (const item of serverLogs) {
         if (!item || item.callSid === 'gayatri-persistent-storage') continue;
+        if (deletedIds.has(item.id) || (item.callSid && deletedIds.has(item.callSid))) continue;
         const name = (item.customerName || item.leadName || '').toLowerCase();
         const sid = (item.callSid || item.id || '').toLowerCase();
         if (sid.includes('probe') || name.includes('probe')) continue;
@@ -553,24 +596,21 @@ export default function ColdCallingHomePage() {
         map.set(key, item);
       }
 
-      // Second, augment with local items that are in-flight or not yet reached the server
+      // Second, augment with local items from permanent history (RETAIN ALL CALLS: Never discard older calls)
       for (const localItem of permanentHistory) {
         if (!localItem || localItem.callSid === 'gayatri-persistent-storage') continue;
         const key = localItem.callSid || localItem.id;
+        if (deletedIds.has(localItem.id) || (localItem.callSid && deletedIds.has(localItem.callSid))) continue;
         const existing = map.get(key);
 
         if (existing) {
-          // Server log is authoritative for transcript, outcome, duration, and summary.
-          // Preserve local data:audio/ URL only if the server does not provide one.
+          // Preserve local audio if server doesn't have one
           if (localItem.recordingUrl?.startsWith('data:') && !existing.recordingUrl?.startsWith('data:')) {
             existing.recordingUrl = localItem.recordingUrl;
           }
         } else {
-          // If this is a very recent in-flight call placed on this device (< 3 mins), keep it
-          const ageMinutes = (nowMs - new Date(localItem.calledAt).getTime()) / 60000;
-          if (ageMinutes < 3.0 && (localItem.outcome === 'Calling...' || localItem.outcome === 'Ringing / Calling')) {
-            map.set(key, localItem);
-          }
+          // Retain all historical calls permanently so no call is ever missing
+          map.set(key, localItem);
         }
       }
 
@@ -784,42 +824,164 @@ export default function ColdCallingHomePage() {
     }
   };
 
-  // ── Batch Campaign Helpers ──
-  const parseCsvOrLines = (raw: string): { name: string; phone: string }[] => {
+  // ── Clean Phone Number Helper ──
+  // Strips noise, trailing decimals (.0), formatting, and normalizes to standard +91 or +<country>
+  const cleanPhoneNumber = (val: any): string | null => {
+    if (val === null || val === undefined) return null;
+    let str = String(val).trim();
+    if (!str) return null;
+
+    // Handle float / scientific notation from spreadsheets (e.g. 9876543210.0 or 9.87654321E+09)
+    if (/^\d+\.0+$/.test(str)) {
+      str = str.split('.')[0];
+    } else if (/e\+/i.test(str)) {
+      const num = Number(str);
+      if (!isNaN(num)) str = Math.floor(num).toString();
+    }
+
+    // Remove common punctuation/spacing
+    str = str.replace(/[\s\-\(\)\.,]/g, '');
+
+    const hasPlus = str.startsWith('+');
+    const digits = str.replace(/\D/g, '');
+
+    if (!digits || digits.length < 8) return null;
+
+    // Indian standard phone normalization
+    if (digits.length === 10) {
+      return `+91${digits}`;
+    }
+    if (digits.length === 11 && digits.startsWith('0')) {
+      return `+91${digits.slice(1)}`;
+    }
+    if (digits.length === 12 && digits.startsWith('91')) {
+      return `+${digits}`;
+    }
+    if (hasPlus) {
+      return `+${digits}`;
+    }
+    if (digits.length >= 10 && digits.length <= 15) {
+      return `+${digits}`;
+    }
+    return null;
+  };
+
+  // ── Universal Spreadsheet & CSV Parser (.xlsx, .xls, .csv, .txt) ──
+  // Deep scans every row and cell across all sheets. If only numbers exist, assigns C1, C2, C3...
+  const parseSpreadsheetOrText = (data: ArrayBuffer | string): { name: string; phone: string }[] => {
+    const contacts: { name: string; phone: string }[] = [];
+    const seenPhones = new Set<string>();
+    let customerIndex = 1;
+
+    try {
+      let workbook: XLSX.WorkBook;
+      if (typeof data === 'string') {
+        workbook = XLSX.read(data, { type: 'string' });
+      } else {
+        workbook = XLSX.read(new Uint8Array(data), { type: 'array' });
+      }
+
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) continue;
+        const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        for (const row of rows) {
+          if (!Array.isArray(row) || row.length === 0) continue;
+
+          // Check for pure header rows
+          const rowStr = row.map(c => String(c).toLowerCase()).join(' ');
+          if (rowStr.includes('sr no') && rowStr.includes('phone') && !row.some(c => cleanPhoneNumber(c))) {
+            continue;
+          }
+
+          let foundPhone: string | null = null;
+          let candidateName = '';
+
+          for (const cell of row) {
+            const cleaned = cleanPhoneNumber(cell);
+            if (cleaned && !foundPhone) {
+              foundPhone = cleaned;
+            } else {
+              const cellStr = String(cell).trim();
+              if (
+                cellStr.length >= 2 &&
+                /[a-zA-Z\u0900-\u097F]/.test(cellStr) &&
+                !/^(name|phone|mobile|contact|customer|sr|s\.no|sr\.|no|number|date|address|city|email|remark|status)$/i.test(cellStr)
+              ) {
+                if (!candidateName) {
+                  candidateName = cellStr;
+                }
+              }
+            }
+          }
+
+          if (foundPhone && !seenPhones.has(foundPhone)) {
+            seenPhones.add(foundPhone);
+            const finalName = candidateName || `C${customerIndex++}`;
+            contacts.push({ name: finalName, phone: foundPhone });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error parsing spreadsheet:', err);
+    }
+
+    return contacts;
+  };
+
+  const parseManualLines = (raw: string): { name: string; phone: string }[] => {
     const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
     const contacts: { name: string; phone: string }[] = [];
+    const seen = new Set<string>();
+    let cIndex = 1;
+
     for (const line of lines) {
-      // Skip header rows
       if (/^(name|phone|contact|number)/i.test(line)) continue;
-      // CSV: "Name, Phone" or "Phone, Name"
       const parts = line.split(/,/).map(p => p.trim().replace(/^["']|["']$/g, ''));
+      let phone: string | null = null;
+      let name = '';
+
       if (parts.length >= 2) {
-        const isFirstPhone = /^\+?[\d\s\-()]{7,}$/.test(parts[0]);
-        const name = isFirstPhone ? (parts[1] || 'Customer') : parts[0];
-        const phone = isFirstPhone ? parts[0] : parts[1];
-        if (/[\d+]/.test(phone)) contacts.push({ name, phone });
+        const phone1 = cleanPhoneNumber(parts[0]);
+        const phone2 = cleanPhoneNumber(parts[1]);
+        if (phone1) {
+          phone = phone1;
+          name = parts[1];
+        } else if (phone2) {
+          phone = phone2;
+          name = parts[0];
+        }
       } else if (parts.length === 1) {
-        // Just a phone number
-        if (/[\d+]/.test(parts[0])) contacts.push({ name: 'Customer', phone: parts[0] });
+        phone = cleanPhoneNumber(parts[0]);
+      }
+
+      if (phone && !seen.has(phone)) {
+        seen.add(phone);
+        contacts.push({ name: name || `C${cIndex++}`, phone });
       }
     }
     return contacts;
   };
 
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCsvOrLines(text);
-      setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
+      const buffer = ev.target?.result as ArrayBuffer;
+      const parsed = parseSpreadsheetOrText(buffer);
+      if (parsed.length > 0) {
+        setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
+      }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
+    e.target.value = ''; // Allow re-selecting the same file if needed
   };
 
   const handleManualListLoad = () => {
-    const parsed = parseCsvOrLines(manualList);
+    const parsed = parseManualLines(manualList);
     if (parsed.length === 0) return;
     setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
   };
@@ -830,7 +992,7 @@ export default function ColdCallingHomePage() {
     setCampaignRunning(true);
     setCampaignStopped(false);
 
-    const MAX_CONCURRENT = 4;
+    const MAX_CONCURRENT = 2; // Optimal concurrency for carrier routing
     let activeCount = 0;
     let contactIdx = 0;
     const contacts = [...batchContacts];
@@ -862,22 +1024,19 @@ export default function ColdCallingHomePage() {
       }
 
       activeCount--;
-      // Trigger next in queue
       if (!campaignStopRef.current && contactIdx < contacts.length) {
         const nextIdx = contactIdx++;
         activeCount++;
-        // Stagger calls by 2 seconds to avoid hammering the API
         setTimeout(() => dialNext(nextIdx), 2000);
       } else if (activeCount === 0) {
         setCampaignRunning(false);
       }
     };
 
-    // Seed up to MAX_CONCURRENT simultaneous calls
     while (contactIdx < contacts.length && activeCount < MAX_CONCURRENT) {
       const idx = contactIdx++;
       activeCount++;
-      await new Promise(r => setTimeout(r, 500)); // 500ms stagger
+      await new Promise(r => setTimeout(r, 600));
       dialNext(idx);
     }
   };
@@ -886,37 +1045,66 @@ export default function ColdCallingHomePage() {
     campaignStopRef.current = true;
     setCampaignRunning(false);
     setCampaignStopped(true);
-    // Mark remaining queued items as queued (not started yet, can resume)
     setBatchContacts(prev => prev.map(c => c.status === 'calling' ? { ...c, status: 'queued' } : c));
   };
 
-  const handleDeleteCall = async (id: string, e: React.MouseEvent) => {
+  const handleDeleteCall = async (id: string, e: React.MouseEvent, callSid?: string) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this call log?')) return;
+    if (!confirm('Are you sure you want to permanently delete this call log?')) return;
 
+    // 1. Add to local deleted blacklist so polling never resurrects it
     try {
-      const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
+      const raw = localStorage.getItem('gayatri_deleted_call_ids');
+      const delSet = new Set<string>(raw ? JSON.parse(raw) : []);
+      delSet.add(id);
+      if (callSid) delSet.add(callSid);
+      localStorage.setItem('gayatri_deleted_call_ids', JSON.stringify(Array.from(delSet)));
+    } catch {}
+
+    // 2. Remove from localStorage permanent history
+    try {
+      const stored = localStorage.getItem('gayatri_permanent_history');
       if (stored) {
-        const filtered = JSON.parse(stored).filter((c: any) => c.id !== id && c.callSid !== id);
+        const filtered = JSON.parse(stored).filter((c: any) => 
+          c.id !== id && c.callSid !== id && (!callSid || (c.id !== callSid && c.callSid !== callSid))
+        );
         localStorage.setItem('gayatri_permanent_history', JSON.stringify(filtered));
-        localStorage.removeItem('gayatri_live_call_logs');
       }
     } catch (e) {
       console.warn('Failed to delete from localStorage:', e);
     }
 
-    setCallLogs(prev => prev.filter(c => c.id !== id));
-    await deleteCallLog(id);
-    await loadData();
+    // 3. Optimistic UI removal
+    setCallLogs(prev => prev.filter(c => c.id !== id && (!callSid || c.callSid !== callSid)));
+    if (selectedCall?.id === id || (callSid && selectedCall?.callSid === callSid)) {
+      setSelectedCall(null);
+    }
+
+    // 4. Delete on server (db.json + LiveKit room metadata)
+    try {
+      await deleteCallLog(id);
+      if (callSid && callSid !== id) {
+        await deleteCallLog(callSid);
+      }
+    } catch (delErr) {
+      console.warn('Error calling deleteCallLog server action:', delErr);
+    }
   };
 
-  // Filtered call logs
+  // Filtered call logs with search, outcome, and Picked / Not Picked filters
   const filteredCalls = callLogs.filter(call => {
     const nameMatch = (call.customerName || call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
     const phoneMatch = (call.customerPhone || call.leadPhone || '').toLowerCase().includes(searchQuery.toLowerCase());
     const queryMatches = nameMatch || phoneMatch;
 
     if (!queryMatches) return false;
+
+    // Picked Up vs Not Picked Up filter
+    if (pickedFilter !== 'All') {
+      const pickedInfo = getCallPickedInfo(call);
+      if (pickedFilter === 'Picked Up' && !pickedInfo.isPicked) return false;
+      if (pickedFilter === 'Not Picked Up' && pickedInfo.isPicked) return false;
+    }
 
     if (statusFilter === 'All') return true;
     const tag = getOutcomeTag(call).label;
@@ -1218,21 +1406,21 @@ export default function ColdCallingHomePage() {
           <div className="border-t border-slate-200 dark:border-slate-800 p-6 space-y-5">
             {/* Input Area */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* CSV Upload */}
+              {/* Spreadsheet / CSV Upload */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" /> Upload CSV File
+                  <FileText className="h-3.5 w-3.5" /> Upload Excel (.xlsx/.xls) or CSV
                 </p>
                 <div
                   className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-violet-400 transition-colors"
-                  onClick={() => csvFileRef.current?.click()}
+                  onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="h-7 w-7 text-slate-400" />
                   <p className="text-xs text-slate-500 text-center">
-                    Click to upload <span className="font-semibold text-violet-600">.csv</span><br />
-                    <span className="text-[11px]">Format: Name, Phone or Phone, Name</span>
+                    Click to upload <span className="font-semibold text-violet-600">.xlsx, .xls, or .csv</span><br />
+                    <span className="text-[11px] text-slate-400">Scans all rows & columns • Unnamed contacts auto-named C1, C2...</span>
                   </p>
-                  <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvUpload} />
+                  <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv,.txt" className="hidden" onChange={handleFileUpload} />
                 </div>
               </div>
 
@@ -1253,7 +1441,7 @@ export default function ColdCallingHomePage() {
                   disabled={!manualList.trim()}
                   className="text-xs font-bold px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg disabled:opacity-40 transition-colors"
                 >
-                  Load {manualList.trim() ? `(${parseCsvOrLines(manualList).length} contacts)` : ''}
+                  Load {manualList.trim() ? `(${parseManualLines(manualList).length} contacts)` : ''}
                 </button>
               </div>
             </div>
@@ -1511,7 +1699,29 @@ export default function ColdCallingHomePage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* Filter pills for Site Visit Schedule */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs">
+              {[
+                { id: 'all', label: 'All' },
+                { id: 'today', label: 'Today' },
+                { id: 'week', label: 'This Week' },
+                { id: 'month', label: 'This Month' },
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setVisitTimeFilter(f.id as any)}
+                  className={`px-2.5 py-1 font-bold rounded-lg transition-all cursor-pointer ${
+                    visitTimeFilter === f.id
+                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             <a
               href="https://calendar.google.com/calendar/u/0/r"
               target="_blank"
@@ -1634,6 +1844,31 @@ export default function ColdCallingHomePage() {
               />
             </div>
 
+            {/* Picked Up / Not Picked Up Filter Pills */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
+              {(['All', 'Picked Up', 'Not Picked Up'] as const).map((tab) => {
+                const count = tab === 'All' 
+                  ? callLogs.length 
+                  : tab === 'Picked Up' 
+                    ? callLogs.filter(c => getCallPickedInfo(c).isPicked).length 
+                    : callLogs.filter(c => !getCallPickedInfo(c).isPicked).length;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setPickedFilter(tab)}
+                    className={`px-2.5 py-1 font-bold rounded-lg transition-all flex items-center space-x-1 cursor-pointer ${
+                      pickedFilter === tab
+                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <span>{tab}</span>
+                    <span className="text-[10px] opacity-70">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Filter Pills */}
             <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
               {(['All', 'Interested', 'Future Plan', 'Site Visit', 'Not Interested'] as const).map((tab) => (
@@ -1651,92 +1886,138 @@ export default function ColdCallingHomePage() {
               ))}
             </div>
 
-            {/* Export PDF Dropdown */}
-            <div className="relative" ref={pdfDropdownRef}>
+            {/* Export Reports Dropdown (PDF & Excel XLSX) */}
+            <div className="relative" ref={exportDropdownRef}>
               <button
-                onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
+                onClick={() => setExportMenuOpen(!exportMenuOpen)}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
-                title="Download Categorized PDF Reports"
+                title="Download Reports as PDF or Excel (.xlsx)"
               >
                 <Download className="h-3.5 w-3.5" />
-                <span>Export PDF</span>
-                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${pdfMenuOpen ? 'rotate-180' : ''}`} />
+                <span>Export</span>
+                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${exportMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {pdfMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-30 py-2 text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3.5 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Download Category Report</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold">PDF</span>
+              {exportMenuOpen && (
+                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-30 py-2 text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in zoom-in-95 duration-100 max-h-[85vh] overflow-y-auto">
+                  {/* Excel (.xlsx) Section */}
+                  <div>
+                    <div className="px-3.5 py-1.5 text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/20">
+                      <span>Export Excel (.xlsx)</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 font-bold">EXCEL</span>
+                    </div>
+                    <div className="py-1">
+                      <button
+                        onClick={() => handleDownloadXlsx('Interested')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          <span>Interested Leads (.xlsx)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.interested}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadXlsx('Site Visit')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          <span>Site Visits Scheduled (.xlsx)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.siteVisits}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadXlsx('Future Plan')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          <span>Future Plan / Follow-up (.xlsx)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.futurePlan || 0}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadXlsx('Not Interested')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-rose-50/80 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-rose-500" />
+                          <span>Not Interested Leads (.xlsx)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.notInterested}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadXlsx('All')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 flex items-center justify-between font-bold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <List className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Complete All Call Logs (.xlsx)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{callLogs.length}</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleDownloadPdf('Interested')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        <span>Interested Clients</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/60 dark:border-emerald-800/60">
-                        {stats.interested}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Site Visit')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-blue-500" />
-                        <span>Site Visits Scheduled</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
-                        {stats.siteVisits}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Future Plan')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" />
-                        <span>Future Plan / Follow-up</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold border border-amber-200/60 dark:border-amber-800/60">
-                        {stats.futurePlan || 0}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Not Interested')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/80 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-rose-500" />
-                        <span>Not Interested / DNC</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold border border-rose-200/60 dark:border-rose-800/60">
-                        {stats.notInterested}
-                      </span>
-                    </button>
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      onClick={() => handleDownloadPdf('All')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between font-bold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <List className="h-3.5 w-3.5 text-slate-400" />
-                        <span>Complete All Call Logs</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border border-slate-200/60 dark:border-slate-700/60">
-                        {callLogs.length}
-                      </span>
-                    </button>
+                  {/* PDF Section */}
+                  <div>
+                    <div className="px-3.5 py-1.5 text-[10px] font-extrabold text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center justify-between bg-blue-50/50 dark:bg-blue-950/20">
+                      <span>Export PDF Reports</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 font-bold">PDF</span>
+                    </div>
+                    <div className="py-1">
+                      <button
+                        onClick={() => handleDownloadPdf('Interested')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                          <span>Interested Clients (PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.interested}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf('Site Visit')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-blue-500" />
+                          <span>Site Visits Scheduled (PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.siteVisits}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf('Future Plan')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          <span>Future Plan / Follow-up (PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.futurePlan || 0}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf('Not Interested')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-rose-50/80 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <span className="h-2 w-2 rounded-full bg-rose-500" />
+                          <span>Not Interested Leads (PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{stats.notInterested}</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf('All')}
+                        className="w-full text-left px-3.5 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 flex items-center justify-between font-bold transition-colors cursor-pointer"
+                      >
+                        <span className="flex items-center space-x-2">
+                          <List className="h-3.5 w-3.5 text-blue-600" />
+                          <span>Complete All Call Logs (PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold">{callLogs.length}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1846,8 +2127,8 @@ export default function ColdCallingHomePage() {
                     </div>
                   </div>
 
-                  {/* Right: Timing, Duration & View Script Button */}
-                  <div className="flex items-center space-x-4 self-end md:self-center shrink-0">
+                  {/* Right: Timing, Duration, Quick Listen & View Script Button */}
+                  <div className="flex items-center space-x-3 self-end md:self-center shrink-0">
                     <div className="text-right">
                       <div className="flex items-center space-x-1 text-xs font-semibold text-slate-700 dark:text-slate-300 justify-end">
                         <Clock className="h-3.5 w-3.5 text-slate-400" />
@@ -1858,10 +2139,25 @@ export default function ColdCallingHomePage() {
                       </span>
                     </div>
 
+                    {/* Quick Audio Play Button on Row */}
+                    {(call.recordingUrl || Number(call.durationSeconds || 0) > 0) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCall(call);
+                        }}
+                        className="px-2.5 py-2 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-bold border border-indigo-200/60 dark:border-indigo-800/60 flex items-center space-x-1 transition-all cursor-pointer"
+                        title="Listen to call recording"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Listen</span>
+                      </button>
+                    )}
+
                     {/* View Script Button */}
                     <button
                       onClick={() => setSelectedCall(call)}
-                      className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-200/60 dark:border-blue-800/60 flex items-center space-x-1.5 transition-all group-hover:bg-blue-600 group-hover:text-white"
+                      className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-200/60 dark:border-blue-800/60 flex items-center space-x-1.5 transition-all group-hover:bg-blue-600 group-hover:text-white cursor-pointer"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                       <span>View Full Script</span>
@@ -1869,9 +2165,9 @@ export default function ColdCallingHomePage() {
 
                     {/* Delete button */}
                     <button
-                      onClick={(e) => handleDeleteCall(call.id, e)}
-                      className="p-2 text-slate-300 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                      title="Delete log"
+                      onClick={(e) => handleDeleteCall(call.id, e, call.callSid)}
+                      className="p-2 text-slate-300 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                      title="Permanently delete call log"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -1953,15 +2249,15 @@ export default function ColdCallingHomePage() {
 
               {/* Call Audio Player */}
               {(() => {
-                const picked = getCallPickedInfo(selectedCall);
+                const hasAudio = Boolean(selectedCall.recordingUrl) || Number(selectedCall.durationSeconds || 0) > 0;
                 const audioUrl = selectedCall.recordingUrl || `/api/recordings/${selectedCall.callSid}.mp3`;
 
-                if (!picked.isPicked || Number(selectedCall.durationSeconds || 0) === 0) {
+                if (!hasAudio) {
                   return (
                     <div className="px-6 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                       <span className="flex items-center space-x-2">
                         <PhoneOff className="h-4 w-4 text-rose-500" />
-                        <span>No audio recording (Call was not picked up by the customer).</span>
+                        <span>No audio recording available for this call attempt.</span>
                       </span>
                     </div>
                   );

@@ -3087,7 +3087,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.05"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.15"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -3566,9 +3566,9 @@ async def entrypoint(ctx: JobContext):
         cartesia_speed = custom_speed
     else:
         try:
-            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "1.05"))
         except Exception:
-            cartesia_speed = 0.98
+            cartesia_speed = 1.05
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
@@ -3699,7 +3699,7 @@ async def entrypoint(ctx: JobContext):
     call_finalized = False
 
     async def _finalize_and_save_call(trigger_reason: str):
-        nonlocal call_finalized, customer_name, customer_phone, user_account_email, agent
+        nonlocal call_finalized, customer_name, customer_phone, user_account_email, agent, is_voicemail_detected
         if call_finalized:
             return
         call_finalized = True
@@ -3832,6 +3832,25 @@ async def entrypoint(ctx: JobContext):
             sentiment = intel.get("sentiment", "neutral")
             ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")
             detected_questions = intel.get("detectedQuestions", [])
+
+            # Check if this call was an automated voicemail or telecom auto-announcement
+            vm_check_patterns = [
+                r"\b(voicemail|voice\s*mail)\b",
+                r"\b(forwarded\s*to\s*voicemail|forwarded\s*to\s*voice\s*mail)\b",
+                r"\b(leave\s*a\s*message|record\s*your\s*message|at\s*the\s*tone|after\s*the\s*tone)\b",
+                r"\b(person\s*(you\s*are\s*trying\s*to\s*reach|you\s*have\s*called)\s*(is\s*not\s*available|is\s*busy|is\s*speaking))\b",
+                r"\b(subscriber\s*(you\s*have\s*dialed|is\s*currently\s*busy|is\s*not\s*reachable))\b",
+                r"\b(switched\s*off|out\s*of\s*coverage|temporarily\s*unavailable|cannot\s*be\s*completed)\b",
+                r"\b(dial\s*kiya\s*gaya\s*number|kripya\s*kuch\s*samay\s*baad|se\s*bahar\s*hai|uplabdh\s*nahi\s*hai)\b",
+                r"\b(vyast\s*hai|switched\s*off\s*hai|sampark\s*kshetra\s*se\s*bahar|kripya\s*baad\s*mein)\b",
+                r"\b(krupaya\s*thodya\s*velane|uttar\s*det\s*nahit)\b"
+            ]
+            has_vm_in_transcript = any(re.search(pat, formatted_transcript, re.IGNORECASE) for pat in vm_check_patterns)
+            is_machine = bool(is_voicemail_detected or has_vm_in_transcript or "voicemail" in ai_summary.lower() or "no actual conversation" in ai_summary.lower())
+            if is_machine:
+                call_outcome = "Not Picked Up"
+                sentiment = "neutral"
+                ai_summary = "The call reached the customer's automated voicemail / telecom IVR system, and no actual conversation took place."
 
             # --- AUDIO RECORDING PERSISTENCE ---
             recording_url = ""
@@ -4078,7 +4097,9 @@ async def entrypoint(ctx: JobContext):
                     "outcome": call_outcome,
                     "sentiment": sentiment,
                     "detectedQuestions": detected_questions,
-                    "called_at": datetime.utcnow().isoformat() + "Z"
+                    "called_at": datetime.utcnow().isoformat() + "Z",
+                    "callPicked": False if is_machine else (len([d for d in call_dialogue if d.get("role") == "customer"]) > 0),
+                    "callPickedStatus": "not_picked" if is_machine else "picked"
                 }
                 if b64_audio_payload:
                     webhook_payload["audioBase64"] = b64_audio_payload
@@ -4267,6 +4288,7 @@ async def entrypoint(ctx: JobContext):
     t_user_speaking_start = 0.0
     current_lang = ACTIVE_TTS_LANGUAGE or "mr"
     latest_caller_transcript = ""
+    is_voicemail_detected = False
 
     @session.on("error")
     def _on_session_error(ev):
@@ -4367,7 +4389,7 @@ async def entrypoint(ctx: JobContext):
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
         global ACTIVE_TTS_LANGUAGE
-        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript, initial_hello_done, t_initial_hello_ended, t_call_pickup
+        nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript, initial_hello_done, t_initial_hello_ended, t_call_pickup, is_voicemail_detected
         caller_has_spoken = True
         caller_is_speaking = not ev.is_final
         t_last_activity = time.time()
@@ -4400,6 +4422,24 @@ async def entrypoint(ctx: JobContext):
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
             record_dialogue_turn("customer", ev.transcript.strip())
+
+            # Automated Voicemail / Telecom IVR Machine Announcement Detection
+            voicemail_patterns = [
+                r"\b(voicemail|voice\s*mail)\b",
+                r"\b(forwarded\s*to\s*voicemail|forwarded\s*to\s*voice\s*mail)\b",
+                r"\b(leave\s*a\s*message|record\s*your\s*message|at\s*the\s*tone|after\s*the\s*tone)\b",
+                r"\b(person\s*(you\s*are\s*trying\s*to\s*reach|you\s*have\s*called)\s*(is\s*not\s*available|is\s*busy|is\s*speaking))\b",
+                r"\b(subscriber\s*(you\s*have\s*dialed|is\s*currently\s*busy|is\s*not\s*reachable))\b",
+                r"\b(switched\s*off|out\s*of\s*coverage|temporarily\s*unavailable|cannot\s*be\s*completed)\b",
+                r"\b(dial\s*kiya\s*gaya\s*number|kripya\s*kuch\s*samay\s*baad|se\s*bahar\s*hai|uplabdh\s*nahi\s*hai)\b",
+                r"\b(vyast\s*hai|switched\s*off\s*hai|sampark\s*kshetra\s*se\s*bahar|kripya\s*baad\s*mein)\b",
+                r"\b(krupaya\s*thodya\s*velane|uttar\s*det\s*nahit)\b"
+            ]
+            if any(re.search(pat, text, re.IGNORECASE) for pat in voicemail_patterns):
+                is_voicemail_detected = True
+                logger.warning(f"🚫 [AUTOMATED VOICEMAIL / TELECOM IVR DETECTED] Machine announcement: '{ev.transcript}'. Hanging up immediately!")
+                trigger_hangup(wait_for_speech=False, delay_seconds=0.2)
+                return
             
             # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
             off_topic_patterns = [
