@@ -1539,9 +1539,14 @@ class PriyaRealEstateAgent(Agent):
                                 yield speak("हो, मी विचारत होते — आपण प्रत्यक्ष साईट पाहायला कधी येऊ शकता?")
                         return
 
-                    # Case 0: Repeated Greeting ("Hello", "हा बोलिए", "हॅलो", "नमस्ते")
-                    greeting_kws = ["hello", "helo", "halo", "नमस्ते", "नमस्कार", "namaste", "namaskar", "boliye", "bola", "ha bolie", "ha boliye"]
-                    if any(kw in clean_norm for kw in greeting_kws) and len(words) <= 3:
+                    # Case 0: Repeated Greeting ("Hello", "हा बोलिए", "हॅलो", "नमस्ते", "कौन बोल रहे हैं")
+                    greeting_kws = [
+                        "hello", "helo", "halo", "हॅलो", "हलो", "नमस्ते", "नमस्कार", "namaste", "namaskar",
+                        "boliye", "bola", "ha bolie", "ha boliye", "kaun", "kon", "koun", "ha", "haan",
+                        "hanji", "haanji", "ji", "yes", "kaun hai", "kon ahe", "koni", "bol"
+                    ]
+                    decline_quick = ["not interested", "nahi chahiye", "wrong number", "disconnect", "nako", "nahi", "no"]
+                    if (any(kw in clean_norm for kw in greeting_kws) and len(words) <= 6) or (not getattr(self, "intro_delivered", False) and len(words) <= 4 and not is_1bhk and not is_2bhk and not any(d in clean_norm for d in decline_quick)):
                         logger.info(f"⚡ [FAST-PATH GREETING RECOVERY] Instant response for greeting '{raw_text}' (0ms LLM wait)!")
                         if getattr(self, "intro_delivered", False):
                             if getattr(self, "site_visit_scheduled", False):
@@ -4370,22 +4375,8 @@ async def entrypoint(ctx: JobContext):
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
 
-    # Defensive check: If caller is present but in JOINING state, wait for ACTIVE answer
-    if caller_participant and hasattr(caller_participant, "state"):
-        if caller_participant.state != rtc.ParticipantState.PARTICIPANT_STATE_ACTIVE:
-            logger.info(f"⏳ Caller {caller_participant.identity} is in state {caller_participant.state}. Waiting for ACTIVE answer...")
-            caller_active = asyncio.Event()
-
-            @ctx.room.on("participant_active")
-            def _on_participant_active(p):
-                if caller_participant and p.identity == caller_participant.identity:
-                    logger.info(f"📞 Caller answered! Participant is now ACTIVE: {p.identity}")
-                    caller_active.set()
-
-            try:
-                await asyncio.wait_for(caller_active.wait(), timeout=45.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout waiting for caller participant to become active. Proceeding.")
+    # Caller participant ready
+    logger.info(f"📞 Caller participant in room: {caller_participant.identity if caller_participant else 'None'}. Proceeding to start session.")
 
     # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
@@ -4508,8 +4499,8 @@ async def entrypoint(ctx: JobContext):
     logger.info("⏳ Allowing 0.15s for audio bridge and SIP RTP connection to settle naturally...")
     await asyncio.sleep(0.15)
 
-    # Snappy Multi-Stage Natural Greeting Loop:
-    # Guarantee Gayatri initiates the call immediately with "Hello?" so the caller never hears silence!
+    # Snappy Immediate Pickup Greeting:
+    # Guarantee Gayatri initiates the call immediately upon pickup with "हॅलो?" so the caller never hears silence!
     if not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
         if is_cartesia and hasattr(session.tts, "update_options"):
@@ -4521,31 +4512,35 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        logger.info("🎙️ [CALL CONNECTED] Ready! Gayatri listening for caller greeting/voice to deliver predefined intro...")
+        logger.info("🎙️ [IMMEDIATE PICKUP GREETING] Saying 'हॅलो?' immediately so caller never hears silence...")
+        t_user_stop = 0.0
+        record_dialogue_turn("agent", "हॅलो?")
+        try:
+            session.say("हॅलो?", allow_interruptions=True)
+            initial_hello_done = True
+        except Exception as e:
+            logger.warning(f"Error speaking immediate hello: {e}")
         intro_finished = True
 
-    # Silence Watchdog: 0.8s (Initial Hello) -> 10s Intervals -> 20s (Auto Hangup)
+    # Silence Watchdog: 12s check -> 30s auto-terminate
     t_last_activity = time.time()
     last_prompt_time = time.time()
-    intro_finished = True
 
     async def _silence_watchdog():
         nonlocal t_last_activity, last_prompt_time, _hangup_scheduled, agent_is_speaking, caller_is_speaking, t_user_stop, caller_has_spoken, intro_delivered, initial_hello_done, t_initial_hello_ended, t_call_pickup, t_caller_last_spoke
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
         
-        # 1. Block and DO NOT count ANY silence while call is ringing!
         while not intro_finished and not _hangup_scheduled:
             await asyncio.sleep(0.1)
 
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (0.4s initial hello, 12s voice check, 30s auto-terminate)...")
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (12s voice check, 30s auto-terminate)...")
         
         t_call_pickup = time.time()
         t_caller_last_spoke = t_call_pickup
         last_prompt_time = t_call_pickup
-        initial_hello_done = False
         silence_prompt_count = 0
 
         while not _hangup_scheduled:
@@ -4569,26 +4564,6 @@ async def entrypoint(ctx: JobContext):
             now = time.time()
             caller_silence = now - t_caller_last_spoke
             agent_idle = now - t_last_activity
-
-            # 1. After 0.4s of picking up the call: If caller has not spoken yet, say "हॅलो?"
-            if not initial_hello_done and not caller_has_spoken:
-                if now - t_call_pickup >= 0.4:
-                    initial_hello_done = True
-                    last_prompt_time = now
-                    t_last_activity = now
-                    logger.info("🎙️ [INITIAL GREETING] 0.4s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
-                    try:
-                        t_user_stop = 0.0
-                        record_dialogue_turn("agent", "हॅलो?")
-                        handle = session.say("हॅलो?", allow_interruptions=False)
-                        if handle:
-                            await handle.wait_for_playout()
-                        t_initial_hello_ended = time.time()
-                        t_last_activity = time.time()
-                        last_prompt_time = time.time()
-                    except Exception as e:
-                        logger.warning(f"Error speaking initial 0.4s hello: {e}")
-                continue
 
             active_lang = ACTIVE_TTS_LANGUAGE or current_lang or "hi"
 
