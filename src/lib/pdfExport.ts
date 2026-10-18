@@ -1,9 +1,9 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { CallLog } from '@/lib/types';
-import { getCallTimestampMs, formatCallDuration, getCallPickedInfo } from '@/lib/callUtils';
+import { getCallTimestampMs, formatCallDuration } from '@/lib/callUtils';
 
-export type PdfReportCategory = 'Interested' | 'Site Visit' | 'Not Interested' | 'Picked Up' | 'Not Picked Up' | 'All';
+export type PdfReportCategory = 'Interested' | 'Site Visit' | 'Future Plan' | 'Not Interested' | 'All';
 
 interface ExportPdfOptions {
   category: PdfReportCategory;
@@ -21,15 +21,11 @@ export function exportLeadsToPdf({
   // 1. Filter calls based on category
   const filtered = calls.filter((call) => {
     const tag = getOutcomeTag(call).label;
-    const pickedInfo = getCallPickedInfo(call);
     if (category === 'All') return true;
-    if (category === 'Interested') {
-      return tag === 'Interested' || tag === 'Future Plan / Need Afterwards' || tag.toLowerCase().includes('interested');
-    }
+    if (category === 'Interested') return tag === 'Interested';
+    if (category === 'Future Plan') return tag === 'Future Plan / Need Afterwards';
     if (category === 'Site Visit') return tag === 'Site Visit Scheduled';
     if (category === 'Not Interested') return tag === 'Not Interested';
-    if (category === 'Picked Up') return pickedInfo.isPicked;
-    if (category === 'Not Picked Up') return !pickedInfo.isPicked && pickedInfo.status !== 'ringing';
     return true;
   });
 
@@ -40,33 +36,27 @@ export function exportLeadsToPdf({
   > = {
     Interested: {
       title: 'INTERESTED CLIENTS LEADS REPORT',
-      subtitle: 'High-intent prospective buyers interested in Sai Garden / Sai Complex (1 BHK / 2 BHK)',
+      subtitle: 'High-intent prospective buyers interested in Sai Complex Dombivli East (1 BHK / 2 BHK)',
       primaryColor: [16, 185, 129], // Emerald green
       filename: `Gayatri_AI_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     'Site Visit': {
       title: 'SITE VISIT SCHEDULED LEADS REPORT',
-      subtitle: 'Confirmed site visit appointments booked for Sai Garden / Sai Complex',
+      subtitle: 'Confirmed site visit appointments booked for Sai Complex Dombivli East',
       primaryColor: [37, 99, 235], // Royal blue
       filename: `Gayatri_AI_Site_Visits_${new Date().toISOString().slice(0, 10)}.pdf`,
+    },
+    'Future Plan': {
+      title: 'FUTURE PLAN / FOLLOW-UP LEADS REPORT',
+      subtitle: 'Clients requesting callback later, future purchase plans, or postponed decision',
+      primaryColor: [217, 119, 6], // Amber
+      filename: `Gayatri_AI_Future_Plan_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     'Not Interested': {
       title: 'NOT INTERESTED / DNC LEADS REPORT',
       subtitle: 'Opted out, wrong numbers, or not currently looking to purchase property',
       primaryColor: [225, 29, 72], // Rose red
       filename: `Gayatri_AI_Not_Interested_Leads_${new Date().toISOString().slice(0, 10)}.pdf`,
-    },
-    'Picked Up': {
-      title: 'PICKED UP CALLS REPORT',
-      subtitle: 'All calls successfully answered with real human conversation dialogue',
-      primaryColor: [16, 185, 129], // Emerald green
-      filename: `Gayatri_AI_Picked_Up_Calls_${new Date().toISOString().slice(0, 10)}.pdf`,
-    },
-    'Not Picked Up': {
-      title: 'UNANSWERED / NOT PICKED UP CALLS REPORT',
-      subtitle: 'Calls that were missed, unanswered, voicemail, or disconnected before answer',
-      primaryColor: [225, 29, 72], // Rose red
-      filename: `Gayatri_AI_Unanswered_Calls_${new Date().toISOString().slice(0, 10)}.pdf`,
     },
     All: {
       title: 'COMPLETE CALL LOGS & LEADS REPORT',

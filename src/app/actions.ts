@@ -3,7 +3,7 @@
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import { getRoomServiceClient, getSipClient, getCachedPersistentCloudLogs } from '@/lib/livekit';
+import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
 import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
 import fs from 'fs';
 import path from 'path';
@@ -59,28 +59,8 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
       for (const line of lines) {
         try {
           const rec = JSON.parse(line);
-          const callId = rec.call_id || rec.room_name || `call-${rec.timestamp || Math.random()}`;
-          const transcriptText = rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : '');
-          const existingIdx = dbLogs.findIndex(log => log.callSid === callId || log.id === callId || log.calledAt === rec.timestamp);
-
-          if (existingIdx >= 0) {
-            // Augment existing log with authoritative full dialogue from disk
-            if (transcriptText && transcriptText.length > (dbLogs[existingIdx].transcript || '').length) {
-              dbLogs[existingIdx].transcript = transcriptText;
-            }
-            if (rec.duration_seconds && rec.duration_seconds > (dbLogs[existingIdx].durationSeconds || 0)) {
-              dbLogs[existingIdx].durationSeconds = Math.round(rec.duration_seconds);
-            }
-            if (rec.recording_url && !dbLogs[existingIdx].recordingUrl) {
-              dbLogs[existingIdx].recordingUrl = rec.recording_url;
-            }
-            if (rec.outcome && (!dbLogs[existingIdx].outcome || dbLogs[existingIdx].outcome.includes('Calling'))) {
-              dbLogs[existingIdx].outcome = rec.outcome;
-            }
-            if (rec.ai_summary && (!dbLogs[existingIdx].aiSummary || dbLogs[existingIdx].aiSummary.includes('ringing'))) {
-              dbLogs[existingIdx].aiSummary = rec.ai_summary;
-            }
-          } else {
+          const callId = rec.call_id || `call-${rec.timestamp || Math.random()}`;
+          if (!dbLogs.some(log => log.callSid === callId || log.calledAt === rec.timestamp)) {
             dbLogs.push({
               id: callId,
               leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
@@ -88,7 +68,7 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
               callSid: callId,
               durationSeconds: Math.round(rec.duration_seconds || 0),
               recordingUrl: rec.recording_url || '',
-              transcript: transcriptText,
+              transcript: rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : ''),
               aiSummary: rec.ai_summary || `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
               sentiment: rec.sentiment || (rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : (rec.outcome?.includes('Interested') ? 'positive' : 'neutral'))),
               calledAt: rec.timestamp || new Date().toISOString(),
@@ -103,44 +83,31 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
         }
       }
     }
-
-    // Also scan bookings/transcripts directory for recent individual call JSONs (limit to latest 25)
-    const indTranscriptsDir = path.join(process.cwd(), 'bookings', 'transcripts');
-    if (fs.existsSync(indTranscriptsDir)) {
-      const files = fs.readdirSync(indTranscriptsDir).filter(f => f.endsWith('.json')).slice(-25);
-      for (const file of files) {
-        try {
-          const rec = JSON.parse(fs.readFileSync(path.join(indTranscriptsDir, file), 'utf-8'));
-          const callId = file.replace('.json', '');
-          const transcriptText = rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : '');
-          const existing = dbLogs.find(l => l.callSid === callId || l.id === callId);
-          if (existing) {
-            if (transcriptText && transcriptText.length > (existing.transcript || '').length) {
-              existing.transcript = transcriptText;
-            }
-          }
-        } catch {}
-      }
-    }
   } catch (err) {
     console.warn('Error augmenting call logs from disk:', err);
   }
 
-  // Fast read from in-memory cached LiveKit Cloud room metadata
+  // Also query LiveKit Cloud room metadata gayatri-persistent-storage
   try {
-    const cloudLogs = await getCachedPersistentCloudLogs();
-    for (const cloudLog of cloudLogs) {
-      if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
-      const key = cloudLog.callSid || cloudLog.id;
-      const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
-      if (exIdx >= 0) {
-        dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
-      } else {
-        dbLogs.push(cloudLog);
+    const roomClient = getRoomServiceClient(30);
+    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+    if (rooms.length > 0 && rooms[0].metadata) {
+      const parsed = JSON.parse(rooms[0].metadata);
+      if (Array.isArray(parsed.callLogs)) {
+        for (const cloudLog of parsed.callLogs) {
+          if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
+          const key = cloudLog.callSid || cloudLog.id;
+          const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
+          if (exIdx >= 0) {
+            dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
+          } else {
+            dbLogs.push(cloudLog);
+          }
+        }
       }
     }
   } catch (lkErr) {
-    console.warn('Error reading from cached LiveKit Cloud metadata:', lkErr);
+    console.warn('Error reading from LiveKit Cloud persistent metadata:', lkErr);
   }
 
   return dbLogs.map(log => {
@@ -164,42 +131,15 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
 
 export async function deleteCallLog(id: string): Promise<boolean> {
   const db = getDb();
-  let changed = false;
-
-  // 1. Delete from local db.json
-  if (db.callLogs) {
-    const initialLength = db.callLogs.length;
-    db.callLogs = db.callLogs.filter(c => c.id !== id && c.callSid !== id);
-    if (db.callLogs.length < initialLength) {
-      saveDb(db);
-      changed = true;
-    }
-  }
-
-  // 2. Also delete from LiveKit Cloud metadata (gayatri-persistent-storage)
-  try {
-    const { getRoomServiceClient } = await import('@/lib/livekit');
-    const roomClient = getRoomServiceClient(30);
-    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-    if (rooms.length > 0 && rooms[0].metadata) {
-      const parsed = JSON.parse(rooms[0].metadata);
-      if (Array.isArray(parsed.callLogs)) {
-        const origLen = parsed.callLogs.length;
-        parsed.callLogs = parsed.callLogs.filter((c: any) => c.id !== id && c.callSid !== id);
-        if (parsed.callLogs.length < origLen) {
-          await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(parsed));
-          changed = true;
-        }
-      }
-    }
-  } catch (lkErr) {
-    console.warn('[deleteCallLog LiveKit Cloud Sync Warning]:', lkErr);
-  }
-
-  try {
+  if (!db.callLogs) return false;
+  const initialLength = db.callLogs.length;
+  db.callLogs = db.callLogs.filter(c => c.id !== id);
+  if (db.callLogs.length < initialLength) {
+    saveDb(db);
     revalidatePath('/');
-  } catch {}
-  return true;
+    return true;
+  }
+  return false;
 }
 
 export async function getColdCallingStats() {
@@ -243,8 +183,7 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
     const metadata = JSON.stringify({
       customer_name: customerName,
       phone_number: safePhone,
-      phone: safePhone,
-      voice_speed: 1.05
+      phone: safePhone
     });
 
     console.log(`[LIVEKIT OUTBOUND CALL]: Dialing ${safePhone} in room ${uniqueRoom} with Trunk ${trunkId}`);

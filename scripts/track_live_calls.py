@@ -55,10 +55,6 @@ def format_line(raw_line: str) -> str:
     if not line:
         return ""
 
-    # Skip raw JSON structured log duplicates from systemd
-    if line.startswith("{") and '"message":' in line:
-        return ""
-
     # Skip duplicates or noisy system warnings
     for pattern in IGNORED_PATTERNS:
         if pattern in line:
@@ -97,7 +93,7 @@ def format_line(raw_line: str) -> str:
 
     # 4.1 Agent Speech Captured (Gayatri Dynamic Replies)
     if "[DIALOGUE CAPTURED: GAYATRI]" in line:
-        text_match = re.search(r"GAYATRI\]\s*(?:\[\d+\.?\d*s\]\s*)?['\"](.*?)['\"]", line)
+        text_match = re.search(r"GAYATRI\]\s*['\"](.*?)['\"]", line)
         speech_text = text_match.group(1) if text_match else line
         return f" {BOLD}{MAGENTA}🎙️ Gayatri:{RESET} \"{speech_text}\""
 

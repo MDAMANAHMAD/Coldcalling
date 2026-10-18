@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getRoomServiceClient, getSipClient, updateCachedPersistentCloudLogs } from '@/lib/livekit';
+import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
 import { getDb, saveDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -7,41 +7,31 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 // ── Concurrency guard: max 4 simultaneous outbound calls (~1.2-1.4 GB RAM each on 8 GB VPS) ──
+let activeOutboundCalls = 0;
 const MAX_CONCURRENT_CALLS = 4;
 
 export async function POST(req: NextRequest) {
-  // ── Concurrency check via real-time LiveKit rooms (fast 2s timeout) ──
-  let activeCallsCount = 0;
-  try {
-    const roomService = getRoomServiceClient(2);
-    const rooms = await Promise.race([
-      roomService.listRooms(),
-      new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
-    ]);
-    const activeCalls = rooms.filter(
-      r => r.name.startsWith('call-') && r.numParticipants > 0
+  // ── Concurrency check ──
+  if (activeOutboundCalls >= MAX_CONCURRENT_CALLS) {
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Server is busy: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
+        activeCount: activeOutboundCalls
+      },
+      { status: 429 }
     );
-    activeCallsCount = activeCalls.length;
-    if (activeCallsCount >= MAX_CONCURRENT_CALLS) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Server is busy: ${activeCallsCount}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
-          activeCount: activeCallsCount
-        },
-        { status: 429 }
-      );
-    }
-  } catch (err) {
-    console.warn(`[CONCURRENCY] Fast check bypassed, proceeding with call dispatch:`, err);
   }
+
+  activeOutboundCalls++;
+  console.log(`[CONCURRENCY] Slot acquired. Active outbound calls: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
 
   try {
     const body = await req.json();
     const phoneNumber = body.phoneNumber || '+918693081506';
     const customerName = body.customerName || 'Aman';
     const userEmail = (body.userEmail || 'test@gmail.com').trim().toLowerCase();
-    const voiceSpeed = Number(body.voiceSpeed ?? body.voice_speed) || 1.05;
+    const voiceSpeed = Number(body.voiceSpeed ?? body.voice_speed) || 0.94;
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
@@ -74,6 +64,12 @@ export async function POST(req: NextRequest) {
     );
 
     console.log(`[API OUTBOUND CALL SUCCESS] Created participant:`, participant);
+
+    // Release the concurrency slot after 5 minutes (covers max ring time + typical call duration)
+    setTimeout(() => {
+      activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
+      console.log(`[CONCURRENCY] Slot released (5-min timeout). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
+    }, 300000);
 
     // Record call log in db.json immediately
     try {
@@ -117,51 +113,43 @@ export async function POST(req: NextRequest) {
 
       saveDb(db);
 
-      const newLiveLog = {
-        id: callLogId,
-        leadId: `lead-${cleanId}`,
-        callSid: uniqueRoom,
-        userEmail: userEmail,
-        durationSeconds: 0,
-        recordingUrl: '',
-        transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
-        aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
-        sentiment: 'neutral' as const,
-        calledAt: new Date().toISOString(),
-        outcome: 'Calling...',
-        customerName: customerName,
-        customerPhone: safePhone,
-        detectedQuestions: ['Outbound Initiation']
-      };
-
-      // Instantly update local memory cache
-      updateCachedPersistentCloudLogs(newLiveLog);
-
-      // Non-blocking background sync to LiveKit Cloud 'gayatri-persistent-storage' room metadata
-      (async () => {
-        try {
-          const roomClient = getRoomServiceClient(5);
-          const rooms = await Promise.race([
-            roomClient.listRooms(['gayatri-persistent-storage']),
-            new Promise<any[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
-          ]);
-          let cloudMeta: any = {};
-          if (rooms.length > 0 && rooms[0].metadata) {
-            try { cloudMeta = JSON.parse(rooms[0].metadata); } catch {}
-          } else {
-            await roomClient.createRoom({
-              name: 'gayatri-persistent-storage',
-              emptyTimeout: 86400 * 30,
-            });
-          }
-          if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
-          cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
-          await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
-          console.log(`[API OUTBOUND CALL] Synced call ${uniqueRoom} to gayatri-persistent-storage in background.`);
-        } catch (cloudErr) {
-          console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
+      // Sync newly placed call to LiveKit Cloud 'gayatri-persistent-storage' room metadata
+      // so it shows up IMMEDIATELY across all connected devices (mobile, laptop, tablet)
+      try {
+        const roomClient = getRoomServiceClient(30);
+        const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+        let cloudMeta: any = {};
+        if (rooms.length > 0 && rooms[0].metadata) {
+          try { cloudMeta = JSON.parse(rooms[0].metadata); } catch {}
+        } else {
+          await roomClient.createRoom({
+            name: 'gayatri-persistent-storage',
+            emptyTimeout: 86400 * 30,
+          });
         }
-      })().catch(() => {});
+        if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
+        const newLiveLog = {
+          id: callLogId,
+          leadId: `lead-${cleanId}`,
+          callSid: uniqueRoom,
+          userEmail: userEmail,
+          durationSeconds: 0,
+          recordingUrl: '',
+          transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
+          aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
+          sentiment: 'neutral',
+          calledAt: new Date().toISOString(),
+          outcome: 'Calling...',
+          customerName: customerName,
+          customerPhone: safePhone,
+          detectedQuestions: ['Outbound Initiation']
+        };
+        cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
+        await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
+        console.log(`[API OUTBOUND CALL] Synced call ${uniqueRoom} to gayatri-persistent-storage across all devices.`);
+      } catch (cloudErr) {
+        console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
+      }
     } catch (dbErr) {
       console.warn('[DB Log Warning]:', dbErr);
     }
@@ -171,9 +159,12 @@ export async function POST(req: NextRequest) {
       message: `Outbound call successfully ringing ${safePhone}!`,
       participantId: participant.participantId,
       roomName: uniqueRoom,
-      activeCount: activeCallsCount + 1
+      activeCount: activeOutboundCalls
     });
   } catch (error: any) {
+    // Release slot on failure
+    activeOutboundCalls = Math.max(0, activeOutboundCalls - 1);
+    console.log(`[CONCURRENCY] Slot released (error). Active: ${activeOutboundCalls}/${MAX_CONCURRENT_CALLS}`);
     console.error(`[API OUTBOUND CALL ERROR]:`, error);
     return NextResponse.json(
       {

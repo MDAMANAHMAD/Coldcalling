@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb, saveDb } from '@/lib/db';
 import { Lead, CallLog, Meeting } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
-import { getRoomServiceClient, getCachedPersistentCloudLogs, updateCachedPersistentCloudLogs } from '@/lib/livekit';
+import { RoomServiceClient } from 'livekit-server-sdk';
+import { getRoomServiceClient } from '@/lib/livekit';
 import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
 
 export const dynamic = 'force-dynamic';
@@ -189,7 +190,6 @@ export async function POST(req: NextRequest) {
 
     // Save DB
     saveDb(db);
-    updateCachedPersistentCloudLogs(newCallLog);
 
     // Sync to LiveKit Cloud persistent storage room metadata
     try {
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
       } else {
         meta.callLogs.unshift(newCallLog);
       }
-      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 100);
+      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 30);
 
       // If audio recording data is provided as base64 data URL, persist in a dedicated cloud room: rec-{callSid}
       if (newCallLog.recordingUrl?.startsWith('data:audio/') || body.audioBase64) {
@@ -296,7 +296,14 @@ export async function GET(req: NextRequest) {
     let cloudError: string | null = null;
     let cloudLogs: any[] = [];
     try {
-      cloudLogs = await getCachedPersistentCloudLogs();
+      const roomClient = getRoomServiceClient(30);
+      const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+      if (rooms.length > 0 && rooms[0].metadata) {
+        const parsed = JSON.parse(rooms[0].metadata);
+        if (Array.isArray(parsed.callLogs)) {
+          cloudLogs = parsed.callLogs;
+        }
+      }
     } catch (lkErr: any) {
       cloudError = lkErr?.message || String(lkErr);
       console.warn('[GET Webhook LiveKit Cloud Read Warning]:', lkErr);
