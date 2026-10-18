@@ -2727,7 +2727,7 @@ def prewarm_fnc(proc: JobProcess):
         vad_events=True,
         no_delay=True,
         interim_results=True,
-        keyterm=STT_KEYTERMS,
+        keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
@@ -3141,7 +3141,7 @@ async def entrypoint(ctx: JobContext):
             vad_events=True,
             no_delay=True,
             interim_results=True,
-            keyterm=STT_KEYTERMS,
+            keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
             api_key=deepgram_key
         )
