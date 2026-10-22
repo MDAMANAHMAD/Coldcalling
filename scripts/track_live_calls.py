@@ -55,6 +55,12 @@ def format_line(raw_line: str) -> str:
     if not line:
         return ""
 
+    # Skip JSON duplicate logs
+    if line.startswith('{"message":') and '[DIALOGUE CAPTURED' in line:
+        return ""
+    if line.startswith('{"message":') and '[INFO]' in line:
+        return ""
+
     # Skip duplicates or noisy system warnings
     for pattern in IGNORED_PATTERNS:
         if pattern in line:

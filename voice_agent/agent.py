@@ -2710,7 +2710,7 @@ def prewarm_fnc(proc: JobProcess):
     endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "550"))
     proc.userdata["stt"] = deepgram.STT(
         language=default_stt_lang,
-        model="nova-3",
+        model="nova-2-general",
         endpointing_ms=endpointing_ms,
         utterance_end_ms=None,
         smart_format=True,
@@ -2719,7 +2719,7 @@ def prewarm_fnc(proc: JobProcess):
         vad_events=True,
         no_delay=True,
         interim_results=True,
-        keyterm=STT_KEYTERMS,
+        keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
@@ -2727,7 +2727,7 @@ def prewarm_fnc(proc: JobProcess):
     # 3. Pre-warm Silero VAD (Telephony calibrated: 0.38 threshold ignores ambient noise/bleeding, 80ms min speech, 350ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.65,
+        min_silence_duration=0.70,
         min_speech_duration=0.08,
         activation_threshold=0.38,
         deactivation_threshold=0.28,
@@ -3124,7 +3124,7 @@ async def entrypoint(ctx: JobContext):
         endpointing_ms = int(os.getenv("STT_ENDPOINTING_MS", "550"))
         stt = deepgram.STT(
             language=default_stt_lang,
-            model="nova-3",
+            model="nova-2-general",
             endpointing_ms=endpointing_ms,
             utterance_end_ms=None,
             smart_format=True,
@@ -3133,7 +3133,7 @@ async def entrypoint(ctx: JobContext):
             vad_events=True,
             no_delay=True,
             interim_results=True,
-            keyterm=STT_KEYTERMS,
+            keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
             api_key=deepgram_key
         )
@@ -3269,7 +3269,7 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Calibrated: 80ms min speech, 0.35s silence)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.65,
+            min_silence_duration=0.70,
             min_speech_duration=0.08,
             activation_threshold=0.38,
             deactivation_threshold=0.28,
@@ -3299,7 +3299,7 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.50,
+                "min_delay": 0.65,
             },
             "preemptive_generation": {
                 "enabled": False,  # Starts LLM streaming in advance based on interim STT, eliminating 500-800ms of wait time
@@ -4543,11 +4543,11 @@ async def entrypoint(ctx: JobContext):
 
             # 1. After 0.4s of picking up the call: If caller has not spoken yet, say "हॅलो?"
             if not initial_hello_done and not caller_has_spoken:
-                if now - t_call_pickup >= 0.4:
+                if now - t_call_pickup >= 1.4:
                     initial_hello_done = True
                     last_prompt_time = now
                     t_last_activity = now
-                    logger.info("🎙️ [INITIAL GREETING] 0.4s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
+                    logger.info("🎙️ [INITIAL GREETING] 1.4s elapsed after pickup with caller silent. Saying 'हॅलो?'...")
                     try:
                         t_user_stop = 0.0
                         record_dialogue_turn("agent", "हॅलो?")
