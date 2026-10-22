@@ -2483,6 +2483,22 @@ STT_KEYWORDS = [
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
+
+# Core high-priority keywords for Deepgram Nova-2 (kept compact to avoid HTTP 400 URL length limits)
+CORE_STT_KEYWORDS = [
+    ("Sai Garden", 3.0),
+    ("2 BHK", 3.0),
+    ("1 BHK", 3.0),
+    ("Ready to move", 3.0),
+    ("Under construction", 3.0),
+    ("amenities", 2.5),
+    ("connectivity", 2.5),
+    ("carpet area", 2.5),
+    ("Dombivli", 2.5),
+    ("Xperia", 2.5),
+    ("Nilje", 2.5),
+]
+
 STT_REPLACE = {
     # Marathi numbers & BHK fixes
     "दोन बीएचके": "2 BHK",
@@ -2719,8 +2735,7 @@ def prewarm_fnc(proc: JobProcess):
         vad_events=True,
         no_delay=True,
         interim_results=True,
-        keywords=STT_KEYWORDS,
-        replace=STT_REPLACE,
+        keywords=CORE_STT_KEYWORDS,
         api_key=deepgram_key
     )
 
@@ -3133,8 +3148,7 @@ async def entrypoint(ctx: JobContext):
             vad_events=True,
             no_delay=True,
             interim_results=True,
-            keywords=STT_KEYWORDS,
-            replace=STT_REPLACE,
+            keywords=CORE_STT_KEYWORDS,
             api_key=deepgram_key
         )
         ctx.proc.userdata["stt"] = stt
@@ -4041,6 +4055,14 @@ async def entrypoint(ctx: JobContext):
     def on_user_input(ev: UserInputTranscribedEvent):
         global ACTIVE_TTS_LANGUAGE
         nonlocal current_lang, t_user_stop, t_last_activity, last_prompt_time, has_prompted_silence, caller_has_spoken, caller_is_speaking, intro_delivered, agent, latest_caller_transcript, initial_hello_done, t_initial_hello_ended, t_call_pickup, is_voicemail_detected
+        
+        # Apply phonetic & BHK replacements in Python (0ms latency, zero WebSocket query overhead)
+        if ev.transcript:
+            clean_text = ev.transcript
+            for rep_k, rep_v in STT_REPLACE.items():
+                if rep_k in clean_text:
+                    clean_text = clean_text.replace(rep_k, rep_v)
+            ev.transcript = clean_text
         if ev.transcript and len(ev.transcript.strip()) >= 2:
             caller_has_spoken = True
         caller_is_speaking = not ev.is_final
