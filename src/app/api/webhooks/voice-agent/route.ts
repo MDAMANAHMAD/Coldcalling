@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
       } else {
         meta.callLogs.unshift(newCallLog);
       }
-      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 30);
+      meta.callLogs = meta.callLogs.filter((l: any) => l.callSid !== 'gayatri-persistent-storage').slice(0, 100);
 
       // If audio recording data is provided as base64 data URL, persist in a dedicated cloud room: rec-{callSid}
       if (newCallLog.recordingUrl?.startsWith('data:audio/') || body.audioBase64) {
@@ -290,23 +290,36 @@ export async function POST(req: NextRequest) {
   }
 }
 
+let cachedGetCloudLogs: any[] = [];
+let lastGetCloudFetchTime = 0;
+const GET_CLOUD_CACHE_TTL = 8000;
+
 export async function GET(req: NextRequest) {
   try {
     const db = getDb();
     let cloudError: string | null = null;
-    let cloudLogs: any[] = [];
-    try {
-      const roomClient = getRoomServiceClient(30);
-      const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-      if (rooms.length > 0 && rooms[0].metadata) {
-        const parsed = JSON.parse(rooms[0].metadata);
-        if (Array.isArray(parsed.callLogs)) {
-          cloudLogs = parsed.callLogs;
+    let cloudLogs: any[] = cachedGetCloudLogs;
+    const now = Date.now();
+    if (now - lastGetCloudFetchTime > GET_CLOUD_CACHE_TTL) {
+      try {
+        const roomClient = getRoomServiceClient(5);
+        const lkPromise = roomClient.listRooms(['gayatri-persistent-storage']);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('LiveKit Cloud GET timeout')), 2500)
+        );
+        const rooms: any = await Promise.race([lkPromise, timeoutPromise]);
+        if (rooms.length > 0 && rooms[0].metadata) {
+          const parsed = JSON.parse(rooms[0].metadata);
+          if (Array.isArray(parsed.callLogs)) {
+            cloudLogs = parsed.callLogs;
+            cachedGetCloudLogs = cloudLogs;
+            lastGetCloudFetchTime = now;
+          }
         }
+      } catch (lkErr: any) {
+        cloudError = lkErr?.message || String(lkErr);
+        console.warn('[GET Webhook LiveKit Cloud Read Warning]:', lkErr);
       }
-    } catch (lkErr: any) {
-      cloudError = lkErr?.message || String(lkErr);
-      console.warn('[GET Webhook LiveKit Cloud Read Warning]:', lkErr);
     }
 
     const mergedMap = new Map<string, any>();

@@ -42,7 +42,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
 
 // Helper to determine status tag styling and label with strict precedence
-const getOutcomeTag = (call: CallLog) => {
+export const getOutcomeTag = (call: CallLog) => {
   const outcome = (call.outcome || '').toLowerCase();
   const summary = (call.aiSummary || '').toLowerCase();
   const transcript = (call.transcript || '').toLowerCase();
@@ -174,7 +174,7 @@ const getOutcomeTag = (call: CallLog) => {
   };
 };
 
-const getSentimentTag = (call: CallLog) => {
+export const getSentimentTag = (call: CallLog) => {
   const sentiment = (call.sentiment || '').toLowerCase();
   if (sentiment === 'positive') {
     return {

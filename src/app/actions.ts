@@ -44,42 +44,74 @@ export async function deleteLead(id: string): Promise<boolean> {
   return false;
 }
 
+// --- In-memory cache for LiveKit Cloud & disk transcripts ---
+let cachedCloudLogs: any[] = [];
+let lastCloudFetchTime = 0;
+const CLOUD_CACHE_TTL = 10000; // 10 seconds
+
+let cachedJsonlRecords: any[] = [];
+let lastTranscriptsMtime = 0;
 // --- GAYATRI CALL LOGS & INTELLIGENCE ACTIONS ---
 
 export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: string; leadPhone?: string })[]> {
   const db = getDb();
   const dbLogs = db.callLogs || [];
 
-  // Also check if bookings/call_transcripts.jsonl or property_visits.jsonl has records
+  // Fast cached reading of bookings/call_transcripts.jsonl based on file mtime
   try {
     const transcriptsPath = path.join(process.cwd(), 'bookings', 'call_transcripts.jsonl');
     if (fs.existsSync(transcriptsPath)) {
-      const content = fs.readFileSync(transcriptsPath, 'utf-8');
-      const lines = content.split('\n').filter(l => l.trim().length > 0);
-      for (const line of lines) {
-        try {
-          const rec = JSON.parse(line);
-          const callId = rec.call_id || `call-${rec.timestamp || Math.random()}`;
-          if (!dbLogs.some(log => log.callSid === callId || log.calledAt === rec.timestamp)) {
-            dbLogs.push({
-              id: callId,
-              leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
-              userEmail: rec.user_email || 'test@gmail.com',
-              callSid: callId,
-              durationSeconds: Math.round(rec.duration_seconds || 0),
-              recordingUrl: rec.recording_url || '',
-              transcript: rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : ''),
-              aiSummary: rec.ai_summary || `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
-              sentiment: rec.sentiment || (rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : (rec.outcome?.includes('Interested') ? 'positive' : 'neutral'))),
-              calledAt: rec.timestamp || new Date().toISOString(),
-              outcome: rec.outcome || 'Inquiry Completed',
-              customerName: rec.customer_name || 'Client',
-              customerPhone: rec.customer_phone || '+918693081506',
-              detectedQuestions: rec.detected_questions || []
-            });
+      const stat = fs.statSync(transcriptsPath);
+      if (stat.mtimeMs !== lastTranscriptsMtime) {
+        lastTranscriptsMtime = stat.mtimeMs;
+        const content = fs.readFileSync(transcriptsPath, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim().length > 0);
+        cachedJsonlRecords = [];
+        for (const line of lines) {
+          try {
+            cachedJsonlRecords.push(JSON.parse(line));
+          } catch {}
+        }
+      }
+
+      for (const rec of cachedJsonlRecords) {
+        const callId = rec.call_id || rec.room_name || `call-${rec.timestamp || Math.random()}`;
+        const transcriptText = rec.full_transcript || (rec.dialogue ? rec.dialogue.map((d: any) => `${d.role}: ${d.text}`).join('\n') : '');
+        const existingIdx = dbLogs.findIndex(log => log.callSid === callId || log.id === callId || log.calledAt === rec.timestamp);
+
+        if (existingIdx >= 0) {
+          if (transcriptText && transcriptText.length > (dbLogs[existingIdx].transcript || '').length) {
+            dbLogs[existingIdx].transcript = transcriptText;
           }
-        } catch {
-          // ignore malformed line
+          if (rec.duration_seconds && rec.duration_seconds > (dbLogs[existingIdx].durationSeconds || 0)) {
+            dbLogs[existingIdx].durationSeconds = Math.round(rec.duration_seconds);
+          }
+          if (rec.recording_url && !dbLogs[existingIdx].recordingUrl) {
+            dbLogs[existingIdx].recordingUrl = rec.recording_url;
+          }
+          if (rec.outcome && (!dbLogs[existingIdx].outcome || dbLogs[existingIdx].outcome.includes('Calling'))) {
+            dbLogs[existingIdx].outcome = rec.outcome;
+          }
+          if (rec.ai_summary && (!dbLogs[existingIdx].aiSummary || dbLogs[existingIdx].aiSummary.includes('ringing'))) {
+            dbLogs[existingIdx].aiSummary = rec.ai_summary;
+          }
+        } else {
+          dbLogs.push({
+            id: callId,
+            leadId: `lead-${rec.customer_name?.toLowerCase().replace(/\s+/g, '') || 'client'}`,
+            userEmail: rec.user_email || 'test@gmail.com',
+            callSid: callId,
+            durationSeconds: Math.round(rec.duration_seconds || 0),
+            recordingUrl: rec.recording_url || '',
+            transcript: transcriptText,
+            aiSummary: rec.ai_summary || `Call with ${rec.customer_name}. Outcome: ${rec.outcome}. Questions: ${rec.detected_questions?.join(', ') || 'General'}.`,
+            sentiment: rec.sentiment || (rec.outcome?.includes('Site Visit') ? 'positive' : (rec.outcome?.includes('Not Interested') ? 'negative' : (rec.outcome?.includes('Interested') ? 'positive' : 'neutral'))),
+            calledAt: rec.timestamp || new Date().toISOString(),
+            outcome: rec.outcome || 'Inquiry Completed',
+            customerName: rec.customer_name || 'Client',
+            customerPhone: rec.customer_phone || '+918693081506',
+            detectedQuestions: rec.detected_questions || []
+          });
         }
       }
     }
@@ -87,27 +119,36 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
     console.warn('Error augmenting call logs from disk:', err);
   }
 
-  // Also query LiveKit Cloud room metadata gayatri-persistent-storage
+  // Cached query of LiveKit Cloud room metadata gayatri-persistent-storage (10s TTL)
   try {
-    const roomClient = getRoomServiceClient(30);
-    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
-    if (rooms.length > 0 && rooms[0].metadata) {
-      const parsed = JSON.parse(rooms[0].metadata);
-      if (Array.isArray(parsed.callLogs)) {
-        for (const cloudLog of parsed.callLogs) {
-          if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
-          const key = cloudLog.callSid || cloudLog.id;
-          const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
-          if (exIdx >= 0) {
-            dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
-          } else {
-            dbLogs.push(cloudLog);
-          }
+    const now = Date.now();
+    if (now - lastCloudFetchTime > CLOUD_CACHE_TTL) {
+      const roomClient = getRoomServiceClient(5);
+      const lkPromise = roomClient.listRooms(['gayatri-persistent-storage']);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('LiveKit Cloud read timeout')), 2500)
+      );
+      const rooms: any = await Promise.race([lkPromise, timeoutPromise]);
+      if (rooms.length > 0 && rooms[0].metadata) {
+        const parsed = JSON.parse(rooms[0].metadata);
+        if (Array.isArray(parsed.callLogs)) {
+          cachedCloudLogs = parsed.callLogs;
+          lastCloudFetchTime = now;
         }
       }
     }
+    for (const cloudLog of cachedCloudLogs) {
+      if (cloudLog.callSid === 'gayatri-persistent-storage') continue;
+      const key = cloudLog.callSid || cloudLog.id;
+      const exIdx = dbLogs.findIndex(l => (l.callSid || l.id) === key);
+      if (exIdx >= 0) {
+        dbLogs[exIdx] = { ...dbLogs[exIdx], ...cloudLog };
+      } else {
+        dbLogs.push(cloudLog);
+      }
+    }
   } catch (lkErr) {
-    console.warn('Error reading from LiveKit Cloud persistent metadata:', lkErr);
+    console.warn('Error reading from LiveKit Cloud persistent metadata (using cache):', lkErr);
   }
 
   return dbLogs.map(log => {
@@ -131,15 +172,42 @@ export async function getCallLogsWithLeads(): Promise<(CallLog & { leadName: str
 
 export async function deleteCallLog(id: string): Promise<boolean> {
   const db = getDb();
-  if (!db.callLogs) return false;
-  const initialLength = db.callLogs.length;
-  db.callLogs = db.callLogs.filter(c => c.id !== id);
-  if (db.callLogs.length < initialLength) {
-    saveDb(db);
-    revalidatePath('/');
-    return true;
+  let changed = false;
+
+  // 1. Delete from local db.json
+  if (db.callLogs) {
+    const initialLength = db.callLogs.length;
+    db.callLogs = db.callLogs.filter(c => c.id !== id && c.callSid !== id);
+    if (db.callLogs.length < initialLength) {
+      saveDb(db);
+      changed = true;
+    }
   }
-  return false;
+
+  // 2. Also delete from LiveKit Cloud metadata (gayatri-persistent-storage)
+  try {
+    const { getRoomServiceClient } = await import('@/lib/livekit');
+    const roomClient = getRoomServiceClient(30);
+    const rooms = await roomClient.listRooms(['gayatri-persistent-storage']);
+    if (rooms.length > 0 && rooms[0].metadata) {
+      const parsed = JSON.parse(rooms[0].metadata);
+      if (Array.isArray(parsed.callLogs)) {
+        const origLen = parsed.callLogs.length;
+        parsed.callLogs = parsed.callLogs.filter((c: any) => c.id !== id && c.callSid !== id);
+        if (parsed.callLogs.length < origLen) {
+          await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(parsed));
+          changed = true;
+        }
+      }
+    }
+  } catch (lkErr) {
+    console.warn('[deleteCallLog LiveKit Cloud Sync Warning]:', lkErr);
+  }
+
+  try {
+    revalidatePath('/');
+  } catch {}
+  return true;
 }
 
 export async function getColdCallingStats() {
@@ -183,7 +251,8 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
     const metadata = JSON.stringify({
       customer_name: customerName,
       phone_number: safePhone,
-      phone: safePhone
+      phone: safePhone,
+      voice_speed: 1.05
     });
 
     console.log(`[LIVEKIT OUTBOUND CALL]: Dialing ${safePhone} in room ${uniqueRoom} with Trunk ${trunkId}`);
