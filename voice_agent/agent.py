@@ -4358,22 +4358,7 @@ async def entrypoint(ctx: JobContext):
         except asyncio.TimeoutError:
             logger.warning("Timeout waiting for caller to join room.")
 
-    # Defensive check: If caller is present but in JOINING state, wait for ACTIVE answer
-    if caller_participant and hasattr(caller_participant, "state"):
-        if caller_participant.state != rtc.ParticipantState.PARTICIPANT_STATE_ACTIVE:
-            logger.info(f"⏳ Caller {caller_participant.identity} is in state {caller_participant.state}. Waiting for ACTIVE answer...")
-            caller_active = asyncio.Event()
-
-            @ctx.room.on("participant_active")
-            def _on_participant_active(p):
-                if caller_participant and p.identity == caller_participant.identity:
-                    logger.info(f"📞 Caller answered! Participant is now ACTIVE: {p.identity}")
-                    caller_active.set()
-
-            try:
-                await asyncio.wait_for(caller_active.wait(), timeout=45.0)
-            except asyncio.TimeoutError:
-                logger.warning("Timeout waiting for caller participant to become active. Proceeding.")
+    # (Immediate start: eliminated 45s blocking participant_active wait)
 
     # Dynamically resolve customer name and phone from participants in the room
     for p in ctx.room.remote_participants.values():
