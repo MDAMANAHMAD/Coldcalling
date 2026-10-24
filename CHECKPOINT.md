@@ -1,51 +1,62 @@
-# Gayatri AI Voice Agent — Milestone Checkpoint: `v1.0.0-stable-perfect`
+# Gayatri AI Voice Agent — Milestone Checkpoint: `stamp-9`
 
-**Saved Date**: September 26, 2026  
-**Git Tag**: `v1.0.0-stable-perfect`  
-**Git Branch**: `stable-v1.0-checkpoint`  
+**Saved Date**: October 24, 2026  
+**Git Tag**: `stamp-9`  
+**Git Branch**: `main`  
 **Repository**: `https://github.com/MDAMANAHMAD/Coldcalling`  
-**Production Web Dashboard**: `https://coldcalling-rho.vercel.app`
+**Production Web Dashboard**: `http://qualivo.duckdns.org` (or configured custom domain)
 
 ---
 
-## 🌟 What Is Included & Working in This Stable Release:
+## 🌟 What Is Included & Working in `stamp-9`:
 
-1. **Ultra-Low Latency Telephony Voice Engine**:
-   - Immediate **Hello?** greeting on connect (<100ms) with zero greeting stutter or silence.
-   - Pre-computed turn-1 intro caching and streaming (<150ms TTFB).
-   - Natural Hindi/Hinglish speech synthesis using Cartesia `kusha` voice model (`sonic-3`, speed 0.96).
+1. **Ultra-Fast & Stable Telephony Voice Pipeline**:
+   - Immediate **"हॅलो?"** greeting with tuned 1.4s carrier audio delay so mobile phone audio hardware unmuting never swallows the opening word.
+   - 3-tier fast shortcut matcher for the initial qualifying questions (Greeting -> Intro -> 1 BHK / 2 BHK -> Ready to Move / Under Construction) delivering pre-cached responses in < 150ms TTFB.
+   - High-intelligence Gemini 2.5 Flash Lite brain for all free-form caller queries with sub-second response times.
+   - Site visit date & time confirmation flow before storing to database and booking calendars.
 
-2. **Complete Dual-Channel Audio Recording**:
-   - Persistent dual-channel audio captured directly to disk and uploaded in parallel 40 KB slices to LiveKit Cloud (`rec-{callSid}-{i}`).
-   - Expanded 100-chunk reassembly engine supporting full recordings of calls up to **15+ minutes**.
-   - Verified live with multi-minute calls (e.g., 5-minute Raj call at 1.19 MB, Suraj call at 426 KB).
+2. **Accurate Speech-to-Text (STT) & Interruption Handling**:
+   - Deepgram nova-2-general configured with 11 core high-impact Devanagari keywords (`CORE_STT_KEYWORDS`).
+   - Phonetic correction map executed in Python memory (`on_user_input`), shrinking the Deepgram WebSocket connection URL from 15,538 bytes down to < 300 bytes, completely eliminating `aiohttp HTTP 400 Bad Request` edge rejections.
+   - Silero VAD configured with `min_silence_duration = 0.70s` and `AgentSession(min_delay=0.65s)` to allow callers to pause naturally without Gayatri cutting them off mid-sentence.
+   - Fixed 45-second blocking `caller_active` wait for instant call initialization.
 
-3. **Accurate Dashboard Call Tracking & Synchronization**:
-   - Prominent **Picked Up** (🟢) vs **Not Picked Up / Missed** (🔴) status badges on all cards and modals.
-   - Chronological sorting using normalized UTC timestamps and callSid epoch milliseconds.
-   - Accurate duration display (`0s (Not Answered)` for missed calls; `Xm Ys` for answered calls).
-   - Real-time cross-device sync across mobile, laptop, and tablet via LiveKit Cloud persistent storage.
+3. **High-Performance Production Web Dashboard**:
+   - Next.js Webpack production build configured to prevent Linux EC2 symlink panics with `venv/bin/python`.
+   - In-memory dashboard cache (8–10s TTL) for instant call logs, statistics, and recording playback.
+   - Dual-channel conversation audio recording and live call tracker (`scripts/track_live_calls.py`).
 
 ---
 
-## 🔄 How to Restore / Retain This Progress in the Future
+## 🔄 How to Restore / Retain `stamp-9` Anytime:
 
-If you make new changes in the future and ever want to revert or compare with this perfect working state, use any of the following commands:
+If you ever need to restore your entire project back to this exact working baseline:
 
 ### 1. View this exact version without changing your current work:
 ```bash
-git checkout v1.0.0-stable-perfect
+git checkout stamp-9
 ```
 
-### 2. Reset your local code back to this exact milestone:
+### 2. Reset your local code back to `stamp-9`:
 ```bash
 git checkout main
-git reset --hard v1.0.0-stable-perfect
+git reset --hard stamp-9
 git push origin main --force
 ```
 
-### 3. Restore your AWS VPS voice agent to this exact state:
+### 3. Restore your AWS EC2 VPS to `stamp-9`:
 ```bash
-git checkout v1.0.0-stable-perfect
-sudo systemctl restart voice-agent
+cd ~/Coldcalling
+git checkout stamp-9
+sudo systemctl restart voice-agent.service
+npm run build
+sudo systemctl restart coldcalling-web.service
 ```
+
+---
+
+## Historical Milestones:
+- `stamp-8`: Initial Hindi flow optimizations and latency reductions.
+- `stamp-7` - `stamp-2`: Voice latency and dual-recording iterations.
+- `v1.0.0-stable-perfect`: Original stable release (September 26, 2026).
