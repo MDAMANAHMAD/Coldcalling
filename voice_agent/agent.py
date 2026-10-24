@@ -1937,6 +1937,7 @@ class PriyaRealEstateAgent(Agent):
 
         visit_record = {
             "customer_name": customer_name,
+            "customer_phone": getattr(self, "customer_phone", "") or "+918693081506",
             "preferred_day": preferred_day,
             "preferred_time": preferred_time,
             "flat_type": flat_type,

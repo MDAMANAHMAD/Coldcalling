@@ -1,7 +1,7 @@
 'use server';
 
 import { getDb, saveDb } from '@/lib/db';
-import { Lead, CallLog } from '@/lib/types';
+import { Lead, CallLog, SiteVisitRecord } from '@/lib/types';
 import { revalidatePath } from 'next/cache';
 import { getRoomServiceClient, getSipClient } from '@/lib/livekit';
 import { getCallTimestampMs, getCallPickedInfo } from '@/lib/callUtils';
@@ -237,6 +237,121 @@ export async function getColdCallingStats() {
     notInterested
   };
 }
+
+// --- SITE VISIT SCHEDULE ACTIONS FOR BUILDER ---
+export async function getSiteVisits(): Promise<SiteVisitRecord[]> {
+  const db = getDb();
+  const dbVisits: SiteVisitRecord[] = db.siteVisits || [];
+  const visits: SiteVisitRecord[] = [...dbVisits];
+  const seen = new Set<string>();
+
+  for (const v of visits) {
+    seen.add(`${v.customerName}-${v.customerPhone}-${v.visitDay}-${v.visitTime}`.toLowerCase());
+  }
+
+  // 1. Read bookings/property_visits.jsonl
+  try {
+    const pvPath = path.join(process.cwd(), 'bookings', 'property_visits.jsonl');
+    if (fs.existsSync(pvPath)) {
+      const content = fs.readFileSync(pvPath, 'utf-8');
+      const lines = content.split('\n').filter(l => l.trim().length > 0);
+      lines.forEach((line, idx) => {
+        try {
+          const rec = JSON.parse(line);
+          const name = rec.customer_name || 'Client';
+          const phone = rec.customer_phone || '+918693081506';
+          const day = rec.preferred_day || 'Upcoming';
+          const time = rec.preferred_time || '11:00 AM';
+          const flat = rec.flat_type || '2 BHK';
+          const key = `${name}-${phone}-${day}-${time}`.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            visits.push({
+              id: `pv-${idx}`,
+              customerName: name,
+              customerPhone: phone,
+              visitDay: day,
+              visitTime: time,
+              flatType: flat,
+              status: (rec.status === 'site_visit_confirmed' ? 'confirmed' : rec.status) || 'confirmed',
+              createdAt: rec.timestamp || new Date().toISOString(),
+              notes: rec.notes || '',
+              project: 'Sai Complex, Dombivli East',
+            });
+          }
+        } catch {}
+      });
+    }
+  } catch (err) {
+    console.warn('Error reading property_visits.jsonl:', err);
+  }
+
+  // 2. Read callLogs (including LiveKit persistent storage logs)
+  try {
+    const allLogs = await getCallLogsWithLeads();
+    for (const log of allLogs) {
+      const outcome = (log.outcome || '').toLowerCase();
+      const summary = log.aiSummary || '';
+      if (outcome.includes('site visit') || summary.toLowerCase().includes('site visit')) {
+        const name = log.customerName || log.leadName || 'Valued Customer';
+        const phone = log.customerPhone || log.leadPhone || '+918693081506';
+
+        // Extract day and time from summary or transcript
+        const textToSearch = `${summary} ${log.transcript || ''}`;
+        const dayMatch = textToSearch.match(/(sunday|saturday|monday|tuesday|wednesday|thursday|friday|tomorrow|kal|weekend)/i);
+        const timeMatch = textToSearch.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)|morning|afternoon|evening|dopahar|subah)/i);
+        const flatMatch = textToSearch.match(/([123]\s*bhk)/i);
+
+        const day = dayMatch ? dayMatch[1].charAt(0).toUpperCase() + dayMatch[1].slice(1).toLowerCase() : 'Sunday';
+        const time = timeMatch ? timeMatch[1].toUpperCase() : '11:00 AM';
+        const flat = flatMatch ? flatMatch[1].toUpperCase() : '2 BHK';
+        const key = `${name}-${phone}-${day}-${time}`.toLowerCase();
+
+        if (!seen.has(key)) {
+          seen.add(key);
+          visits.push({
+            id: `call-visit-${log.id || log.callSid}`,
+            customerName: name,
+            customerPhone: phone,
+            visitDay: day,
+            visitTime: time,
+            flatType: flat,
+            status: 'confirmed',
+            createdAt: log.calledAt || new Date().toISOString(),
+            notes: summary,
+            callId: log.callSid || log.id,
+            recordingUrl: log.recordingUrl,
+            project: 'Sai Complex, Dombivli East',
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error extracting visits from callLogs:', err);
+  }
+
+  // Sort visits with newest first
+  return visits.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export async function updateSiteVisitStatus(id: string, status: 'confirmed' | 'visited' | 'rescheduled' | 'cancelled'): Promise<boolean> {
+  const db = getDb();
+  if (!db.siteVisits) db.siteVisits = [];
+  const idx = db.siteVisits.findIndex(v => v.id === id);
+  if (idx >= 0) {
+    db.siteVisits[idx].status = status;
+  } else {
+    const all = await getSiteVisits();
+    const item = all.find(v => v.id === id);
+    if (item) {
+      db.siteVisits.unshift({ ...item, status });
+    }
+  }
+  saveDb(db);
+  revalidatePath('/');
+  return true;
+}
+
 
 const VERIFIED_HOST = 'https://cold-calling-j7qhnkas.livekit.cloud';
 // --- DIRECT OUTBOUND CALL ACTION (NON-BLOCKING) ---

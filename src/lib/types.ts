@@ -127,6 +127,21 @@ export interface Meeting {
   createdAt: string;
 }
 
+export interface SiteVisitRecord {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  visitDay: string;
+  visitTime: string;
+  flatType: string;
+  status: 'confirmed' | 'visited' | 'rescheduled' | 'cancelled';
+  createdAt: string;
+  notes?: string;
+  callId?: string;
+  recordingUrl?: string;
+  project?: string;
+}
+
 export interface AppDatabase {
   users?: UserAccount[];
   leads: Lead[];
@@ -138,4 +153,5 @@ export interface AppDatabase {
   imapConfig?: ImapConfig;
   callLogs: CallLog[];
   meetings: Meeting[];
+  siteVisits?: SiteVisitRecord[];
 }
