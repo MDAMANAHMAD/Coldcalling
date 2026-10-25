@@ -846,9 +846,9 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
             chat_ctx_dummy.add_message(role="user", content="hello")
             
             async def _test_compile(llm_instance):
-                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                async for chunk in chat_stream:
-                    break
+                async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
+                    async for chunk in chat_stream:
+                        break
 
             try:
                 loop_static = asyncio.get_event_loop()
@@ -921,9 +921,9 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
             chat_ctx_dummy.add_message(role="user", content="hello")
             
             async def _test_compile_groq(llm_instance):
-                chat_stream = llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                async for chunk in chat_stream:
-                    break
+                async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
+                    async for chunk in chat_stream:
+                        break
 
             try:
                 loop_static = asyncio.get_event_loop()
@@ -1109,9 +1109,9 @@ def prewarm_fnc(proc: JobProcess):
                 chat_ctx_dummy.add_message(role="user", content="hello")
 
                 async def _compile_schemas_lazy():
-                    chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
-                    async for chunk in chat_stream:
-                        break
+                    async with global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
+                        async for chunk in chat_stream:
+                            break
 
                 loop_lazy = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop_lazy)
@@ -1136,7 +1136,7 @@ def prewarm_fnc(proc: JobProcess):
         smart_format=True,
         no_delay=True,
         interim_results=True,
-        keyterm=STT_KEYTERMS,
+        keywords=STT_KEYWORDS,
         replace=STT_REPLACE,
         api_key=deepgram_key
     )
@@ -1542,7 +1542,7 @@ async def entrypoint(ctx: JobContext):
             smart_format=True,
             no_delay=True,
             interim_results=True,
-            keyterm=STT_KEYTERMS,
+            keywords=STT_KEYWORDS,
             replace=STT_REPLACE,
             api_key=deepgram_key
         )
