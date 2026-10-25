@@ -591,13 +591,35 @@ export default function ColdCallingHomePage() {
   useEffect(() => {
     loadData();
 
-    // Auto-poll for background updates every 4 seconds for instant cross-device sync
+    // Smart adaptive polling:
+    // 1. Pauses completely when browser tab is inactive/hidden (saves gigabytes of bandwidth)
+    // 2. Polls fast (4s) only when actively dialing a call or running a campaign
+    // 3. Relaxes to 15s when idle
+    const pollIntervalMs = (campaignRunning || isDialing) ? 4000 : 15000;
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        return; // Do not waste bandwidth if tab is hidden
+      }
       loadData();
-    }, 4000);
+    }, pollIntervalMs);
 
-    return () => clearInterval(interval);
-  }, []);
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        loadData(); // Instant fresh sync as soon as user returns to the dashboard
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [campaignRunning, isDialing]);
 
   const handleRefresh = () => {
     setRefreshing(true);
