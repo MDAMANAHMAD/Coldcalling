@@ -290,65 +290,59 @@ def set_normal_priority():
 # ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
-HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR SAI GARDEN
+HINDI_REAL_ESTATE_PROMPT = """# गायत्री (GAYATRI) — साई गार्डन AI रियल एस्टेट प्रॉपर्टी एडवाइज़र
 
-ROLE & PERSONA:
-- Name: Gayatri (गायत्री)
-- Role: Real Estate Property Advisor for SAI GARDEN (साई गार्डन) project by Sai City Group.
-- Project Location: Dombivli East, Nilje, directly opposite Xperia Mall, Kalyan-Shilphata Road.
-- MahaRERA: PR1330002501452
+भूमिका और व्यक्तित्व (ROLE & PERSONA):
+- नाम: गायत्री (Gayatri)
+- भूमिका: साई सिटी ग्रुप के 'साई गार्डन' (SAI GARDEN) प्रोजेक्ट की रियल एस्टेट प्रॉपर्टी एडवाइज़र।
+- प्रोजेक्ट लोकेशन: डोंबिवली ईस्ट, निल्जे, ठीक एक्सपिरिया मॉल के सामने, कल्याण-शिल्फाटा रोड।
+- महारेरा (MahaRERA) नंबर: PR1330002501452
 
-GENDER-NEUTRAL LANGUAGE RULES (STRICT & MANDATORY):
-- You are talking to a person whose gender you do not know. Never assume it.
-- Never address the customer as sir, madam, ji sahab, bhaiya, didi, or any gendered term. Use only the neutral "आप" (Hindi) / "तुम्ही" (Marathi) / "you" (English).
-- Never use verb forms that assume the customer's gender. Words like "देख रहे हैं" (male) or "देख रही हैं" (female) are both strictly forbidden!
-- Use only these gender-neutral Hindi constructions when talking about the customer:
-  * "आपको ... चाहिए"
-  * "आपको ... पसंद है"
-  * "आपके लिए ... ठीक रहेगा"
-  * "आपको ... करना ठीक लगेगा"
-- In Marathi use only:
-  * "आपल्याला ... हवंय"
-  * "आपल्याला ... आवडतं"
-  * "आपल्यासाठी ... ठीक राहील"
-- In English use neutral phrasing:
-  * "would you prefer", "do you need", "is that okay for you".
-- Refer to the caller's family and friends neutrally too: say "किसी को 1 या 2 BHK चाहिए हो", never "कोई देख रहा हो" or "कोई देख रही हो".
-- You yourself are Gayatri and always speak as a female voice ("बात कर रही हूँ"). Only the customer's gender is never assumed.
+फिक्स्ड ओपनिंग ग्रीटिंग (FIRST SPOKEN LINE - MANDATORY):
+"नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
 
-FLUENCY & DELIVERY RULES:
-- Keep every sentence short and complete. One idea per sentence.
-- Never restart a sentence, never repeat a phrase, never trail off mid-thought. If you pause, let the sentence end cleanly first.
-- Keep responses under 20-25 words. Never give long robotic monologues. Always end with a gentle question.
+सख्त जेंडर-न्यूट्रल भाषा के नियम (STRICT GENDER-NEUTRAL RULES):
+- ग्राहक का जेंडर (लिंग) कभी भी मानकर न चलें।
+- सर, मैडम, जी साहब, भैया, दीदी जैसे जेंडर वाले शब्दों का प्रयोग कभी न करें।
+- "देख रहे हैं" या "देख रही हैं" बोलना पूरी तरह से वर्जित है!
+- केवल इन जेंडर-न्यूट्रल वाक्यों का ही उपयोग करें:
+  * "आपको 1 BHK चाहिए या 2 BHK?"
+  * "आपको ready-to-move चाहिए या under-construction चलेगा?"
+  * "आपके लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
+  * "अगर आपकी फैमिली या फ्रेंड्स में किसी को 1 या 2 BHK चाहिए हो, तो हमारा नंबर ज़रूर शेयर कीजिएगा।"
+- आप खुद गायत्री हैं, इसलिए अपने लिए महिला वाचक क्रिया का उपयोग करें ("मैं बात कर रही हूँ", "मैं बोल रही हूँ", "मैं भेज रही हूँ")।
 
-PROPERTY DETAILS & PRICING:
-- 1 BHK: Starts at 30 Lakh onwards. Down payment 3 to 5 Lakh with easy bank loans (SBI, HDFC, ICICI).
-- 2 BHK: Starts at 45 Lakh onwards. G+22 storey grand tower with 35+ luxury lifestyle amenities.
-- 3 BHK / 1 RK: NOT available. Clarify politely that only 1 BHK and 2 BHK are available.
-- Amenities: Modern Gym, Swimming Pool, Clubhouse, Children's Play Area, Landscaped Garden, 24/7 Security.
+प्रॉपर्टी विवरण और सही मूल्य (PROPERTY DETAILS & PRICING):
+- 1 BHK: ₹30 लाख से शुरू। डाउन पेमेंट ₹3 से ₹5 लाख (बैंक लोन सुविधाएं: SBI, HDFC, ICICI)।
+- 2 BHK: ₹45 लाख से शुरू। G+22 मंजिला भव्य टॉवर, 35+ लग्जरी सुविधाओं के साथ।
+- 3 BHK / 1 RK: उपलब्ध नहीं हैं। विनम्रता से स्पष्ट करें कि केवल 1 BHK और 2 BHK ही उपलब्ध हैं।
+- सुविधाएं (Amenities): मॉडर्न जिम, स्विमिंग पूल, क्लबहाउस, बच्चों का खेल क्षेत्र, लैंडस्केप गार्डन, 24/7 सुरक्षा।
+- प्रमुख कनेक्टिविटी:
+  * निल्जे रेलवे स्टेशन: 1 से 2 मिनट पैदल दूरी।
+  * एक्सपिरिया मॉल: ठीक सामने (3 मिनट)।
+  * आगामी मेट्रो लाइन 12 (कल्याण-तलोझा): 4 मिनट।
+  * डोंबिवली स्टेशन: 20 मिनट।
+  * ऐरोली-कटाई टनल: 10 मिनट।
 
-KEY CONNECTIVITY & LANDMARKS:
-- Nilje Railway Station: 1 to 2 minutes walking distance.
-- Xperia Mall: 3 minutes (right opposite the gate).
-- Upcoming Metro Line 12 (Kalyan-Taloja): 4 minutes.
-- Dombivli Station: 20 minutes.
-- Airoli-Katai Tunnel: 10 minutes.
+बातचीत का प्रवाह और 4 स्टेप्स (CONVERSATION FLOW & STEPS):
+- हर वाक्य छोटा और स्पष्ट रखें (20-25 शब्दों के अंदर)। हर उत्तर के बाद एक विनम्र सवाल ज़रूर पूछें।
+- ओपनिंग: "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
+- स्टेप 1 (फ्लैट की पसंद और पज़ेशन):
+  "1 BHK ₹30 लाख से और 2 BHK ₹45 लाख से शुरू होता है। आपको ready-to-move चाहिए या under-construction चलेगा?"
+- स्टेप 2 (अन्य पूछताछ / एमेनिटीज):
+  यदि ग्राहक कोई सवाल पूछे, 20-25 शब्दों में संक्षिप्त उत्तर दें और पूछें: "क्या आप प्रोजेक्ट या सुविधाओं के बारे में कुछ और जानना चाहते हैं, या प्रत्यक्ष साईट विजिट प्लान करें?"
+- स्टेप 3 (साइट विजिट बुक करना - मुख्य लक्ष्य):
+  "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
+- स्टेप 4 (तुरंत कन्फर्मेशन - वॉइस पहले, बैकग्राउंड सेव):
+  "बिल्कुल! आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। धन्यवाद!"
+- यदि ग्राहक रुचि न दिखाए:
+  "कोई बात नहीं! अगर आपकी फैमिली या फ्रेंड्स में किसी को 1 या 2 BHK चाहिए हो तो हमारा नंबर ज़रूर शेयर कीजिएगा। धन्यवाद!"
 
-CONVERSATION FLOW & STEPS:
-- Opening (Fixed Greeting): "Hello! This is Gayatri from Sai Garden, Dombivli East, right opposite Xperia Mall. Would you prefer a 1 BHK or a 2 BHK?"
-- Step 1 (What Caller Wants): Answer any questions and ask which flat is preferred, 1 BHK or 2 BHK. If 3 BHK or 1 RK is asked, politely clarify only 1 and 2 BHK are available.
-- Step 2 (Pricing):
-  * 1 BHK starts 30 Lakh, down payment 3 to 5 Lakh, easy loans from SBI, HDFC, ICICI.
-  * 2 BHK starts 45 Lakh, G+22 tower, 35+ amenities.
-- Step 3 (Ready-to-move): Ask: "आपको ready-to-move चाहिए या under-construction चालेगा?" (Marathi: "आपल्याला ready-to-move हवंय की under-construction चालेल?")
-- Step 4 (Site Visit Goal): Ask: "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?" (Marathi: "प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?")
-- Step 5 (Confirmation Once Agreed): Once day/time is confirmed, say immediately: "बिल्कुल! आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। धन्यवाद!" (Marathi: "नक्कीच! तुमची साईट व्हिजिट कन्फर्म केली आहे. सर्व माहिती व्हाट्सअॅपवर पाठवत आहे. धन्यवाद!")
-- If Not Interested: Politely say: "कोई बात नहीं! अगर आपकी फैमिली या फ्रेंड्स में किसी को 1 या 2 BHK चाहिए हो तो हमारा नंबर ज़रूर शेयर कीजिएगा। धन्यवाद!" (Marathi: "काही हरकत नाही! जर आपल्या फॅमिली किंवा फ्रेंड्समध्ये कोणाला 1 किंवा 2 BHK हवं असल्यास आमचा नंबर नक्की शेअर करा. धन्यवाद!")
-
-STICKY LANGUAGE SWITCHING:
-- Default language is Hindi.
-- Switch to Marathi if caller asks ("marathit bola").
-- Switch to English if caller asks ("speak in English")."""
+कॉल हैंडलिंग नियम:
+- अधिकतम कॉल अवधि: 5 मिनट।
+- वॉइसमेल संदेश: "हे, लगता है आपका कॉल वॉइसमेल पर चला गया है। मैं आपको बाद में कॉल करती हूँ।"
+- 5 सेकंड की चुप्पी पर: "हे, क्या आप अभी भी कॉल पर हैं?"
+- भाषा: बातचीत हमेशा हिंदी में शुरू होगी और हिंदी में ही लॉक रहेगी। केवल तभी बदलें जब ग्राहक स्पष्ट रूप से मराठी या इंग्लिश में बोलने के लिए कहे।"""
 
 # ==============================================================================
 # 2. LANGUAGE RESOLUTION HELPER & AGENT CLASS (STICKY MULTILINGUAL)
@@ -771,7 +765,7 @@ class PriyaRealEstateAgent(Agent):
             elif ACTIVE_TTS_LANGUAGE == "en":
                 reply = "I apologize, we only have 1 BHK and 2 BHK flats available. Would you prefer details for 1 BHK or 2 BHK?"
             else:
-                reply = "माफ़ कीजिएगा, हमारे यहाँ सिर्फ 1 BHK aur 2 BHK flats available hain. Aapko 1 BHK ke baare mein janna hai ya 2 BHK?"
+                reply = "माफ़ कीजिएगा, हमारे यहाँ सिर्फ 1 BHK और 2 BHK उपलब्ध हैं। आपको 1 BHK के बारे में जानना है या 2 BHK?"
             logger.info("⚡ [FAST 3BHK/1RK REFUSAL (<80ms)]")
             speak(reply)
             yield reply
@@ -784,7 +778,7 @@ class PriyaRealEstateAgent(Agent):
             elif ACTIVE_TTS_LANGUAGE == "en":
                 reply = "Our 1 BHK flats start from 30 Lakh onwards with down payment of 3 to 5 Lakh. Would you prefer ready-to-move or under-construction?"
             else:
-                reply = "हमारे 1 BHK flats 30 lakh se shuru hote hain, down payment 3 to 5 lakh hai. Aapko ready-to-move chahiye ya under-construction chalega?"
+                reply = "हमारे 1 BHK फ्लैट्स 30 लाख से शुरू होते हैं, डाउन पेमेंट 3 से 5 लाख है। आपको ready-to-move चाहिए या under-construction चलेगा?"
             logger.info("⚡ [FAST 1 BHK PRICING (<80ms)]")
             speak(reply)
             yield reply
@@ -797,24 +791,40 @@ class PriyaRealEstateAgent(Agent):
             elif ACTIVE_TTS_LANGUAGE == "en":
                 reply = "Our 2 BHK luxury flats start from 45 Lakh onwards in a G+22 tower with 35+ amenities. Would you prefer ready-to-move or under-construction?"
             else:
-                reply = "हमारे 2 BHK luxury flats 45 lakh se start hote hain, G+22 tower mein 35+ luxury amenities ke saath. Aapko ready-to-move chahiye ya under-construction chalega?"
+                reply = "हमारे 2 BHK लग्जरी फ्लैट्स 45 लाख से शुरू होते हैं, G+22 टॉवर में 35 से ज़्यादा सुविधाओं के साथ। आपको ready-to-move चाहिए या under-construction चलेगा?"
             logger.info("⚡ [FAST 2 BHK PRICING (<80ms)]")
             speak(reply)
             yield reply
             return
 
-        # 4. READY-TO-MOVE VS UNDER-CONSTRUCTION (STEP 3 -> STEP 4)
+        # 4. READY-TO-MOVE VS UNDER-CONSTRUCTION (STEP 2 -> ASK OTHER INQUIRY OR SITE VISIT)
         is_rtm_query = any(k in last_agent_text.lower() for k in ["ready-to-move", "ready to move", "under-construction", "under construction"])
         is_rtm_reply = any(k in lower_raw for k in ["ready", "ready to move", "ready-to-move", "under", "under construction", "under-construction", "dono", "koi bhi", "chalega"])
 
         if is_rtm_query and is_rtm_reply:
             if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "समजले. प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?"
+                reply = "समजले. आपल्याला प्रोजेक्ट किंवा सुविधांबद्दल अजून काही विचारायचे आहे, की थेट साईट व्हिजिट प्लॅन करूया?"
             elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "Understood. Which day and time would be convenient for a direct site visit?"
+                reply = "Understood. Would you like to know more about the amenities or connectivity, or shall we plan a direct site visit?"
             else:
-                reply = "समझ गई. प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
-            logger.info("⚡ [FAST SITE VISIT QUESTION (<80ms)]")
+                reply = "समझ गई। क्या आप प्रोजेक्ट या सुविधाओं के बारे में कुछ और पूछना चाहते हैं, या प्रत्यक्ष साईट विजिट प्लान करें?"
+            logger.info("⚡ [FAST INQUIRY CHECK QUESTION (<80ms)]")
+            speak(reply)
+            yield reply
+            return
+
+        # 4B. TRANSITION FROM INQUIRY CHECK TO SITE VISIT
+        is_inquiry_check = any(k in last_agent_text.lower() for k in ["कुछ और पूछना चाहते हैं", "साईट विजिट प्लान करें", "अजून काही विचारायचे आहे", "site visit plan"])
+        is_direct_visit_intent = any(k in lower_raw for k in ["site visit", "visit", "nahi", "kuch nahi", "direct", "dekhne", "aana", "plan kar", "theek hai", "chalega", "aayenge"])
+
+        if is_inquiry_check and is_direct_visit_intent:
+            if ACTIVE_TTS_LANGUAGE == "mr":
+                reply = "प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?"
+            elif ACTIVE_TTS_LANGUAGE == "en":
+                reply = "Which day and time would be convenient for a direct site visit?"
+            else:
+                reply = "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
+            logger.info("⚡ [FAST SITE VISIT PROMPT (<80ms)]")
             speak(reply)
             yield reply
             return
@@ -992,15 +1002,15 @@ class PriyaRealEstateAgent(Agent):
         else:
             message_body = (
                 f"Namaste {target_name},\n\n"
-                "Thank you for speaking with Gayatri at Sai Garden (Shree Om Sai Developers).\n"
+                "Thank you for speaking with Gayatri at Sai Garden (Sai City Group).\n"
                 "As requested, here are the official brochure & details for *Sai Garden*, Dombivli East (Nilje):\n\n"
                 "🌿 *Project*: Sai Garden — Where Luxury Meets Nature\n"
-                "📍 *Location*: Lodha Heaven, Nilaje, Kalyan-Shil Road, Dombivli East (1 min from Nilje Station, 3 mins from Xperia Mall)\n"
-                "🏢 *Tower*: G+22 Storeyed Residential Tower (MahaRERA: PR1330002501452)\n"
+                "📍 *Location*: Directly opposite Xperia Mall, Kalyan-Shilphata Road, Dombivli East (1 min from Nilje Station)\n"
+                "🏢 *Tower*: G+22 Storeyed Luxury Tower (MahaRERA: PR1330002501452)\n"
                 "💰 *Pricing*:\n"
-                "• 1 BHK: Starts at 36 Lakh\n"
-                "• 2 BHK: Starts at 72 Lakh\n\n"
-                "🏊 *Amenities*: Multipurpose Garden, Modern Fitness Studio, Children's Play Kingdom, Indoor Games\n\n"
+                "• 1 BHK: Starts at 30 Lakh (Down payment 3 to 5 Lakh, Easy loans from SBI/HDFC/ICICI)\n"
+                "• 2 BHK: Starts at 45 Lakh (G+22 Tower, 35+ Luxury Amenities)\n\n"
+                "🏊 *Amenities*: Modern Gym, Swimming Pool, Clubhouse, Children's Play Area, Landscaped Garden, 24/7 Security\n\n"
                 "📍 *Site Office*: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Dombivli East - 421204\n"
                 "📞 *Contact*: 8104027095 / 8097052221 / 9892115901\n\n"
                 "Have a wonderful day!"
@@ -2767,7 +2777,7 @@ async def entrypoint(ctx: JobContext):
             if is_voicemail_or_machine(text):
                 logger.warning(f"🚫 [ANSWERING MACHINE / VOICEMAIL DETECTED] Transcript: '{ev.transcript}'. Speaking message and concluding...")
                 is_answering_machine = True
-                vm_msg = "Hey, seems like I have reached your voicemail. I shall call you back at a later time"
+                vm_msg = "हे, लगता है आपका कॉल वॉइसमेल पर चला गया है। मैं आपको बाद में कॉल करती हूँ।"
                 record_dialogue_turn("agent", vm_msg)
                 record_dialogue_turn("customer", f"[Voicemail/Machine: {ev.transcript}]")
                 try:
@@ -2785,7 +2795,7 @@ async def entrypoint(ctx: JobContext):
                 intro_started = True
                 intro_finished = True
                 record_dialogue_turn("customer", ev.transcript.strip())
-                opening_greeting = "Hello! This is Gayatri from Sai Garden, Dombivli East, right opposite Xperia Mall. Would you prefer a 1 BHK or a 2 BHK?"
+                opening_greeting = "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
                 logger.info(f"👤 [HUMAN VOICE CONFIRMED] Caller spoke. Delivering opening greeting: '{opening_greeting}'")
                 record_dialogue_turn("agent", opening_greeting)
                 try:
@@ -3207,7 +3217,7 @@ async def entrypoint(ctx: JobContext):
         if not intro_started and not _hangup_scheduled:
             intro_started = True
             intro_finished = True
-            opening_greeting = "Hello! This is Gayatri from Sai Garden, Dombivli East, right opposite Xperia Mall. Would you prefer a 1 BHK or a 2 BHK?"
+            opening_greeting = "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
             logger.info(f"🎙️ [IMMEDIATE OPENING GREETING] Speaking fixed opening greeting: '{opening_greeting}'")
             record_dialogue_turn("agent", opening_greeting)
             try:
@@ -3267,12 +3277,12 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 2. Silence Nudge: after 5 silent seconds, gently prompt: "Hey, are you still on the call?"
+            # 2. Silence Nudge: after 5 silent seconds, gently prompt: "हे, क्या आप अभी भी कॉल पर हैं?"
             if (not has_prompted_silence) and (silence_duration >= 5.0):
                 has_prompted_silence = True
                 last_prompt_time = now
-                logger.info(f"⏳ [SILENCE NUDGE] 5s silence elapsed. Prompting gently: 'Hey, are you still on the call?'")
-                prompt_text = "Hey, are you still on the call?"
+                logger.info(f"⏳ [SILENCE NUDGE] 5s silence elapsed. Prompting gently: 'हे, क्या आप अभी भी कॉल पर हैं?'")
+                prompt_text = "हे, क्या आप अभी भी कॉल पर हैं?"
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
@@ -3286,7 +3296,7 @@ async def entrypoint(ctx: JobContext):
         await asyncio.sleep(295.0)
         if not _hangup_scheduled:
             logger.info("⏱️ [MAX CALL DURATION] 5 minutes elapsed. Concluding call gracefully...")
-            conclusion = "Thank you so much for your time today. Have a wonderful day, goodbye!"
+            conclusion = "समय देने के लिए बहुत-बहुत धन्यवाद। आपका दिन शुभ हो, नमस्कार!"
             try:
                 record_dialogue_turn("agent", conclusion)
                 speech = session.say(conclusion, allow_interruptions=False)
@@ -3298,22 +3308,7 @@ async def entrypoint(ctx: JobContext):
 
     max_duration_task = asyncio.create_task(_max_call_duration_watchdog())
 
-    # Max Call Duration Watchdog: 5-minute strict limit
-    async def _max_call_duration_watchdog():
-        await asyncio.sleep(295.0)
-        if not _hangup_scheduled:
-            logger.info("⏱️ [MAX CALL DURATION] 5 minutes elapsed. Concluding call gracefully...")
-            conclusion = "Thank you so much for your time today. Have a wonderful day, goodbye!"
-            try:
-                record_dialogue_turn("agent", conclusion)
-                speech = session.say(conclusion, allow_interruptions=False)
-                if speech:
-                    await speech.wait_for_playout()
-            except Exception:
-                pass
-            trigger_hangup(wait_for_speech=False, delay_seconds=0.5)
 
-    max_duration_task = asyncio.create_task(_max_call_duration_watchdog())
 
 
 # ==============================================================================
