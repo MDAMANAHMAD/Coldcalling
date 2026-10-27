@@ -280,106 +280,51 @@ def set_normal_priority():
 # ==============================================================================
 # 1. PRIYA SHARMA HINDI VOICE PERSONA & CRISP KNOWLEDGE BASE
 # ==============================================================================
-HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MASTER SYSTEM PROMPT)
+HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR SAI GARDEN
 
-0. STRICT ANTI-REPETITION MANDATE (ZERO CONSECUTIVE REPETITIONS)
-- YOU MUST NEVER REPEAT YOUR PREVIOUS STATEMENT, PITCH, OR QUESTION IN TWO CONSECUTIVE TURNS!
-- Look at your immediately preceding assistant message in the conversation history before responding. If you already said it, DO NOT SAY IT AGAIN.
-- If the customer gives a short filler, confirmation, or acknowledgment ("haan", "haan boliye", "boliye", "hello", "theek hai", "sun raha hoon", "details", "achha", "suniye"):
-  * STRICTLY DO NOT repeat what you just said!
-  * Never repeat the 1 BHK vs 2 BHK question if you already asked it!
-  * Instead, acknowledge with 1 word ("Ji", "Bilkul") and immediately ask a NEW, fresh question or share fresh details:
-    - E.g. Ask: "Aap ready-to-move flat dekh rahe hain ya upcoming possession chalega?"
-    - Or ask: "Aap khud rehne ke liye dekh rahe hain ya investment purpose ke liye plan kar rahe hain?"
-    - Or explain: "Humare paas spacious master bedroom aur Jaquar fittings ke sath flats available hain. Kya iske baare mein aapka koi specific sawaal hai?"
-- EXCEPTION: You may ONLY repeat your previous statement if the customer explicitly asks you to repeat: e.g. "kya bola aapne?", "phir se boliye", "repeat kijiye", "sunai nahi diya".
+1. PERSONA & CORE RULES
+- You are Gayatri (गायत्री), a warm, professional, authentic Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East.
+- STRICT BREVITY & CONCISE REPLIES (MANDATORY):
+  * Keep every single answer STRICTLY between 1 to 2 short sentences (maximum 15 words).
+  * Answer the caller's specific question directly in 1 short sentence, then ask 1 short closing question.
+  * NEVER give long paragraphs, never list all amenities at once, never describe entire project catalogs!
+  * Short replies ensure lightning-fast response times under 1 second.
+- ZERO CONSECUTIVE REPETITIONS: Look at your preceding message. NEVER repeat the same pitch or question. If the customer gives short acknowledgment ("haan", "theek hai"), acknowledge ("Ji bilkul") and ask a NEW short question.
+- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor numbers, pricing, and configurations in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute". Never say "ek" or "do" with BHK.
+- NATURAL CONSULTATIVE CONVERSATIONS: Strictly DO NOT push for a site visit on every turn! Only invite for a site visit when the customer shows interest or agrees.
+- TONE: Calm, steady, welcoming telephone voice. Use single periods (.) only. NO exclamation marks.
 
-1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
-- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East / Shilphata.
-- PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
-- TONE & ATTITUDE: Calm, warm, steady, professional, and patient. Speak exactly like a real human advisor talking on a phone call.
-- NATURAL CONSULTATIVE CONVERSATIONS:
-  - Strictly DO NOT push for a site visit on every single turn!
-  - Answer the customer's question thoroughly first, then ask natural, consultative follow-up questions such as:
-    * "Kya flat ya layout ke regarding aapka koi specific sawaal hai?"
-    * "Aap kis tareeqe ka layout prefer karte hain?"
-    * "Aap kab tak shift hone ya buy karne ka plan kar rahe hain?"
-    * "Isme aapko aur kuch details janna hai?"
-  - Mix and vary your follow-up questions across turns. NEVER repeat the exact same closing phrase.
-  - Only invite for a site visit when the customer shows genuine interest, asks to see the flat, or agrees after exploring details.
-- STRICT PITCH & EMOTION CONTROL:
-  - Speak with a calm, conversational, welcoming tone.
-  - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
-- PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
-- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor numbers, pricing, and configurations in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute". Never mix Hindi numbers like "ek" or "do" with BHK, as English numbers ("one BHK", "two BHK") are 100% crystal-clear on telephone lines.
-- NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
-- DYNAMIC & CONTEXTUAL RESPONSE LENGTH:
-  * Adapt your reply length dynamically according to the situation and question:
-  * For quick factual questions (e.g., possession date, parking type, MahaRERA number, basic pricing): Give a crisp, direct answer (1 sentence) followed by a polite consultative follow-up question.
-  * For in-depth questions (e.g., amenities, location advantages, connectivity, floor plan specs): Provide a comprehensive, informative, engaging answer (2 to 3 natural sentences) highlighting the key features thoroughly.
-  * For conversational fillers or acknowledgments ("haan", "theek hai", "suniye"): Keep it natural and warm in 1 to 2 sentences.
-  * Always sound like an articulate, warm, professional human real estate advisor on a live phone call.
+2. PROJECT FACTS (SAI GARDEN, DOMBIVLI EAST)
+- Project Name: Sai Garden | Tagline: Where Luxury Meets Nature...
+- Tower: G plus twenty-two storeyed residential high-rise tower (earthquake resistant).
+- Developer: Shree Om Sai Developers (Sai City Group).
+- MahaRERA: PR1330002501452 (100% RERA registered & legally clear).
+- Location: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
+- Configurations & Pricing:
+  * 1 BHK: thirty-six lakh onwards (375 to 520 square feet carpet area).
+  * 2 BHK: seventy-two lakh onwards (760 square feet carpet area).
+- Unbeatable Transit & Distances:
+  * Nilje Railway Station: Just one minute walking distance!
+  * Upcoming Metro Line 12: Just four minutes!
+  * Xperia Mall & PVR Cinemas: three minutes!
+  * Pawar Public School: one minute walk! Lodha World School: five minutes!
+  * Kalyan Station: twenty-five minutes | Diva Junction: twelve minutes | Dombivli Station: twenty minutes.
+  * Navi Mumbai International Airport (NMIA): forty-five minutes.
+- Modern Amenities:
+  * Multipurpose Garden (open gym, party lawn, sand pit, seating).
+  * Modern Fitness Studio (high-end gymnasium, yoga and meditation room).
+  * Children Play Area, Indoor Games, society office, grand plush entrance lobby.
+  * High-speed lifts, stack & puzzle car parking, 24-hour CCTV & manned security.
+  * Branded Jaquar / Cera bathroom fittings, Anchor modular switches.
 
-2. PROJECT FACTS (SAI GARDEN, DOMBIVLI EAST / NILAJE)
-- Project Name: Sai Garden
-- Tagline: Where Luxury Meets Nature...
-- Project Type: 1 BHK & 2 BHK Luxurious Homes in a G+22 Storeyed Residential Tower.
-- MahaRERA Registration: PR1330002501452 (100% RERA registered & legally clear).
-- Developer: Shree Om Sai Developers (A prestigious project by Sai City Group).
-- Location / Address: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Lodha Heaven, on Kalyan-Shil Road, Dombivli East / Shilphata — 421204.
-- Pricing & Configurations:
-  * 1 BHK: 36 Lakh onwards (375 to 520 square feet carpet area).
-  * 2 BHK: 72 Lakh onwards (760 square feet carpet area).
-- Unbeatable Connectivity & Transit:
-  * Nilje Railway Station: Just 1 minute walking distance!
-  * Upcoming Metro Line 12 (Kalyan-Taloja): Just 4 minutes!
-  * Xperia Mall & PVR Cinemas: 3 minutes!
-  * Pawar Public School: 1 minute! Lodha World School: 5 minutes!
-  * Diva Junction: 12 minutes | Dombivli Station: 20 minutes | Kalyan-Shilphata Road: 2 minutes | Mumbra-Panvel Highway: 5 minutes.
-  * Navi Mumbai International Airport (NMIA): 45 minutes | Upcoming Airoli-Katai Tunnel: 10 minutes | Upcoming Bullet Train Station (Thane): 25 minutes.
-- Tower Structure & Modern Amenities:
-  * G+22 Storeyed High-Rise Residential Tower with Earthquake Resistant Design.
-  * Lifts: Reputed brand high-speed lifts with stack and puzzle car parking systems. Ample parking.
-  * Multipurpose Garden: Community destination with open gym, party lawn, sand pit, and senior citizen seating.
-  * Modern Fitness Studio: High-end gymnasium with cardio and strength equipment, yoga and meditation room.
-  * Children's Play Kingdom and Indoor Games arena.
-  * Eco-Friendly creation with rainwater harvesting and 24/7 high-definition CCTV security with manned checkpoints.
-- Premium Specifications:
-  * 2x4 vitrified tiles in living area, granite kitchen platform with glazed tiles up to 2 feet.
-  * Powder-coated aluminium windows (Jindal or equivalent), luxurious balconies.
-  * Jaquar, Plumber, Cera sanitary and bathroom fittings, Astral/Finolex plumbing.
-  * Fire-resistant ISI wiring and Anchor modular switches, with provisions for AC, TV, geyser, purifier, washing machine.
+3. SITE VISIT BOOKING (TOOL: schedule_site_visit)
+- When customer agrees to visit or provides day/time, IMMEDIATELY call `schedule_site_visit(customer_name, preferred_day, preferred_time, flat_type)`.
+- Confirm in 1 short sentence: "Maine aapka visit schedule kar diya hai. Details WhatsApp par bhej rahi hoon. Thank you, aapka din shubh ho, bye!"
 
-3. SITE VISIT CONFIRMATION & CLOSING
-- If customer expresses interest in visiting: "Actual flat dekhne ke liye kaun sa din aapke liye convenient rahega, aur kis time comfortable rahega?"
-- When user confirms:
-  Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
-  and confirm day and time clearly at the end.
-
-4. MANDATORY CALL CLOSING RULE
-- Hindi calls: Conclude with: "Aapka din shubh ho, bye."
-- Marathi calls: Conclude with: "तुमचा दिवस चांगला जावो, नमस्कार."
-- English calls: Conclude with: "Thank you for your time. Have a wonderful day, goodbye!"
-
-5. 100% PURE MARATHI MODE
-- Trigger: If caller speaks or asks for Marathi ("marathi madhe bola", "मराठीत बोला", "marathi aati hai kya"):
-- Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई गार्डन, डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
-- 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
-- 2 BHK: "दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
-- Numbers in Marathi: Always pronounce 375 as "तीनशे पंच्याहत्तर", 760 as "सातशे साठ", 520 as "पाचशे वीस", 36 as "छत्तीस", 72 as "बहात्तर".
-- Silence Watchdog in Marathi: "हॅलो? आपण एक बीएचके फ्लॅट शोधत आहात की दोन बीएचके?"
-- Closing in Marathi: "तुमचा दिवस चांगला जावो, नमस्कार."
-- Rejections in Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
-
-6. 100% PURE ENGLISH MODE
-- Trigger: If caller speaks or asks for English ("can you speak English", "talk in English", "English please"):
-- Respond 100% in fluent, professional English. ZERO Hindi words.
-- Opening: "Yes, absolutely! This is Gayatri from Sai Garden, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
-- 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lakh rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
-- 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lakh rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
-- Silence Watchdog in English: "Hello? Are you looking for a 1 BHK or a 2 BHK home?"
-- Closing in English: "Thank you so much for your time. Have a wonderful day, goodbye!"
+4. STICKY LANGUAGE SWITCHING
+- Default language is Hindi.
+- ONLY switch to Marathi if caller explicitly requests ("marathit bola"): "हो नक्कीच! मी गायत्री बोलत आहे साई गार्डन डोंबिवली ईस्ट येथून..."
+- ONLY switch to English if caller explicitly requests ("speak in English"): "Certainly! This is Gayatri from Sai Garden, Dombivli East..."
 """
 
 # ==============================================================================
@@ -962,46 +907,47 @@ else:
 
 # Maharashtra Real Estate Specific STT Keyword Boosting and Phonetic Replacements
 STT_KEYWORDS = [
+    ("Sai Garden", 3.0),
+    ("School", 3.0),
+    ("Hospital", 3.0),
+    ("Station", 3.0),
+    ("Possession", 3.0),
+    ("1 BHK", 3.0),
+    ("2 BHK", 3.0),
+    ("one BHK", 3.0),
+    ("two BHK", 3.0),
+    ("BHK", 3.0),
+    ("Site visit", 3.0),
+    ("Nilje", 2.5),
     ("Dombivli", 2.5),
-    ("Vashi", 2.5),
-    ("Kalyan", 2.0),
-    ("Nilje", 2.0),
-    ("Palava", 2.0),
+    ("Kalyan", 2.5),
     ("Thane", 2.0),
+    ("Xperia", 2.5),
+    ("Mall", 2.5),
+    ("Metro", 2.5),
+    ("Gym", 2.5),
+    ("Garden", 2.5),
+    ("Amenities", 2.5),
+    ("Lakh", 2.5),
+    ("Crore", 2.0),
+    ("Carpet area", 2.5),
+    ("Tomorrow", 2.5),
+    ("Weekend", 2.5),
+    ("Vashi", 2.0),
     ("Airoli", 2.0),
-    ("Sai Complex", 2.0),
+    ("Palava", 2.0),
     ("Shil Road", 2.0),
-    ("1 RK", 3.0),
-    ("one RK", 3.0),
-    ("१ आरके", 3.0),
-    ("आरके", 2.5),
-    ("वन आरके", 2.5),
-    ("एक आरके", 2.5),
-    ("मराठी", 2.5),
-    ("1 BHK", 2.5),
-    ("2 BHK", 2.5),
-    ("one BHK", 2.0),
-    ("two BHK", 2.0),
-    ("BHK", 2.0),
-    ("RK", 2.0),
-    ("Lodha", 1.8),
-    ("Casario", 1.8),
-    ("flat", 1.5),
-    ("carpet", 1.5),
-    ("terrace", 1.5),
-    ("lakh", 1.5),
-    ("crore", 1.5),
-    ("budget", 1.5),
-    ("visit", 1.5),
-    ("Details", 2.0),
-    ("Overview", 2.0),
-    ("Ready to move", 2.0),
-    ("Possession", 2.0),
-    ("Price", 2.0),
+    ("Lodha", 2.0),
+    ("Jaquar", 2.0),
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
 STT_REPLACE = {
+    "cool": "school",
+    "cool वग़ैरह": "school वग़ैरह",
+    "exam": "station",
+    "exam possession": "station possession",
+    "station se kitna door hai tujh": "station se kitna door hai",
     "washing station": "Vashi station",
     "washing": "Vashi",
     "bashi": "Vashi",
@@ -1014,19 +960,8 @@ STT_REPLACE = {
     "१आरके": "1 RK",
     "वन आरके": "1 RK",
     "एक आरके": "1 RK",
-    "आरके": "1 RK",
-    "1 आरके": "1 RK",
-    "I RK": "1 RK",
-    "i rk": "1 RK",
-    "1rk": "1 RK",
-    "one rk": "1 RK",
-    "1 r.k": "1 RK",
-    "1-rk": "1 RK",
-    "one-rk": "1 RK",
-    "2BHK": "2 BHK",
-    "1BHK": "1 BHK",
-    "2bhk": "2 BHK",
-    "1bhk": "1 BHK",
+    "२ बीएचके": "2 BHK",
+    "१ बीएचके": "1 BHK",
 }
 
 
@@ -2595,7 +2530,7 @@ async def entrypoint(ctx: JobContext):
 
         # Keep up to 6 recent dialogue items + system prompt (keeps TTFT ultra-fast while preserving immediate context)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            max_dialogue_items = 6
+            max_dialogue_items = 4
             items = session._chat_ctx.items
             if len(items) > max_dialogue_items + 1:
                 sys_prompt = items[0]
@@ -2793,54 +2728,37 @@ async def entrypoint(ctx: JobContext):
     intro_finished = True
 
     async def _silence_watchdog():
-        nonlocal t_last_activity, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken
+        nonlocal t_last_activity, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken, has_prompted_silence
         logger.info("🛡️ [SILENCE WATCHDOG] Task active. Monitoring caller activity...")
-        
-        # 1. Block and DO NOT count ANY silence while call is ringing!
+
         while not intro_finished and not _hangup_scheduled:
             await asyncio.sleep(0.1)
 
         if _hangup_scheduled:
             return
 
-        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (2s initial hello, 5s intervals, 15s auto-terminate)...")
-        
-        t_call_pickup = time.time()
-        last_prompt_time = t_call_pickup
-        initial_hello_done = False
+        logger.info("🛡️ [SILENCE WATCHDOG] Caller connected! Monitoring silence (12s gentle prompt, 22s auto-terminate)...")
+
+        last_prompt_time = time.time()
 
         while not _hangup_scheduled:
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.3)
             if _hangup_scheduled:
                 break
-                
-            # If agent is currently speaking or generating speech, reset caller silence timer
+
+            # If agent is speaking or generating speech, reset caller silence timer
             if agent_is_speaking or (session.current_speech and not session.current_speech.done()):
                 t_last_activity = time.time()
                 last_prompt_time = time.time()
+                has_prompted_silence = False
                 continue
 
             now = time.time()
             silence_duration = now - t_last_activity
 
-            # 1. After 2.0s of picking up the call: If caller has not spoken yet, say "Hello?"
-            if not initial_hello_done and not caller_has_spoken:
-                if now - t_call_pickup >= 2.0:
-                    initial_hello_done = True
-                    last_prompt_time = now
-                    logger.info("🎙️ [SILENCE WATCHDOG] 3.5s elapsed with caller silent. Prompting in Hindi...")
-                    try:
-                        t_user_stop = 0.0
-                        record_dialogue_turn("agent", "हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?")
-                        session.say("हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?", allow_interruptions=True)
-                        t_last_activity = time.time()
-                    except Exception as e:
-                        logger.warning(f"Error speaking initial 2s hello: {e}")
-                continue
-
-            # 2. If caller stays silent for 15.0 seconds total without response -> Terminate call
-            if silence_duration >= 15.0:
-                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=15s). Terminating call in language '{current_lang}'...")
+            # 1. If caller stays silent for 22.0 seconds total -> Terminate call gracefully
+            if silence_duration >= 22.0:
+                logger.info(f"⏳ [SILENCE WATCHDOG] Caller silent for {silence_duration:.1f}s (>=22s). Concluding call in language '{current_lang}'...")
                 if current_lang == "mr":
                     farewell_text = "तुमचा आवाज येत नाहीये. मी नंतर कॉल करते, तुमचा दिवस चांगला जावो, नमस्कार."
                 elif current_lang == "en":
@@ -2848,7 +2766,7 @@ async def entrypoint(ctx: JobContext):
                 else:
                     farewell_text = "Lagta hai aapki aawaaz nahi aa rahi hai. Hum baad mein call karte hain, aapka din shubh ho, bye!"
                 try:
-                    t_user_stop = 0.0  # Reset so farewell is never tracked as turn latency spike
+                    t_user_stop = 0.0
                     record_dialogue_turn("agent", farewell_text)
                     speech_handle = session.say(farewell_text, allow_interruptions=False)
                     if speech_handle:
@@ -2858,26 +2776,23 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.8)
                 break
 
-            # 3. Say hello in every 5 seconds interval of caller silence
-            if (now - last_prompt_time >= 5.0) and (silence_duration >= 5.0):
+            # 2. If caller remains silent for 12.0 seconds (and agent hasn't prompted yet): Ask gently ONCE
+            if (not has_prompted_silence) and (silence_duration >= 12.0):
+                has_prompted_silence = True
                 last_prompt_time = now
-                logger.info(f"⏳ [SILENCE PROMPT] 5s silence interval elapsed (total silence: {silence_duration:.1f}s). Prompting in language '{current_lang}'...")
+                logger.info(f"⏳ [SILENCE PROMPT] 12s silence elapsed. Prompting gently in language '{current_lang}'...")
                 if current_lang == "mr":
-                    prompt_text = "हॅलो? माझा आवाज येतोय का?"
+                    prompt_text = "हॅलो? आपण काही विचारत आहात का?"
                 elif current_lang == "en":
-                    prompt_text = "Hello? Are you able to hear me?"
+                    prompt_text = "Hello? Do you have any questions regarding Sai Garden?"
                 else:
-                    if not caller_has_spoken:
-                        prompt_text = "Kya aap apne liye one BHK flat dekh rahe hain ya two BHK?"
-                    else:
-                        prompt_text = "Kya aapka Sai Garden ke baare mein koi sawaal hai?"
+                    prompt_text = "Ji, kya aapka Sai Garden ke baare mein koi sawaal hai?"
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
                     session.say(prompt_text, allow_interruptions=True)
                 except Exception as e:
-                    logger.warning(f"Error speaking 5s interval silence prompt: {e}")
-
+                    logger.warning(f"Error speaking silence prompt: {e}")
     watchdog_task = asyncio.create_task(_silence_watchdog())
 
 
