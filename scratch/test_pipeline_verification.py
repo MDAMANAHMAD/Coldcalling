@@ -46,11 +46,13 @@ assert any("send_whatsapp_brochure" in name for name in tool_names), "send_whats
 with open("voice_agent/agent.py", "r", encoding="utf-8") as f:
     source = f.read()
 
-assert "activation_threshold=0.50" in source, "VAD activation_threshold must be 0.50"
+assert "activation_threshold=0.48" in source, "VAD activation_threshold must be 0.48"
 assert "min_silence_duration=0.25" in source, "VAD min_silence_duration must be 0.25s"
-assert "min_delay\": 0.08" in source, "Endpointing min_delay must be 0.08s"
+assert "min_delay\": 0.12" in source, "Endpointing min_delay must be 0.12s"
 assert "min_words\": 1" in source, "Interruption min_words must be 1"
-assert "min_duration\": 0.25" in source, "Interruption min_duration must be 0.25s"
+assert "min_duration\": 0.55" in source, "Interruption min_duration must be 0.55s"
+assert "VOICEMAIL_PATTERNS" in source, "VOICEMAIL_PATTERNS must be defined"
+assert "is_voicemail_or_machine" in source, "is_voicemail_or_machine must be defined"
 assert "num_idle_processes=2" in source, "WorkerOptions must keep 2 idle processes in RAM"
 assert "active_call.lock" not in source, "active_call.lock must be completely removed"
 

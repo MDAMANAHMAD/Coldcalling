@@ -282,60 +282,65 @@ def set_normal_priority():
 # ==============================================================================
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR SAI GARDEN
 
-1. PERSONA & CORE RULES
-- You are Gayatri (गायत्री), a warm, articulate, and natural Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East.
-- RESPONSE LENGTH (MEDIUM & INFORMATIVE):
-  * Keep replies medium-sized: Exactly 2 natural sentences (~20 to 30 words per turn).
-  * First sentence: Answer the caller's specific question directly with accurate project facts.
-  * Second sentence: Ask a consultative, natural follow-up question or share a relevant highlight.
-- ANTI-REPETITION MANDATE (STRICT):
-  * NEVER repeat the same closing pitch or question two turns in a row!
-  * Strictly DO NOT ask "Kya aap site visit ke liye aana chahenge?" on every turn.
-  * Vary your follow-ups:
-    - "Aap khud rehne ke liye dekh rahe hain ya investment purpose ke liye?"
-    - "Aapka budget kya range mein plan hai?"
-    - "School ya station ke alawa aur koi connectivity details janna chahte hain?"
-    - "Aap kab tak shift hone ka plan kar rahe hain?"
-- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor counts, and flat types in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute".
-- TONE: Calm, warm, professional telephone presence. Use single periods (.) only. NO exclamation marks.
+1. FAST-START & RESPONSE LATENCY DIRECTIVE (MANDATORY SUB-SECOND PLAYOUT):
+- Always start your response with the direct factual answer or core information within the first 3 words.
+- DO NOT use conversational filler preambles (e.g. NEVER start with "Main aapko batana chahungi ki...", "Aapka sawaal bohot achha hai...", "Ji bilkul jaise ki maine bataya...").
+- Immediate, crisp start ensures audio streams to the caller in under 1 second!
+- Keep replies medium-sized: Exactly 2 natural sentences (~20 to 28 words per turn).
+  * Sentence 1: Direct, authoritative answer with exact project facts.
+  * Sentence 2: Natural, consultative follow-up question.
 
-2. MASTER PROJECT FACTS & DIRECT Q&A KNOWLEDGE BASE
+2. ANTI-REPETITION MANDATE (STRICT):
+- NEVER repeat the same closing pitch or question two turns in a row!
+- Strictly DO NOT ask "Kya aap site visit ke liye aana chahenge?" on every turn.
+- Vary your consultative follow-ups across turns:
+  * "Aap khud rehne ke liye dekh rahe hain ya investment purpose ke liye?"
+  * "Aapka budget kya range mein plan hai?"
+  * "School ya station ke alawa aur koi connectivity details janna chahte hain?"
+  * "Aap kab tak shift hone ka plan kar rahe hain?"
+  * "Kya aap iska floor plan aur brochure WhatsApp par dekhna chahenge?"
+
+3. MASTER PROJECT FACTS & DIRECT Q&A KNOWLEDGE BASE (SAI GARDEN):
 - Project Name: Sai Garden | Tagline: Where Luxury Meets Nature...
-- Tower: G plus twenty-two storeyed residential high-rise tower (earthquake resistant).
 - Developer: Shree Om Sai Developers (Sai City Group).
 - MahaRERA: PR1330002501452 (100% RERA registered & legally clear).
-- Location / Address: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
+- Tower: G plus twenty-two storeyed residential high-rise tower (earthquake resistant design).
+- Location: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
 
-[PRE-COMPUTED Q&A FOR FAST RESPONSES]
-* 1 BHK Inquiry / Pricing:
+[PRE-COMPUTED ACCURATE ANSWERS FOR INSTANT RECALL]
+* 1 BHK Inquiry & Pricing:
   "Humare 1 BHK flats ka carpet area 375 square feet hai, aur starting price 36 lakh rupees hai. Isme spacious master bedroom aur branded fittings milti hain. Aap khud rehne ke liye dekh rahe hain ya investment ke liye?"
-* 2 BHK Inquiry / Pricing:
-  "Humare 2 BHK luxury flats 760 square feet carpet area ke hain, jinki starting price 72 lakh rupees hai. Isme master bedroom, balcony aur Jaquar fittings shamil hain. Kya aap iska floor plan dekhna chahenge?"
-* Location / Address:
-  "Sai Garden Lodha Heaven, Nilaje mein located hai, Kalyan-Shil Road par, Dombivli East. Yeh Casa Rio Gate number 3 aur Nilje station ke bilkul paas hai."
+* 2 BHK Inquiry & Pricing:
+  "Humare 2 BHK luxury flats 760 square feet carpet area ke hain, jinki starting price 72 lakh rupees hai. Isme master bedroom, wide balcony aur Jaquar fittings shamil hain. Kya aap iska floor plan dekhna chahenge?"
+* Location & Address:
+  "Sai Garden Lodha Heaven, Nilaje mein located hai, Kalyan-Shil Road par, Dombivli East. Yeh Casa Rio Gate number 3 aur Nilje station ke bilkul paas hai. Kya aap is area se familiar hain?"
 * Schools & Education:
-  "Pawar Public School sirf one minute walking distance par hai, aur Lodha World School five minutes ki doori par hai. Bachon ke school ke liye yeh location bohot convenient hai."
+  "Pawar Public School sirf one minute walking distance par hai, aur Lodha World School five minutes ki doori par hai. Bachon ke school ke liye yeh location bohot convenient hai. Isme aapko aur koi details chahiye?"
 * Hospitals & Healthcare:
-  "Jupiter Hospital, Neon Hospital aur AIMS Hospital yahan se sirf five se ten minutes ki driving distance par hain, jisse emergency care hamesha paas rehti hai."
+  "Neon Hospital six minutes, Vaze Hospital nine minutes, aur Jupiter Hospital sirf ten minutes ki doori par hain. Yahan 24-hour emergency medical care available hai. Kya aap connectivity details janna chahenge?"
 * Railway Station & Train Connectivity:
   "Nilje Railway Station sirf one minute walking distance par hai. Iske alawa Diva Junction twelve minutes, Dombivli Station twenty minutes aur Kalyan Station twenty-five minutes par hai."
-* Metro Line 12:
-  "Upcoming Metro Line 12 (Kalyan-Taloja Metro) project se sirf four minutes door hai, jisse Navi Mumbai aur Thane aana-jaana bohot aasan ho jayega."
+* Metro Line 12 & Bullet Train:
+  "Upcoming Metro Line 12 Kalyan-Taloja Metro sirf four minutes door hai, aur Bullet Train Station twenty-five minutes par. Isse Navi Mumbai aur Thane travel bohot fast ho jayega."
 * Shopping, Mall & Entertainment:
-  "Xperia Mall aur PVR Cinemas project se sirf three minutes ki doori par hain, jahan shopping, dining aur multiplex entertainment available hai."
-* Amenities:
-  "Sai Garden mein multipurpose garden, open gym, party lawn, children play area aur modern fitness studio shamil hain. Tower mein high-speed lifts aur puzzle parking bhi hai."
-* Parking:
-  "Tower mein ample parking space hai, jisme stack aur puzzle car parking systems provide kiye gaye hain."
+  "Xperia Mall aur PVR Cinemas project se sirf three minutes ki doori par hain, aur D-Mart Shilphata five minutes par hai. Shopping aur dining ke liye saari facilities paas hain."
+* Amenities & Lifestyle:
+  "Sai Garden mein multipurpose garden, modern fitness studio, open gym, children play kingdom, yoga room aur indoor games shamil hain. Tower mein reputed brand high-speed lifts aur puzzle parking bhi hai."
+* Parking & Security:
+  "Tower mein ample car parking space hai jisme stack aur puzzle parking systems provide kiye gaye hain. Saath hi 24/7 CCTV aur gated multi-layer security available hai."
 * Possession:
   "Project fast speed par under construction hai with clear RERA approvals. Actual possession timeline aur flat selection aap site visit ke dauran model flat dekh kar confirm kar sakte hain."
 
-3. SITE VISIT BOOKING (STRICT TOOL USAGE):
+4. ENGLISH NUMBERS MANDATE:
+- Always speak all numbers, floor counts, and flat types in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute".
+- TONE: Calm, warm, confident telephone presence. Use single periods (.) only. NO exclamation marks.
+
+5. SITE VISIT BOOKING (STRICT TOOL USAGE):
 - ONLY call `schedule_site_visit` when customer explicitly agrees to visit AND gives a preferred day (e.g. 'kal', 'tomorrow', 'Sunday', 'weekend').
 - NEVER call `schedule_site_visit` if the customer simply says '1' or '2'! Saying '1' or '2' means 1 BHK or 2 BHK!
 - Confirm in 1 short sentence: "Maine aapka visit schedule kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you, aapka din shubh ho, bye!"
 
-4. STICKY LANGUAGE SWITCHING
+6. STICKY LANGUAGE SWITCHING:
 - Default language is Hindi.
 - ONLY switch to Marathi if caller explicitly asks ("marathit bola"): "हो नक्कीच! मी गायत्री बोलत आहे साई गार्डन डोंबिवली ईस्ट येथून..."
 - ONLY switch to English if caller explicitly asks ("speak in English"): "Certainly! This is Gayatri from Sai Garden, Dombivli East..."
@@ -956,6 +961,40 @@ STT_KEYWORDS = [
 ]
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
+# Answering Machine / Voicemail / Email Forwarding Patterns (AMD)
+VOICEMAIL_PATTERNS = [
+    r"\b(voicemail|voice\s*mail)\b",
+    r"\b(leave\s*(a|your)?\s*message)\b",
+    r"\b(after\s*the\s*(tone|beep))\b",
+    r"\b(record\s*(your)?\s*message)\b",
+    r"\b(at\s*the\s*tone)\b",
+    r"\b(call\s*forward(ed|ing)?)\b",
+    r"\b(forward(ed)?\s*to)\b",
+    r"\b(email\s*forward(ing)?)\b",
+    r"\b(switched\s*off)\b",
+    r"\b(switch\s*off)\b",
+    r"\b(not\s*reachable)\b",
+    r"\b(out\s*of\s*coverage)\b",
+    r"\b(currently\s*unavailable)\b",
+    r"\b(cannot\s*(take|answer)\s*(your)?\s*call)\b",
+    r"\b(cannot\s*be\s*reached)\b",
+    r"\b(vyast\s*hai)\b",
+    r"\b(dusre\s*call\s*par)\b",
+    r"\b(another\s*call)\b",
+    r"\b(busy\s*on\s*another\s*call)\b",
+    r"\b(kripya\s*(kuch\s*samay\s*)?baad)\b",
+    r"\b(please\s*try\s*again\s*later)\b",
+    r"\b(does\s*not\s*exist)\b",
+    r"\b(invalid\s*number)\b",
+]
+
+def is_voicemail_or_machine(transcript: str) -> bool:
+    if not transcript:
+        return False
+    t = transcript.strip().lower()
+    return any(re.search(pat, t, re.IGNORECASE) for pat in VOICEMAIL_PATTERNS)
+
+
 STT_REPLACE = {
     "2 amenities": "2 BHK",
     "two amenities": "2 BHK",
@@ -1045,7 +1084,7 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2-general",
-        endpointing_ms=300,
+        endpointing_ms=120,
         utterance_end_ms=None,
         smart_format=True,
         no_delay=True,
@@ -1058,10 +1097,10 @@ def prewarm_fnc(proc: JobProcess):
     # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 200ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.50,
-        min_speech_duration=0.08,
-        activation_threshold=0.35,
-        deactivation_threshold=0.20,
+        min_silence_duration=0.25,
+        min_speech_duration=0.10,
+        activation_threshold=0.48,
+        deactivation_threshold=0.25,
         prefix_padding_duration=0.15,
         sample_rate=16000
     )
@@ -1071,8 +1110,8 @@ def prewarm_fnc(proc: JobProcess):
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.20"))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
@@ -1081,7 +1120,7 @@ def prewarm_fnc(proc: JobProcess):
             sample_rate=24000,
             model=cartesia_model,
             speed=cartesia_speed,
-            emotion=[cartesia_emotion] if cartesia_emotion else None,
+            emotion=None,
             volume=cartesia_volume,
             word_timestamps=False,
             tokenizer=PhoneticSentenceTokenizer()
@@ -1439,7 +1478,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2-general",
-            endpointing_ms=300,
+            endpointing_ms=120,
             utterance_end_ms=None,
             smart_format=True,
             no_delay=True,
@@ -1534,8 +1573,8 @@ async def entrypoint(ctx: JobContext):
             cartesia_speed = 0.98
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
-    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
+    cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
+    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.20"))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
@@ -1550,7 +1589,7 @@ async def entrypoint(ctx: JobContext):
                 sample_rate=24000,
                 model=cartesia_model,
                 speed=cartesia_speed,
-                emotion=[cartesia_emotion] if cartesia_emotion else None,
+                emotion=None,
                 volume=cartesia_volume,
                 word_timestamps=False,
                 tokenizer=PhoneticSentenceTokenizer()
@@ -1579,13 +1618,13 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.50,
-            min_speech_duration=0.08,
-            activation_threshold=0.35,
-            deactivation_threshold=0.20,
-            prefix_padding_duration=0.15,
-            sample_rate=16000
-        )
+        min_silence_duration=0.25,
+        min_speech_duration=0.10,
+        activation_threshold=0.48,
+        deactivation_threshold=0.25,
+        prefix_padding_duration=0.15,
+        sample_rate=16000
+    )
     
     # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
     is_cartesia = tts and "cartesia" in tts.__class__.__module__
@@ -1609,19 +1648,19 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.35,  # 350ms pause after caller finishes before taking turn
+                "min_delay": 0.12,  # Ultra-crisp 120ms turn-taking after caller finishes
             },
             "preemptive_generation": {
-                "enabled": False,  # Disabled: waits for caller to finish full sentence instead of guessing on interim words
+                "enabled": False,
                 "preemptive_tts": False,
             },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.30,  # Caller can interrupt with 300ms of real voice
+                "min_duration": 0.55,  # Requires 550ms of real voice to interrupt, preventing background noise/breathing cuts
                 "resume_false_interruption": True,
-                "false_interruption_timeout": 1.0,
+                "false_interruption_timeout": 1.2,
             }
         }
     )
@@ -1778,17 +1817,26 @@ async def entrypoint(ctx: JobContext):
                 formatted_lines.append(f"[{turn['time']}s] {role_label}: {turn['text']}")
             formatted_transcript = "\n".join(formatted_lines) if formatted_lines else "No conversation recorded."
 
-            # Run Post-Call Intelligence Classifier (Gemini 3.6 / Groq / Multilingual Regex)
-            try:
-                intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
-            except Exception as classify_err:
-                logger.error(f"Error in classify_call_intelligence: {classify_err}", exc_info=True)
+            # If call was voicemail / answering machine, set outcome directly
+            if is_answering_machine:
                 intel = {
+                    "outcome": "Not Interested",
+                    "sentiment": "neutral",
+                    "aiSummary": f"Call to {customer_name} reached voicemail, answering machine, or email forwarding; terminated immediately.",
+                    "detectedQuestions": ["Voicemail / Answering Machine"]
+                }
+            else:
+                # Run Post-Call Intelligence Classifier (Gemini 3.6 / Groq / Multilingual Regex)
+                try:
+                    intel = classify_call_intelligence(formatted_transcript, call_dialogue, customer_name)
+                except Exception as classify_err:
+                    logger.error(f"Error in classify_call_intelligence: {classify_err}", exc_info=True)
+                    intel = {
                     "outcome": "Inquiry Completed",
                     "sentiment": "neutral",
                     "aiSummary": f"Call with {customer_name}. Discussed Sai Complex project details.",
                     "detectedQuestions": ["General Inquiry"]
-                }
+                    }
             call_outcome = intel.get("outcome", "Inquiry Completed")
             sentiment = intel.get("sentiment", "neutral")
             ai_summary = intel.get("aiSummary", f"Call with {customer_name}. Outcome: {call_outcome}.")
@@ -2225,8 +2273,10 @@ async def entrypoint(ctx: JobContext):
     t_last_activity = time.time()
     has_prompted_silence = False
     agent_is_speaking = False
+    intro_started = False
     intro_finished = False
     caller_has_spoken = False
+    is_answering_machine = False
     watchdog_task = None
     last_agent_speech = ""
 
@@ -2319,7 +2369,7 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("user_input_transcribed")
     def on_user_input(ev: UserInputTranscribedEvent):
-        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken
+        nonlocal current_lang, t_user_stop, t_last_activity, has_prompted_silence, caller_has_spoken, intro_started, intro_finished, is_answering_machine
         caller_has_spoken = True
         t_last_activity = time.time()
         has_prompted_silence = False
@@ -2329,9 +2379,32 @@ async def entrypoint(ctx: JobContext):
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} (+{transcribed_after:.1f}ms) | Text: '{ev.transcript}'")
             else:
                 logger.info(f"🎙️ [STT TRANSCRIPT] Final={ev.is_final} | Text: '{ev.transcript}'")
+
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
+
+            # 1. Answering Machine / Voicemail / Forwarding Check (AMD)
+            if is_voicemail_or_machine(text):
+                logger.warning(f"🚫 [ANSWERING MACHINE / VOICEMAIL DETECTED] Transcript: '{ev.transcript}'. Disconnecting call immediately!")
+                is_answering_machine = True
+                record_dialogue_turn("customer", f"[Voicemail/Machine: {ev.transcript}]")
+                trigger_hangup(wait_for_speech=False, delay_seconds=0.1)
+                return
+
             record_dialogue_turn("customer", ev.transcript.strip())
+
+            # 2. First Human Voice Detection: Trigger Opening Greeting
+            if not intro_started:
+                intro_started = True
+                intro_finished = True
+                logger.info(f"👤 [HUMAN VOICE DETECTED] Caller said: '{ev.transcript}'. Speaking opening Sai Garden greeting...")
+                intro_text = "नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ one aur two BHK luxury flats thirty-six lakh se shuru ho rahe hain. Kya aap apne liye one BHK dekh rahe hain ya two BHK?"
+                record_dialogue_turn("agent", intro_text)
+                try:
+                    session.say(intro_text, allow_interruptions=True)
+                except Exception as intro_err:
+                    logger.warning(f"Error speaking intro on human voice: {intro_err}")
+                return
             
             # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
             off_topic_patterns = [
@@ -2739,23 +2812,25 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        # Graceful 2.0-second pause after pickup so caller has placed the phone to their ear
-        logger.info("⏳ [PHONE PICKUP] Waiting 2.0s for caller to place phone to ear before speaking introduction...")
-        await asyncio.sleep(2.0)
+        # Dynamic Human Voice Detection: Gayatri listens first for caller voice ('Hello', etc.)
+        # If the caller stays silent for 3.5 seconds after pickup, gently prompt with Hello
+        async def _initial_human_listener():
+            nonlocal intro_started, intro_finished, _hangup_scheduled
+            logger.info("🎧 [HUMAN VOICE DETECTION ACTIVE] Waiting for caller to speak first (e.g. 'Hello')...")
+            await asyncio.sleep(3.5)
+            if not intro_started and not _hangup_scheduled:
+                logger.info("⏳ [INITIAL SILENCE] Caller answered but stayed silent for 3.5s. Prompting with gentle Hello...")
+                prompt_hello = "Hello? नमस्कार!"
+                record_dialogue_turn("agent", prompt_hello)
+                try:
+                    session.say(prompt_hello, allow_interruptions=True)
+                except Exception as e:
+                    logger.warning(f"Error speaking initial gentle prompt: {e}")
 
-        logger.info("🎙️ [INITIAL GREETING] Speaking complete Sai Garden introduction to caller...")
-        intro_text = "नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ one aur two BHK luxury flats thirty-six lakh se shuru ho rahe hain. Kya aap apne liye one BHK dekh rahe hain ya two BHK?"
-        try:
-            record_dialogue_turn("agent", intro_text)
-            session.say(intro_text, allow_interruptions=True)
-            t_last_activity = time.time()
-        except Exception as e:
-            logger.warning(f"Error speaking initial introduction: {e}")
-        intro_finished = True
+        asyncio.create_task(_initial_human_listener())
 
-    # Silence Watchdog: 2s (Initial Hello) -> 5s Interval Prompts -> 15s (Auto Hangup)
+    # Silence Watchdog: Monitors caller silence after intro completes (12s gentle prompt, 22s auto-terminate)
     t_last_activity = time.time()
-    intro_finished = True
 
     async def _silence_watchdog():
         nonlocal t_last_activity, _hangup_scheduled, agent_is_speaking, t_user_stop, caller_has_spoken, has_prompted_silence
