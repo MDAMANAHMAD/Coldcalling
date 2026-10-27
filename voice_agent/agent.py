@@ -450,6 +450,12 @@ class PriyaRealEstateAgent(Agent):
                     raw_text = " ".join(str(x) for x in c if x)
                 else:
                     raw_text = str(c or "")
+
+            # Strictly drop non-human acoustic artifacts (e.g. ringback pulses '2', line clicks)
+            if is_noise_or_digit_artifact(raw_text):
+                logger.info(f"🚫 [LLM NODE] Dropping non-human acoustic artifact: '{raw_text}'")
+                return
+
             if raw_text:
                 global ACTIVE_TTS_LANGUAGE
                 det_lang = resolve_language(raw_text, ACTIVE_TTS_LANGUAGE)
@@ -993,6 +999,31 @@ def is_voicemail_or_machine(transcript: str) -> bool:
         return False
     t = transcript.strip().lower()
     return any(re.search(pat, t, re.IGNORECASE) for pat in VOICEMAIL_PATTERNS)
+
+HUMAN_GREETING_WORDS = [
+    "hello", "namaskar", "namaste", "haan", "ha", "haa", "boliye", "bolo", "kaun",
+    "kaun bol", "sun raha", "bataiye", "yes", "hi", "who is", "kya hai", "accha",
+    "bhk", "flat", "sai garden", "dombivli", "property", "details", "ji"
+]
+
+def is_noise_or_digit_artifact(text: str) -> bool:
+    if not text:
+        return True
+    clean = re.sub(r'[^\w\s]', '', text).strip()
+    if not clean or clean.isdigit() or len(clean) <= 1:
+        return True
+    if clean.lower() in ['2', '1', '3', '4', '5', 'प', 'द', 'अ', 'h', 'ah', 'uh']:
+        return True
+    return False
+
+def is_human_speech(text: str) -> bool:
+    if is_noise_or_digit_artifact(text):
+        return False
+    t = text.lower()
+    words = t.split()
+    if any(w in t for w in HUMAN_GREETING_WORDS) or len(words) >= 2:
+        return True
+    return False
 
 
 STT_REPLACE = {
@@ -2383,6 +2414,11 @@ async def entrypoint(ctx: JobContext):
         if ev.is_final and ev.transcript:
             text = ev.transcript.strip().lower()
 
+            # 0. Reject solitary digits ('2', '1'), DTMF tones, and line noise artifacts
+            if is_noise_or_digit_artifact(text):
+                logger.info(f"🔇 [FILTERED ARTIFACT] Ignored non-human acoustic tone / digit: '{ev.transcript}'")
+                return
+
             # 1. Answering Machine / Voicemail / Forwarding Check (AMD)
             if is_voicemail_or_machine(text):
                 logger.warning(f"🚫 [ANSWERING MACHINE / VOICEMAIL DETECTED] Transcript: '{ev.transcript}'. Disconnecting call immediately!")
@@ -2391,13 +2427,15 @@ async def entrypoint(ctx: JobContext):
                 trigger_hangup(wait_for_speech=False, delay_seconds=0.1)
                 return
 
-            record_dialogue_turn("customer", ev.transcript.strip())
-
-            # 2. First Human Voice Detection: Trigger Opening Greeting
+            # 2. First Human Voice Detection: Trigger Opening Greeting ONLY on genuine human speech
             if not intro_started:
+                if not is_human_speech(text):
+                    logger.info(f"⏳ [AWAITING HUMAN WORDS] Caller uttered non-greeting noise: '{ev.transcript}'. Waiting for real speech...")
+                    return
                 intro_started = True
                 intro_finished = True
-                logger.info(f"👤 [HUMAN VOICE DETECTED] Caller said: '{ev.transcript}'. Speaking opening Sai Garden greeting...")
+                record_dialogue_turn("customer", ev.transcript.strip())
+                logger.info(f"👤 [HUMAN VOICE CONFIRMED] Caller said: '{ev.transcript}'. Speaking opening Sai Garden greeting...")
                 intro_text = "नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ one aur two BHK luxury flats thirty-six lakh se shuru ho rahe hain. Kya aap apne liye one BHK dekh rahe hain ya two BHK?"
                 record_dialogue_turn("agent", intro_text)
                 try:
@@ -2405,6 +2443,8 @@ async def entrypoint(ctx: JobContext):
                 except Exception as intro_err:
                     logger.warning(f"Error speaking intro on human voice: {intro_err}")
                 return
+
+            record_dialogue_turn("customer", ev.transcript.strip())
             
             # Off-topic heuristic detector (flirting, personal questions, trolling, abusive/unrelated topics)
             off_topic_patterns = [
@@ -2817,7 +2857,7 @@ async def entrypoint(ctx: JobContext):
         async def _initial_human_listener():
             nonlocal intro_started, intro_finished, _hangup_scheduled
             logger.info("🎧 [HUMAN VOICE DETECTION ACTIVE] Waiting for caller to speak first (e.g. 'Hello')...")
-            await asyncio.sleep(3.5)
+            await asyncio.sleep(8.0)
             if not intro_started and not _hangup_scheduled:
                 logger.info("⏳ [INITIAL SILENCE] Caller answered but stayed silent for 3.5s. Prompting with gentle Hello...")
                 prompt_hello = "Hello? नमस्कार!"

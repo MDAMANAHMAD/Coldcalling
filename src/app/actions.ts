@@ -380,7 +380,7 @@ export async function triggerLiveKitOutboundCall(phoneNumber: string, customerNa
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         participantMetadata: metadata,
-        playRingtone: true,
+        playRingtone: false, // Never play fake dialtone into AI room
         hidePhoneNumber: false,
         waitUntilAnswered: false, // Non-blocking dispatch
       }

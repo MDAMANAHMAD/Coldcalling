@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         participantMetadata: metadata,
-        playRingtone: true,
+        playRingtone: false, // Strictly false: never inject fake dialtones that confuse AI STT
         waitUntilAnswered: false, // Instant dispatch
       }
     );
