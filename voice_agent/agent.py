@@ -1140,15 +1140,15 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.20"))
+    cartesia_volume = min(1.0, float(os.getenv("CARTESIA_VOLUME", "1.0")))
     if cartesia_key and len(cartesia_key) > 10:
         proc.userdata["tts"] = cartesia.TTS(
             api_key=cartesia_key,
             voice=kusha_voice_id,
             language="hi",
-            sample_rate=24000,
+            sample_rate=48000,
             model=cartesia_model,
             speed=cartesia_speed,
             emotion=None,
@@ -1569,7 +1569,7 @@ async def entrypoint(ctx: JobContext):
     # 1. room metadata (voice_speed / voiceSpeed)
     # 2. db.json / settings.json
     # 3. os.getenv("CARTESIA_SPEED", "0.98")
-    cartesia_speed = 0.98
+    cartesia_speed = 0.94
     custom_speed = None
     if ctx.room.metadata:
         try:
@@ -1599,13 +1599,13 @@ async def entrypoint(ctx: JobContext):
         cartesia_speed = custom_speed
     else:
         try:
-            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
         except Exception:
-            cartesia_speed = 0.98
+            cartesia_speed = 0.94
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "").strip()
-    cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.20"))
+    cartesia_volume = min(1.0, float(os.getenv("CARTESIA_VOLUME", "1.0")))
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     if not tts:
@@ -1617,7 +1617,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="hi",
-                sample_rate=24000,
+                sample_rate=48000,
                 model=cartesia_model,
                 speed=cartesia_speed,
                 emotion=None,
@@ -1664,7 +1664,7 @@ async def entrypoint(ctx: JobContext):
             voice=kusha_voice_id,
             language="hi",
             speed=cartesia_speed,
-            emotion=[cartesia_emotion] if cartesia_emotion else None,
+            emotion=None,
             volume=cartesia_volume
         )
         logger.info(f"🔄 [STATE RESET] Cartesia TTS options reset to natural Kusha Cloned Voice ({kusha_voice_id}, speed={cartesia_speed}, volume={cartesia_volume}).")
@@ -1689,9 +1689,8 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.55,  # Requires 550ms of real voice to interrupt, preventing background noise/breathing cuts
-                "resume_false_interruption": True,
-                "false_interruption_timeout": 1.2,
+                "min_duration": 0.65,  # Sustained human speech required to interrupt
+                "resume_false_interruption": False,  # NEVER pause/duck/mute agent audio during speech! Continuous steady playout.
             }
         }
     )
@@ -2495,7 +2494,7 @@ async def entrypoint(ctx: JobContext):
                             voice=kusha_voice_id,
                             language="mr",
                             speed=cartesia_speed,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            emotion=None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Pure Marathi with Kusha Cloned Voice ({kusha_voice_id}, volume={cartesia_volume}, speed={cartesia_speed})")
@@ -2504,7 +2503,7 @@ async def entrypoint(ctx: JobContext):
                             voice=kusha_voice_id,
                             language="en",
                             speed=cartesia_speed,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            emotion=None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to English (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
@@ -2513,7 +2512,7 @@ async def entrypoint(ctx: JobContext):
                             voice=kusha_voice_id,
                             language="hi",
                             speed=cartesia_speed,
-                            emotion=[cartesia_emotion] if cartesia_emotion else None,
+                            emotion=None,
                             volume=cartesia_volume
                         )
                         logger.info(f"🔄 Switched TTS to Hindi (Kusha Cloned Voice: {kusha_voice_id}, speed={cartesia_speed})")
