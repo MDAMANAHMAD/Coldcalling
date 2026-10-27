@@ -300,9 +300,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR 
 - Developer: Shree Om Sai Developers (Sai City Group).
 - MahaRERA: PR1330002501452 (100% RERA registered & legally clear).
 - Location: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
-- Configurations & Pricing:
-  * 1 BHK: thirty-six lakh onwards (375 to 520 square feet carpet area).
-  * 2 BHK: seventy-two lakh onwards (760 square feet carpet area).
+- Configurations & Pricing (NEVER MIX UP NUMBERS):
+  * 1 BHK: 36 Lakh (thirty-six lakh). Carpet area: 375 square feet.
+  * 2 BHK: 72 Lakh (seventy-two lakh). Carpet area: 760 square feet (seven hundred sixty square feet).
+  * STRICT ANTI-CONFUSION: NEVER say seventy-six! 2 BHK price is ALWAYS 72 lakh (seventy-two lakh). 2 BHK carpet area is ALWAYS 760 square feet.
 - Unbeatable Transit & Distances:
   * Nilje Railway Station: Just one minute walking distance!
   * Upcoming Metro Line 12: Just four minutes!
@@ -317,8 +318,10 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR 
   * High-speed lifts, stack & puzzle car parking, 24-hour CCTV & manned security.
   * Branded Jaquar / Cera bathroom fittings, Anchor modular switches.
 
-3. SITE VISIT BOOKING (TOOL: schedule_site_visit)
-- When customer agrees to visit or provides day/time, IMMEDIATELY call `schedule_site_visit(customer_name, preferred_day, preferred_time, flat_type)`.
+3. SITE VISIT BOOKING (STRICT TOOL USAGE):
+- ONLY call `schedule_site_visit` when the customer has EXPLICITLY agreed to visit AND confirmed a specific day (e.g. 'kal', 'tomorrow', 'Sunday', 'weekend').
+- NEVER call `schedule_site_visit` if the customer simply says '1' or '2' or asks for details! Saying '1' or '2' means they are selecting 1 BHK or 2 BHK!
+- If the customer says '2' or '2 BHK': Respond: "Ji, two BHK flats 72 lakh se shuru hote hain, 760 square feet carpet area ke sath. Kya aap floor plan ya amenities janna chahte hain?"
 - Confirm in 1 short sentence: "Maine aapka visit schedule kar diya hai. Details WhatsApp par bhej rahi hoon. Thank you, aapka din shubh ho, bye!"
 
 4. STICKY LANGUAGE SWITCHING
@@ -1019,7 +1022,7 @@ def prewarm_fnc(proc: JobProcess):
     proc.userdata["stt"] = deepgram.STT(
         language="hi",
         model="nova-2-general",
-        endpointing_ms=25,
+        endpointing_ms=300,
         utterance_end_ms=None,
         smart_format=True,
         no_delay=True,
@@ -1032,11 +1035,11 @@ def prewarm_fnc(proc: JobProcess):
     # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 200ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.10,
-        activation_threshold=0.50,
-        deactivation_threshold=0.35,
-        prefix_padding_duration=0.10,
+        min_silence_duration=0.50,
+        min_speech_duration=0.08,
+        activation_threshold=0.35,
+        deactivation_threshold=0.20,
+        prefix_padding_duration=0.15,
         sample_rate=16000
     )
 
@@ -1413,7 +1416,7 @@ async def entrypoint(ctx: JobContext):
         stt = deepgram.STT(
             language="hi",
             model="nova-2-general",
-            endpointing_ms=25,
+            endpointing_ms=300,
             utterance_end_ms=None,
             smart_format=True,
             no_delay=True,
@@ -1553,11 +1556,11 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.25,
-            min_speech_duration=0.10,
-            activation_threshold=0.50,
-            deactivation_threshold=0.35,
-            prefix_padding_duration=0.10,
+            min_silence_duration=0.50,
+            min_speech_duration=0.08,
+            activation_threshold=0.35,
+            deactivation_threshold=0.20,
+            prefix_padding_duration=0.15,
             sample_rate=16000
         )
     
@@ -1583,17 +1586,17 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.08,
+                "min_delay": 0.35,  # 350ms pause after caller finishes before taking turn
             },
             "preemptive_generation": {
-                "enabled": True,  # Starts LLM streaming in advance based on interim STT
-                "preemptive_tts": True,  # Pre-synthesizes audio during caller pause for instantaneous 0ms playout
+                "enabled": False,  # Disabled: waits for caller to finish full sentence instead of guessing on interim words
+                "preemptive_tts": False,
             },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.25,
+                "min_duration": 0.30,  # Caller can interrupt with 300ms of real voice
                 "resume_false_interruption": True,
                 "false_interruption_timeout": 1.0,
             }
