@@ -168,20 +168,24 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
         # as requested, while keeping Dombivli in natural Devanagari phonetics ('डोंबिवली') and BHK as 'बीएचके'.
         replacements = [
             (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
-            (r'\b(2|two)\s*BHK\b', 'टू बीएचके'),
-            (r'\b(1|one)\s*BHK\b', 'वन बीएचके'),
-            (r'\b(1|one)\s*RK\b', 'वन आरके'),
-            (r'\b1rk\b', 'वन आरके'),
-            (r'\bBHK\b', 'बीएचके'),
-            (r'\bRK\b', 'आरके'),
-            (r'\bchhattis\s*lakh\b', '36 lakh'),
-            (r'\bbahattar\s*lakh\b', '72 lakh'),
-            (r'\bchhattis\b', '36'),
-            (r'\bbahattar\b', '72'),
-            (r'छत्तीस\s*लाख', '36 lakh'),
-            (r'बहात्तर\s*लाख', '72 lakh'),
-            (r'छत्तीस', '36'),
-            (r'बहात्तर', '72'),
+            (r'\b(?:ek|एक|1|one)\s*(aur|and|ya|or|और|या|-)\s*(?:do|दो|दोन|2|two)\s*BHK\b', r'one \1 two BHK'),
+            (r'\b(1|one)\s*BHK\b', 'one BHK'),
+            (r'\b(2|two)\s*BHK\b', 'two BHK'),
+            (r'\b(3|three)\s*BHK\b', 'three BHK'),
+            (r'\b(1|one)\s*RK\b', 'one RK'),
+            (r'\b1rk\b', 'one RK'),
+            (r'\b(ek|एक)\s*(बी\s*एच\s*के|बीएचके)\b', 'one BHK'),
+            (r'\b(do|दो|दोन)\s*(बी\s*एच\s*के|बीएचके)\b', 'two BHK'),
+            (r'\bBHK\b', 'BHK'),
+            (r'\bRK\b', 'RK'),
+            (r'\b(chhattis|छत्तीस)\s*(lakh|लाख)?\b', 'thirty-six lakh'),
+            (r'\b(bahattar|बहात्तर)\s*(lakh|लाख)?\b', 'seventy-two lakh'),
+            (r'\b36\s*(lakh|लाख)\b', 'thirty-six lakh'),
+            (r'\b72\s*(lakh|लाख)\b', 'seventy-two lakh'),
+            (r'\b36\b', 'thirty-six'),
+            (r'\b72\b', 'seventy-two'),
+            (r'\b375\b', 'three hundred seventy-five'),
+            (r'\b760\b', 'seven hundred sixty'),
             (r'\b(sqft|sq\.ft|sq\s*ft)\b', 'square feet'),
             (r'\b15\s*(-|to|se)\s*20\b', '15 se 20'),
             (r'\b11\s*(am|baje)\b', '11 baje'),
@@ -307,9 +311,14 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - Speak with a calm, conversational, welcoming tone.
   - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
 - PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
-- STRICT NUMBER PRONUNCIATION: ALWAYS say numbers and pricing in English digits/words: "36 lakh", "72 lakh", "375 square feet", "760 square feet", "11 AM", "3 PM". Strictly NEVER say "chhattis" or "bahattar" which causes customer confusion!
+- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor numbers, pricing, and configurations in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute". Never mix Hindi numbers like "ek" or "do" with BHK, as English numbers ("one BHK", "two BHK") are 100% crystal-clear on telephone lines.
 - NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
-- STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantaneously (<1 second latency).
+- DYNAMIC & CONTEXTUAL RESPONSE LENGTH:
+  * Adapt your reply length dynamically according to the situation and question:
+  * For quick factual questions (e.g., possession date, parking type, MahaRERA number, basic pricing): Give a crisp, direct answer (1 sentence) followed by a polite consultative follow-up question.
+  * For in-depth questions (e.g., amenities, location advantages, connectivity, floor plan specs): Provide a comprehensive, informative, engaging answer (2 to 3 natural sentences) highlighting the key features thoroughly.
+  * For conversational fillers or acknowledgments ("haan", "theek hai", "suniye"): Keep it natural and warm in 1 to 2 sentences.
+  * Always sound like an articulate, warm, professional human real estate advisor on a live phone call.
 
 2. PROJECT FACTS (SAI GARDEN, DOMBIVLI EAST / NILAJE)
 - Project Name: Sai Garden
@@ -2570,10 +2579,10 @@ async def entrypoint(ctx: JobContext):
 
                 text = raw_text.lower()
                 ending_phrases = [
-                    "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-                    "shukriya", "bye!", "bye", "baad mein call karte hain",
-                    "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
-                    "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
+                    "aapka din shubh ho", "din shubh ho", "shubh ho bye", "shubh ho, bye", "alvida",
+                    "baad mein call karte hain",
+                    "have a wonderful day", "have a great day", "goodbye",
+                    "दिवस चांगला जावो", "काळजी घ्या, नमस्कार"
                 ]
                 if any(phrase in text for phrase in ending_phrases):
                     logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
@@ -2701,10 +2710,10 @@ async def entrypoint(ctx: JobContext):
 
         text = raw_text.lower()
         ending_phrases = [
-            "aapka din shubh ho", "shubh ho... bye", "din shubh ho", "shubh ho!", "shubh ho, bye", "shubh ho bye", "alvida",
-            "shukriya", "bye!", "bye", "baad mein call karte hain",
-            "have a wonderful day", "have a great day", "goodbye", "take care", "connect later",
-            "दिवस चांगला जावो", "चांगला जावो, नमस्कार", "चांगला जावो", "नमस्कार, काळजी घ्या", "काळजी घ्या", "काळजी", "नमस्कार"
+            "aapka din shubh ho", "din shubh ho", "shubh ho bye", "shubh ho, bye", "alvida",
+            "baad mein call karte hain",
+            "have a wonderful day", "have a great day", "goodbye",
+            "दिवस चांगला जावो", "काळजी घ्या, नमस्कार"
         ]
         if any(phrase in text for phrase in ending_phrases):
             logger.info("👋 [GOODBYE DETECTED IN AGENT SPEECH] Ensuring automated call termination after speech finishes...")
@@ -2770,7 +2779,7 @@ async def entrypoint(ctx: JobContext):
             )
 
         logger.info("🎙️ [INITIAL GREETING] Speaking complete Sai Garden introduction to caller...")
-        intro_text = "हलो? नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ 1 और 2 BHK लग्ज़री फ्लैट्स 36 लाख से शुरू हो रहे हैं। क्या आप अपने लिए 1 BHK देख रहे हैं या 2 BHK?"
+        intro_text = "नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ one aur two BHK luxury flats thirty-six lakh se shuru ho rahe hain. Kya aap apne liye one BHK dekh rahe hain ya two BHK?"
         try:
             record_dialogue_turn("agent", intro_text)
             session.say(intro_text, allow_interruptions=True)
@@ -2859,9 +2868,9 @@ async def entrypoint(ctx: JobContext):
                     prompt_text = "Hello? Are you able to hear me?"
                 else:
                     if not caller_has_spoken:
-                        prompt_text = "हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?"
+                        prompt_text = "Kya aap apne liye one BHK flat dekh rahe hain ya two BHK?"
                     else:
-                        prompt_text = "हलो? क्या आपका साई गार्डन के बारे में कोई सवाल है?"
+                        prompt_text = "Kya aapka Sai Garden ke baare mein koi sawaal hai?"
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)

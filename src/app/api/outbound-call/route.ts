@@ -16,11 +16,11 @@ export async function POST(req: NextRequest) {
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
-    const uniqueRoom = call--;
+    const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
 
     const { client: sipClient, trunkId } = getSipClient();
 
-    console.log([API OUTBOUND CALL] Instant dial  -> room  (trunk: , user: ));
+    console.log(`[API OUTBOUND CALL] Instant dial ${safePhone} -> room ${uniqueRoom} (trunk: ${trunkId}, user: ${userEmail})`);
 
     const metadata = JSON.stringify({
       customer_name: customerName,
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       safePhone,
       uniqueRoom,
       {
-        participantIdentity: sip-,
+        participantIdentity: `sip-${cleanId}`,
         participantName: customerName,
         participantMetadata: metadata,
         playRingtone: true,
@@ -45,22 +45,22 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log([API OUTBOUND CALL SUCCESS] Created participant:, participant);
+    console.log(`[API OUTBOUND CALL SUCCESS] Created participant:`, participant);
 
     // Record call log in db.json immediately
     try {
       const db = getDb();
-      const callLogId = call-;
+      const callLogId = `call-${Date.now()}`;
       if (!db.callLogs) db.callLogs = [];
       db.callLogs.unshift({
         id: callLogId,
-        leadId: lead-,
+        leadId: `lead-${cleanId}`,
         callSid: uniqueRoom,
         userEmail: userEmail,
         durationSeconds: 0,
         recordingUrl: '',
-        transcript: [Call initiated from Web Dashboard]\nAgent: Gayatri connecting to  ()...,
-        aiSummary: Outbound AI call initiated to  (). Phone ringing.,
+        transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
+        aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
         sentiment: 'neutral',
         calledAt: new Date().toISOString(),
         outcome: 'Calling...',
@@ -71,13 +71,13 @@ export async function POST(req: NextRequest) {
 
       // Also ensure lead exists in db
       if (!db.leads) db.leads = [];
-      const existingLead = db.leads.find(l => l.phone.replace(/\\D/g, '') === safePhone.replace(/\\D/g, ''));
+      const existingLead = db.leads.find(l => l.phone.replace(/\D/g, '') === safePhone.replace(/\D/g, ''));
       if (existingLead) {
         existingLead.status = 'calling';
         existingLead.lastCallAt = new Date().toISOString();
       } else {
         db.leads.unshift({
-          id: lead-,
+          id: `lead-${cleanId}`,
           name: customerName,
           phone: safePhone,
           status: 'calling',
@@ -106,13 +106,13 @@ export async function POST(req: NextRequest) {
           if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
           const newLiveLog = {
             id: callLogId,
-            leadId: lead-,
+            leadId: `lead-${cleanId}`,
             callSid: uniqueRoom,
             userEmail: userEmail,
             durationSeconds: 0,
             recordingUrl: '',
-            transcript: [Call initiated from Web Dashboard]\nAgent: Gayatri connecting to  ()...,
-            aiSummary: Outbound AI call initiated to  (). Phone ringing.,
+            transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
+            aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
             sentiment: 'neutral',
             calledAt: new Date().toISOString(),
             outcome: 'Calling...',
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           };
           cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
           await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
-          console.log([API OUTBOUND CALL] Background synced call  to gayatri-persistent-storage.);
+          console.log(`[API OUTBOUND CALL] Background synced call ${uniqueRoom} to gayatri-persistent-storage.`);
         } catch (cloudErr) {
           console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
         }
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: Outbound call successfully ringing !,
+        message: `Outbound call successfully ringing ${safePhone}!`,
         participantId: participant.participantId,
         roomName: uniqueRoom,
       },
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
       }
     );
   } catch (error: any) {
-    console.error([API OUTBOUND CALL ERROR]:, error);
+    console.error(`[API OUTBOUND CALL ERROR]:`, error);
     return NextResponse.json(
       {
         success: false,
