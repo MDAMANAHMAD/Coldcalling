@@ -6,37 +6,7 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-// ── Concurrency guard: max 4 simultaneous outbound calls (~1.2-1.4 GB RAM each on 8 GB VPS) ──
-const MAX_CONCURRENT_CALLS = 4;
-
 export async function POST(req: NextRequest) {
-  // ── Concurrency check via real-time LiveKit rooms (with fast 1.5s timeout) ──
-  let activeCallsCount = 0;
-  try {
-    const roomService = getRoomServiceClient(5);
-    const roomsPromise = roomService.listRooms();
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('LiveKit listRooms timeout')), 1500)
-    );
-    const rooms: any = await Promise.race([roomsPromise, timeoutPromise]);
-    const activeCalls = rooms.filter(
-      (r: any) => r.name.startsWith('call-') && r.numParticipants > 0
-    );
-    activeCallsCount = activeCalls.length;
-    if (activeCallsCount >= MAX_CONCURRENT_CALLS) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Server is busy: ${activeCallsCount}/${MAX_CONCURRENT_CALLS} calls are already active. Please wait for a call to complete before dialing more.`,
-          activeCount: activeCallsCount
-        },
-        { status: 429 }
-      );
-    }
-  } catch (err) {
-    console.warn(`[CONCURRENCY] LiveKit active rooms check skipped or timed out, proceeding with call dispatch:`, err);
-  }
-
   try {
     const body = await req.json();
     const phoneNumber = body.phoneNumber || '+918693081506';
@@ -46,11 +16,11 @@ export async function POST(req: NextRequest) {
 
     const safePhone = phoneNumber.replace(/[^0-9+]/g, '');
     const cleanId = safePhone.replace('+', '');
-    const uniqueRoom = `call-${customerName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+    const uniqueRoom = call--;
 
     const { client: sipClient, trunkId } = getSipClient();
 
-    console.log(`[API OUTBOUND CALL] Dialing ${safePhone} to room ${uniqueRoom} with trunk ${trunkId} for user: ${userEmail} (speed=${voiceSpeed})`);
+    console.log([API OUTBOUND CALL] Instant dial  -> room  (trunk: , user: ));
 
     const metadata = JSON.stringify({
       customer_name: customerName,
@@ -61,35 +31,36 @@ export async function POST(req: NextRequest) {
       voice_speed: voiceSpeed,
     });
 
+    // ── Instant Non-Blocking Outbound SIP Dispatch (<80ms) ──
     const participant = await sipClient.createSipParticipant(
       trunkId,
       safePhone,
       uniqueRoom,
       {
-        participantIdentity: `sip-${cleanId}`,
+        participantIdentity: sip-,
         participantName: customerName,
         participantMetadata: metadata,
         playRingtone: true,
-        waitUntilAnswered: false, // Non-blocking dispatch
+        waitUntilAnswered: false, // Instant dispatch
       }
     );
 
-    console.log(`[API OUTBOUND CALL SUCCESS] Created participant:`, participant);
+    console.log([API OUTBOUND CALL SUCCESS] Created participant:, participant);
 
     // Record call log in db.json immediately
     try {
       const db = getDb();
-      const callLogId = `call-${Date.now()}`;
+      const callLogId = call-;
       if (!db.callLogs) db.callLogs = [];
       db.callLogs.unshift({
         id: callLogId,
-        leadId: `lead-${cleanId}`,
+        leadId: lead-,
         callSid: uniqueRoom,
         userEmail: userEmail,
         durationSeconds: 0,
         recordingUrl: '',
-        transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
-        aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
+        transcript: [Call initiated from Web Dashboard]\nAgent: Gayatri connecting to  ()...,
+        aiSummary: Outbound AI call initiated to  (). Phone ringing.,
         sentiment: 'neutral',
         calledAt: new Date().toISOString(),
         outcome: 'Calling...',
@@ -100,13 +71,13 @@ export async function POST(req: NextRequest) {
 
       // Also ensure lead exists in db
       if (!db.leads) db.leads = [];
-      const existingLead = db.leads.find(l => l.phone.replace(/\D/g, '') === safePhone.replace(/\D/g, ''));
+      const existingLead = db.leads.find(l => l.phone.replace(/\\D/g, '') === safePhone.replace(/\\D/g, ''));
       if (existingLead) {
         existingLead.status = 'calling';
         existingLead.lastCallAt = new Date().toISOString();
       } else {
         db.leads.unshift({
-          id: `lead-${cleanId}`,
+          id: lead-,
           name: customerName,
           phone: safePhone,
           status: 'calling',
@@ -135,13 +106,13 @@ export async function POST(req: NextRequest) {
           if (!cloudMeta.callLogs) cloudMeta.callLogs = [];
           const newLiveLog = {
             id: callLogId,
-            leadId: `lead-${cleanId}`,
+            leadId: lead-,
             callSid: uniqueRoom,
             userEmail: userEmail,
             durationSeconds: 0,
             recordingUrl: '',
-            transcript: `[Call initiated from Web Dashboard]\nAgent: Gayatri connecting to ${customerName} (${safePhone})...`,
-            aiSummary: `Outbound AI call initiated to ${customerName} (${safePhone}). Phone ringing.`,
+            transcript: [Call initiated from Web Dashboard]\nAgent: Gayatri connecting to  ()...,
+            aiSummary: Outbound AI call initiated to  (). Phone ringing.,
             sentiment: 'neutral',
             calledAt: new Date().toISOString(),
             outcome: 'Calling...',
@@ -151,7 +122,7 @@ export async function POST(req: NextRequest) {
           };
           cloudMeta.callLogs = [newLiveLog, ...cloudMeta.callLogs.filter((l: any) => l.callSid !== uniqueRoom && l.callSid !== 'gayatri-persistent-storage')].slice(0, 30);
           await roomClient.updateRoomMetadata('gayatri-persistent-storage', JSON.stringify(cloudMeta));
-          console.log(`[API OUTBOUND CALL] Background synced call ${uniqueRoom} to gayatri-persistent-storage.`);
+          console.log([API OUTBOUND CALL] Background synced call  to gayatri-persistent-storage.);
         } catch (cloudErr) {
           console.warn('[API Outbound LiveKit Cloud Sync Warning]:', cloudErr);
         }
@@ -160,22 +131,35 @@ export async function POST(req: NextRequest) {
       console.warn('[DB Log Warning]:', dbErr);
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Outbound call successfully ringing ${safePhone}!`,
-      participantId: participant.participantId,
-      roomName: uniqueRoom,
-      activeCount: activeCallsCount + 1
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: Outbound call successfully ringing !,
+        participantId: participant.participantId,
+        roomName: uniqueRoom,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      }
+    );
   } catch (error: any) {
-    console.error(`[API OUTBOUND CALL ERROR]:`, error);
+    console.error([API OUTBOUND CALL ERROR]:, error);
     return NextResponse.json(
       {
         success: false,
         message: error?.message || 'Failed to dispatch outbound SIP call',
         error: String(error)
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        }
+      }
     );
   }
 }

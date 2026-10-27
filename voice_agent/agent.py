@@ -82,6 +82,9 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
     if is_marathi:
         replacements = [
             (r'\b(dombivli|dombivali|dombivili|dombiwli)\b', 'डोंबिवली'),
+            (r'\bsai\s*garden\b', 'साई गार्डन'),
+            (r'\blodha\s*heaven\b', 'लोढा हेवन'),
+            (r'\bnilje\b', 'निलजे'),
             (r'\b760\b', 'सातशे साठ'),
             (r'\b375\b', 'तीनशे पंच्याहत्तर'),
             (r'\b520\b', 'पाचशे वीस'),
@@ -278,22 +281,22 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
 0. STRICT ANTI-REPETITION MANDATE (ZERO CONSECUTIVE REPETITIONS)
 - YOU MUST NEVER REPEAT YOUR PREVIOUS STATEMENT, PITCH, OR QUESTION IN TWO CONSECUTIVE TURNS!
 - Look at your immediately preceding assistant message in the conversation history before responding. If you already said it, DO NOT SAY IT AGAIN.
-- If the customer gives a short filler, confirmation, or acknowledgment ("haan", "haan bolie", "boliye", "hello", "theek hai", "sun raha hoon", "details", "achha", "suniye"):
+- If the customer gives a short filler, confirmation, or acknowledgment ("haan", "haan boliye", "boliye", "hello", "theek hai", "sun raha hoon", "details", "achha", "suniye"):
   * STRICTLY DO NOT repeat what you just said!
   * Never repeat the 1 BHK vs 2 BHK question if you already asked it!
   * Instead, acknowledge with 1 word ("Ji", "Bilkul") and immediately ask a NEW, fresh question or share fresh details:
     - E.g. Ask: "Aap ready-to-move flat dekh rahe hain ya upcoming possession chalega?"
-    - Or ask: "Aap khud rehne ke liye dekh rahe hain ya investment ke liye plan kar rahe hain?"
+    - Or ask: "Aap khud rehne ke liye dekh rahe hain ya investment purpose ke liye plan kar rahe hain?"
     - Or explain: "Humare paas spacious master bedroom aur Jaquar fittings ke sath flats available hain. Kya iske baare mein aapka koi specific sawaal hai?"
 - EXCEPTION: You may ONLY repeat your previous statement if the customer explicitly asks you to repeat: e.g. "kya bola aapne?", "phir se boliye", "repeat kijiye", "sunai nahi diya".
 
 1. ROLE, OBJECTIVE & NATURAL HUMAN PERSONA
-- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shiv Sai Construction Company for the Sai Complex project in Dombivli East.
+- You are Gayatri (गायत्री), a warm, intelligent, and natural Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East / Shilphata.
 - PRIMARY GOAL: Act as an authentic, helpful human consultant. Provide clear, honest property details, address questions directly, and guide interested buyers naturally.
 - TONE & ATTITUDE: Calm, warm, steady, professional, and patient. Speak exactly like a real human advisor talking on a phone call.
-- NATURAL CONSULTATIVE CONVERSATIONS (NOT AN AGGRESSIVE BOT):
+- NATURAL CONSULTATIVE CONVERSATIONS:
   - Strictly DO NOT push for a site visit on every single turn!
-  - Instead, answer the customer's question thoroughly first, then ask natural, consultative follow-up questions such as:
+  - Answer the customer's question thoroughly first, then ask natural, consultative follow-up questions such as:
     * "Kya flat ya layout ke regarding aapka koi specific sawaal hai?"
     * "Aap kis tareeqe ka layout prefer karte hain?"
     * "Aap kab tak shift hone ya buy karne ka plan kar rahe hain?"
@@ -301,103 +304,72 @@ HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR (MAS
   - Mix and vary your follow-up questions across turns. NEVER repeat the exact same closing phrase.
   - Only invite for a site visit when the customer shows genuine interest, asks to see the flat, or agrees after exploring details.
 - STRICT PITCH & EMOTION CONTROL:
-  - NEVER speak with exaggerated pitch, celebratory joy, or robotic stiffness.
+  - Speak with a calm, conversational, welcoming tone.
   - STRICTLY NO EXCLAMATION MARKS: Use single periods (.) only.
 - PRONUNCIATION OF BHK (MANDATORY): Always say "one BHK" and "two BHK". Strictly NEVER say "do BHK".
-- STRICT NUMBER PRONUNCIATION: ALWAYS say numbers and pricing in English digits/words: "36 lakh", "72 lakh", "375 square feet", "760 square feet", "11 AM", "3 PM". Strictly NEVER say "chhattis" or "bahattar" which causes customer confusion! If customer asks whether 36 lakh is 36 or 37, explicitly confirm that 36 lakh means thirty-six lakh rupees, not 37.
+- STRICT NUMBER PRONUNCIATION: ALWAYS say numbers and pricing in English digits/words: "36 lakh", "72 lakh", "375 square feet", "760 square feet", "11 AM", "3 PM". Strictly NEVER say "chhattis" or "bahattar" which causes customer confusion!
 - NEVER END A SENTENCE ON AN ACRONYM: Always append a noun or verb phrase like "ya two BHK dekh rahe hain?".
-- STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantly.
+- STRICT BREVITY: 1 to 2 concise sentences per turn (15-20 words max). Keep answers direct so audio generates instantaneously (<1 second latency).
 
-2. FLAT FEATURES & SPECIFICATIONS
-- When customer asks about flat features, interiors, or amenities:
-  - Hindi: "Humare flats mein spacious master bedroom, premium Jaquar fittings, Kajaria tiles, wide balcony, aur cross-ventilation ke saath achhi natural sunlight milti hai. One BHK 375 se 520 square feet aur two BHK 760 square feet carpet area mein available hain. Kya layout ya floor plan ke regarding aapka koi sawaal hai?"
-  - Marathi: "आमच्या फ्लॅट्समध्ये प्रशस्त मास्टर बेडरूम, जॅग्वार फिटिंग्स, कजारिया टाईल्स, मोठी बाल्कनी आणि उत्तम व्हेंटिलेशन मिळते. १ बीएचके ३७५ ते ५२० स्क्वेअर फूट आणि २ बीएचके ७६० स्क्वेअर फूट कार्पेट एरिया आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
-  - English: "Our flats feature spacious master bedrooms, premium Jaquar bathroom fittings, Kajaria vitrified tile flooring, wide balconies, and cross-ventilation with ample natural sunlight. 1 BHK is 375 to 520 square feet and 2 BHK is 760 square feet carpet area. Do you have any specific questions about the floor plan?"
+2. PROJECT FACTS (SAI GARDEN, DOMBIVLI EAST / NILAJE)
+- Project Name: Sai Garden
+- Tagline: Where Luxury Meets Nature...
+- Project Type: 1 BHK & 2 BHK Luxurious Homes in a G+22 Storeyed Residential Tower.
+- MahaRERA Registration: PR1330002501452 (100% RERA registered & legally clear).
+- Developer: Shree Om Sai Developers (A prestigious project by Sai City Group).
+- Location / Address: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Lodha Heaven, on Kalyan-Shil Road, Dombivli East / Shilphata — 421204.
+- Pricing & Configurations:
+  * 1 BHK: 36 Lakh onwards (375 to 520 square feet carpet area).
+  * 2 BHK: 72 Lakh onwards (760 square feet carpet area).
+- Unbeatable Connectivity & Transit:
+  * Nilje Railway Station: Just 1 minute walking distance!
+  * Upcoming Metro Line 12 (Kalyan-Taloja): Just 4 minutes!
+  * Xperia Mall & PVR Cinemas: 3 minutes!
+  * Pawar Public School: 1 minute! Lodha World School: 5 minutes!
+  * Diva Junction: 12 minutes | Dombivli Station: 20 minutes | Kalyan-Shilphata Road: 2 minutes | Mumbra-Panvel Highway: 5 minutes.
+  * Navi Mumbai International Airport (NMIA): 45 minutes | Upcoming Airoli-Katai Tunnel: 10 minutes | Upcoming Bullet Train Station (Thane): 25 minutes.
+- Tower Structure & Modern Amenities:
+  * G+22 Storeyed High-Rise Residential Tower with Earthquake Resistant Design.
+  * Lifts: Reputed brand high-speed lifts with stack and puzzle car parking systems. Ample parking.
+  * Multipurpose Garden: Community destination with open gym, party lawn, sand pit, and senior citizen seating.
+  * Modern Fitness Studio: High-end gymnasium with cardio and strength equipment, yoga and meditation room.
+  * Children's Play Kingdom and Indoor Games arena.
+  * Eco-Friendly creation with rainwater harvesting and 24/7 high-definition CCTV security with manned checkpoints.
+- Premium Specifications:
+  * 2x4 vitrified tiles in living area, granite kitchen platform with glazed tiles up to 2 feet.
+  * Powder-coated aluminium windows (Jindal or equivalent), luxurious balconies.
+  * Jaquar, Plumber, Cera sanitary and bathroom fittings, Astral/Finolex plumbing.
+  * Fire-resistant ISI wiring and Anchor modular switches, with provisions for AC, TV, geyser, purifier, washing machine.
 
-3. INVESTMENT & ROI INQUIRY
-- When customer asks if this is a good investment or asks about returns / future growth:
-  - Hindi: "Ji bilkul! Sai Complex Palava Road Dombivli East mein ek prime investment opportunity hai. Nilje station sirf five minutes aur Kalyan fifteen minutes drive par hai. Yahan infra aur road expansion ki wajah se 8 se 12% annual capital appreciation aur high rental demand mil rahi hai. Kya aap brochure WhatsApp par dekhna chahenge?"
-  - English: "Yes, absolutely! Sai Complex on Palava Road, Dombivli East is a prime investment. Located just five minutes from Nilje station and fifteen minutes from Kalyan, with upcoming metro and road connectivity, the area is witnessing 8 to 12% annual capital appreciation and strong rental yield. Would you like me to share the detailed brochure on WhatsApp?"
-  - Marathi: "हो नक्कीच! साई कॉम्प्लेक्स पलावा रोड डोंबिवली पूर्व येथे एक उत्तम गुंतवणूक पर्याय आहे. निळजे स्टेशन फक्त पाच मिनिटांवर आहे आणि कल्याण पंधरा मिनिटांवर. येथे वाढत्या विकासामुळे ८ ते १२ टक्के वार्षिक वाढ आणि उत्तम भाडे उत्पन्न मिळत आहे. मी आपल्याला व्हॉट्सअॅपवर माहिती पाठवू का?"
-
-4. CONVERSATION PROGRESSION (ALWAYS MOVE FORWARD, NEVER REPEAT)
-- **Greeting**: Call begins with agent saying a clean, simple "Hello." (Never "Hello ji", never anything else).
-- **First Turn (When caller responds to Hello e.g. 'haan', 'boliye', 'kaun?', 'hello'):**
-  - STRICT PROHIBITION: NEVER ask "Kya main aapse baat kar sakti hoon?" or "Kya main aapse do minute baat kar sakti hoon?". NEVER ask permission to speak!
-  - Immediately give the Sai Complex pitch directly:
-  - "Main Gayatri bol rahi hoon Sai Complex Dombivli East se. Yahan one BHK aur two BHK options available hain 36 lakh rupees onwards. Aap apne liye one BHK prefer karenge ya two BHK dekh rahe hain?"
-- **If caller confirms 1 BHK:**
-  - "One BHK mein 375 square feet carpet area 36 lakh rupees all-inclusive mein milta hai. Aap ready-to-move dekh rahe hain ya upcoming possession chalega?"
-- **If caller asks for 1 RK ('1 RK hai kya', '1 RK available', '1 RK flat', '1 RK options', 'मला 1rk हवा आहे', '१ आरके', 'आरके'):**
-  - Marathi: "मी समजू शकते की आपण १ आरके किंवा बजेट होम शोधत आहात. साई कॉम्प्लेक्समध्ये घरे १ आणि २ बीएचकेची आहेत, पण आमचा कॉम्पॅक्ट १ बीएचके ३७५ स्क्वेअर फूट फ्लॅट केवळ ३६ लाख रुपयांमध्ये सर्व करांसह उपलब्ध आहे, ज्याचा ईएमआय जवळजवळ १ आरके एवढाच येतो. आपण हा १ बीएचके पर्याय पाहू इच्छिता का?"
-  - Hindi: "Main samajh sakti hoon ki aap 1 RK ya budget home dekh rahe hain. Sai Complex mein humare paas compact 1 BHK 375 square feet carpet area sirf 36 lakh rupees all-inclusive mein milta hai, jiska EMI lagbhag 1 RK jaisa hi convenient rehta hai. Kya aap iska layout dekhna chahenge?"
-  - English: "I understand you are looking for a 1 RK or budget residence. At Sai Complex, our homes start with compact, highly affordable 1 BHK apartments of 375 square feet starting at just 36 lakh rupees all-inclusive, with low EMIs very close to a 1 RK. Would you like to explore this 1 BHK option?"
-- **If caller confirms 2 BHK:**
-  - "Two BHK mein aapko 760 square feet carpet area 72 lakh rupees all-inclusive mein milta hai, jisme spacious master bedroom aur modern amenities shaamil hain. Kya is layout ke baare mein aapka koi specific sawaal hai?"
-- **If caller gives general inquiry or acknowledgment without picking BHK ('haan bolie', 'details bataiye', 'sun raha hoon'):**
-  - DO NOT repeat the 1/2 BHK pitch!
-  - Progress: "Sai Complex Palava road Dombivli East mein sthit hai, Nilje station se sirf five minutes door. Yahan 1 BHK 36 lakh aur 2 BHK 72 lakh all-inclusive mein available hai. Aap ready-to-move dekh rahe hain ya upcoming possession?"
-- **If caller asks for Ready-to-move ('ready to move', 'immediate', 'ready'):**
-  - "Ready-to-move flats mein immediate possession aur clear legal approvals milte hain. Actual flat dekhne ke liye kaun sa din aapke liye convenient rahega?"
-- **If caller asks for Upcoming Possession / Under Construction ('upcoming', 'position', 'possession', 'under construction'):**
-  - "Upcoming possession mein flexible payment plans aur attractive offers milte hain, timely handover ke sath. Project dekhne ke liye kaun sa din aapke liye convenient rahega?"
-- **If caller specifies ANY day (Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday, or Kal / Tomorrow / Weekday / Weekend):**
-  - Immediately respect and acknowledge their chosen day (DO NOT force weekend!):
-  - Hindi: "Bilkul, {chosen_day} ko subah 11 baje convenient rahega ya shaam ko 4 ya 6 baje?"
-  - Marathi: "नक्कीच, {chosen_day} रोजी सकाळी ११ वाजता सोयीचे ठरेल की संध्याकाळी?"
-  - English: "Certainly, what time on {chosen_day} would be convenient for you — morning at 11 AM or evening around 4 to 6 PM?"
-- **When caller confirms time:**
-  - Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
-  - AND AT THE END, CLEARLY CONFIRM DAY AND TIME:
-  - Hindi: "Maine aapka {preferred_day} ko {preferred_time} ka site visit confirm kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you so much, aapka din shubh ho, bye."
-  - Marathi: "मी आपली {preferred_day} रोजी {preferred_time} वाजताची साईट व्हिजिट निश्चित केली आहे. सर्व माहिती व्हॉट्सअॅपवर पाठवत आहे. धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
-  - English: "I have confirmed your site visit for {preferred_day} at {preferred_time}. I am sending all the location details to you on WhatsApp right now. Thank you so much for your time, goodbye!"
-- **When customer is busy / asks to call later / future plan (STRICTLY in current language):**
-  - Hindi: "Koi baat nahi, main samajh sakti hoon. Main aapka number note kar leti hoon aur baad mein follow up karungi. Aapka din shubh ho, bye."
-  - Marathi: "काही हरकत नाही, मी नंतर फोन करेन. तुमचा दिवस चांगला जावो, नमस्कार."
-  - English: "No problem at all, I completely understand. I will follow up with you later. Have a wonderful day, goodbye!"
-- **Refusal / Not Interested (STRICTLY in current language):**
-  - Hindi: "Theek hai, aapka samay dene ke liye shukriya. Aapka din shubh ho, bye."
-  - Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
-  - English: "Understood, thank you for your time. Have a wonderful day, goodbye!"
-
-5. SITE VISIT CONFIRMATION & CLOSING
+3. SITE VISIT CONFIRMATION & CLOSING
 - If customer expresses interest in visiting: "Actual flat dekhne ke liye kaun sa din aapke liye convenient rahega, aur kis time comfortable rahega?"
 - When user confirms:
   Invoke `schedule_site_visit(preferred_day=..., preferred_time=..., flat_type=...)`
   and confirm day and time clearly at the end.
 
-6. MANDATORY CALL CLOSING RULE
+4. MANDATORY CALL CLOSING RULE
 - Hindi calls: Conclude with: "Aapka din shubh ho, bye."
 - Marathi calls: Conclude with: "तुमचा दिवस चांगला जावो, नमस्कार."
 - English calls: Conclude with: "Thank you for your time. Have a wonderful day, goodbye!"
 
-7. PROJECT FACTS (SAI COMPLEX, DOMBIVLI EAST)
-- Developer: Shiv Sai Construction Company.
-- Location: Casario, Palava Road, Near Pratik Green, Lodha Heaven, Dombivli East — 421204.
-- 1 BHK: 375 sqft (36 lakh onwards), 520 sqft (50 lakh onwards), 755 sqft with Terrace (72 lakh onwards).
-- 2 BHK: 760 sqft (72 lakh onwards), 1110 sqft with Terrace (1 crore 4 lakh onwards), 2285 sqft with Terrace (2 crore 10 lakh onwards).
-- Connectivity: Dombivli Station (15-20 mins), Nilje Station (5 mins), Kalyan (15 mins), Thane/Navi Mumbai via Shil Road (25-30 mins).
-- Amenities: Gym, children play area, jogging track, 24-hour water supply, Jaquar fittings, Kajaria tiles. Free VIP cab pickup for site visits.
-
-8. 100% PURE MARATHI MODE
+5. 100% PURE MARATHI MODE
 - Trigger: If caller speaks or asks for Marathi ("marathi madhe bola", "मराठीत बोला", "marathi aati hai kya"):
 - Respond 100% in PURE authentic Marathi in Devanagari script. ZERO Hindi words.
-- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई कॉम्प्लेक्स डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
+- Opening: "हो, मी पूर्णपणे मराठीत बोलू शकते. मी गायत्री बोलतेय साई गार्डन, डोंबिवली पूर्व येथून. येथे एक आणि दोन बीएचके पर्याय छत्तीस लाख रुपयांपासून उपलब्ध आहेत. आपण आपल्यासाठी एक बीएचके शोधत आहात की दोन बीएचके फ्लॅट शोधत आहात?"
 - 1 BHK: "समजले मला. एक बीएचकेमध्ये तीनशे पंच्याहत्तर स्क्वेअर फूट कार्पेट एरिया मिळतो. आपण रेडी-टू-मूव्ह शोधत आहात की अंडर-कन्स्ट्रक्शन चालेल?"
 - 2 BHK: "दोन बीएचकेमध्ये सातशे साठ स्क्वेअर फूट कार्पेट एरिया बहात्तर लाख रुपयांमध्ये मिळतो, ज्यामध्ये आधुनिक सुविधांचा समावेश आहे. याबद्दल आपल्या मनात काही शंका किंवा प्रश्न आहेत का?"
 - Numbers in Marathi: Always pronounce 375 as "तीनशे पंच्याहत्तर", 760 as "सातशे साठ", 520 as "पाचशे वीस", 36 as "छत्तीस", 72 as "बहात्तर".
-- Silence Watchdog in Marathi: "हॅलो? माझा आवाज येतोय का?"
+- Silence Watchdog in Marathi: "हॅलो? आपण एक बीएचके फ्लॅट शोधत आहात की दोन बीएचके?"
 - Closing in Marathi: "तुमचा दिवस चांगला जावो, नमस्कार."
 - Rejections in Marathi: "काही हरकत नाही. वेळ दिल्याबद्दल धन्यवाद, तुमचा दिवस चांगला जावो, नमस्कार."
 
-9. 100% PURE ENGLISH MODE
+6. 100% PURE ENGLISH MODE
 - Trigger: If caller speaks or asks for English ("can you speak English", "talk in English", "English please"):
 - Respond 100% in fluent, professional English. ZERO Hindi words.
-- Opening: "Yes, absolutely! This is Gayatri from Sai Complex, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
+- Opening: "Yes, absolutely! This is Gayatri from Sai Garden, Dombivli East. We have premium 1 and 2 BHK residences starting from 36 lakh rupees onwards. Are you looking for a 1 BHK or a 2 BHK apartment?"
 - 1 BHK: "Understood. Our 1 BHK homes offer 375 square feet carpet area starting at 36 lakh rupees all-inclusive. Are you looking for immediate possession or upcoming possession?"
 - 2 BHK: "Our 2 BHK homes provide 760 square feet carpet area at 72 lakh rupees all-inclusive, featuring spacious master bedrooms and premium fittings. Do you have any questions about the amenities or floor plan?"
-- Silence Watchdog in English: "Hello? Are you able to hear me?"
+- Silence Watchdog in English: "Hello? Are you looking for a 1 BHK or a 2 BHK home?"
 - Closing in English: "Thank you so much for your time. Have a wonderful day, goodbye!"
 """
 
@@ -696,14 +668,18 @@ class PriyaRealEstateAgent(Agent):
         else:
             message_body = (
                 f"Namaste {target_name},\n\n"
-                "Thank you for speaking with Gayatri at Shiv Sai Construction.\n"
-                "As requested, here are the brochure and pricing details for *Sai Complex*, Dombivli East:\n\n"
-                "📍 *Location*: Palava Road, near Pratik Green, Dombivli East\n"
+                "Thank you for speaking with Gayatri at Sai Garden (Shree Om Sai Developers).\n"
+                "As requested, here are the official brochure & details for *Sai Garden*, Dombivli East (Nilje):\n\n"
+                "🌿 *Project*: Sai Garden — Where Luxury Meets Nature\n"
+                "📍 *Location*: Lodha Heaven, Nilaje, Kalyan-Shil Road, Dombivli East (1 min from Nilje Station, 3 mins from Xperia Mall)\n"
+                "🏢 *Tower*: G+22 Storeyed Residential Tower (MahaRERA: PR1330002501452)\n"
                 "💰 *Pricing*:\n"
                 "• 1 BHK: Starts at 36 Lakh\n"
                 "• 2 BHK: Starts at 72 Lakh\n\n"
-                "📄 *Brochure PDF*: https://sai-complex.com/brochure.pdf\n\n"
-                "If you have any questions, reply to this message. Have a nice day!"
+                "🏊 *Amenities*: Multipurpose Garden, Modern Fitness Studio, Children's Play Kingdom, Indoor Games\n\n"
+                "📍 *Site Office*: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Dombivli East - 421204\n"
+                "📞 *Contact*: 8104027095 / 8097052221 / 9892115901\n\n"
+                "Have a wonderful day!"
             )
 
         try:
@@ -763,12 +739,7 @@ import multiprocessing
 is_main_process = (multiprocessing.current_process().name == "MainProcess")
 
 if is_main_process:
-    if os.path.exists("bookings/active_call.lock"):
-        try:
-            os.remove("bookings/active_call.lock")
-            logger.info("🧹 Cleaned up stale active call lock at startup.")
-        except Exception as e:
-            logger.warning(f"Could not remove stale active call lock: {e}")
+    pass
 
 SELECTED_MODEL = "gemini-3.5-flash-lite"
 SELECTED_GROQ_MODEL = "openai/gpt-oss-20b" # default fallback
@@ -830,69 +801,61 @@ elif global_google_key and (llm_provider in ["google", "gemini"] or not (global_
     preferred_models = ["gemini-3.5-flash-lite"]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
-    if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting Gemini model '{SELECTED_MODEL}' without validation.")
-        global_llm = google.LLM(
-            model=SELECTED_MODEL,
-            api_key=global_google_key,
-            temperature=0.3
-        )
-    else:
-        try:
-            from livekit.agents import llm as agents_llm
-            agent_dummy = PriyaRealEstateAgent()
-            agent_tools_dummy = agent_dummy.tools
-            chat_ctx_dummy = agents_llm.ChatContext()
-            chat_ctx_dummy.add_message(role="user", content="hello")
+    try:
+        from livekit.agents import llm as agents_llm
+        agent_dummy = PriyaRealEstateAgent()
+        agent_tools_dummy = agent_dummy.tools
+        chat_ctx_dummy = agents_llm.ChatContext()
+        chat_ctx_dummy.add_message(role="user", content="hello")
             
-            async def _test_compile(llm_instance):
-                async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
-                    async for chunk in chat_stream:
-                        break
-
-            try:
-                loop_static = asyncio.get_event_loop()
-            except RuntimeError:
-                loop_static = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop_static)
-
-            for model_name in preferred_models:
-                try:
-                    logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
-                    candidate_llm = google.LLM(
-                        model=model_name,
-                        api_key=global_google_key,
-                        temperature=0.3
-                    )
-                    
-                    # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
-                    
-                    global_llm = candidate_llm
-                    SELECTED_MODEL = "gemini-3.5-flash-lite"
-                    global_llm_compiled = True
-                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
+        async def _test_compile(llm_instance):
+            async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
+                async for chunk in chat_stream:
                     break
-                except Exception as e:
-                    logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
-            
-            if not global_llm:
-                logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
-                global_llm = google.LLM(
-                    model="gemini-3.5-flash-lite",
+
+        try:
+            loop_static = asyncio.get_event_loop()
+        except RuntimeError:
+            loop_static = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop_static)
+
+        for model_name in preferred_models:
+            try:
+                logger.info(f"Trying to initialize and compile LLM model '{model_name}'...")
+                candidate_llm = google.LLM(
+                    model=model_name,
                     api_key=global_google_key,
                     temperature=0.3
                 )
+                    
+                # Verify schema compilation works
+                loop_static.run_until_complete(asyncio.wait_for(_test_compile(candidate_llm), timeout=5.0))
+                    
+                global_llm = candidate_llm
                 SELECTED_MODEL = "gemini-3.5-flash-lite"
-        except Exception as outer_err:
-            logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
+                global_llm_compiled = True
+                save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
+                logger.info(f"✅ [IMPORT TIME COMPLETE] LLM model '{model_name}' successfully compiled and selected!")
+                break
+            except Exception as e:
+                logger.warning(f"Failed to initialize/compile model '{model_name}': {e}")
+            
+        if not global_llm:
+            logger.warning("All preferred models failed validation. Falling back to gemini-3.5-flash-lite.")
             global_llm = google.LLM(
                 model="gemini-3.5-flash-lite",
                 api_key=global_google_key,
                 temperature=0.3
             )
             SELECTED_MODEL = "gemini-3.5-flash-lite"
+    except Exception as outer_err:
+        logger.warning(f"Self-healing LLM selector setup failed: {outer_err}. Defaulting to gemini-3.5-flash-lite.")
+        global_llm = google.LLM(
+            model="gemini-3.5-flash-lite",
+            api_key=global_google_key,
+            temperature=0.3
+        )
+        SELECTED_MODEL = "gemini-3.5-flash-lite"
 
 # 2. GROQ LPU (Fallback when explicitly configured or Google key unavailable)
 elif global_groq_key and global_groq_key.startswith("gsk_"):
@@ -904,78 +867,49 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
     ]
     
     # If a call is active, skip verification compilation and use cached/default model immediately
-    if os.path.exists("bookings/active_call.lock"):
-        logger.info(f"🔒 Active call detected during import. Selecting Groq model '{SELECTED_GROQ_MODEL}' without validation.")
-        global_llm = lk_openai.LLM(
-            base_url="https://api.groq.com/openai/v1",
-            model=SELECTED_GROQ_MODEL,
-            api_key=global_groq_key,
-            temperature=0.3
-        )
-    else:
-        try:
-            from livekit.agents import llm as agents_llm
-            agent_dummy = PriyaRealEstateAgent()
-            agent_tools_dummy = agent_dummy.tools
-            chat_ctx_dummy = agents_llm.ChatContext()
-            chat_ctx_dummy.add_message(role="user", content="hello")
+    try:
+        from livekit.agents import llm as agents_llm
+        agent_dummy = PriyaRealEstateAgent()
+        agent_tools_dummy = agent_dummy.tools
+        chat_ctx_dummy = agents_llm.ChatContext()
+        chat_ctx_dummy.add_message(role="user", content="hello")
             
-            async def _test_compile_groq(llm_instance):
-                async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
-                    async for chunk in chat_stream:
-                        break
-
-            try:
-                loop_static = asyncio.get_event_loop()
-            except RuntimeError:
-                loop_static = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop_static)
-
-            for model_name in preferred_groq_models:
-                try:
-                    logger.info(f"Trying to initialize and compile Groq model '{model_name}'...")
-                    candidate_llm = lk_openai.LLM(
-                        base_url="https://api.groq.com/openai/v1",
-                        model=model_name,
-                        api_key=global_groq_key,
-                        temperature=0.3
-                    )
-                    
-                    # Verify schema compilation works
-                    loop_static.run_until_complete(asyncio.wait_for(_test_compile_groq(candidate_llm), timeout=5.0))
-                    
-                    global_llm = candidate_llm
-                    SELECTED_GROQ_MODEL = model_name
-                    global_llm_compiled = True
-                    save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
-                    logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
+        async def _test_compile_groq(llm_instance):
+            async with llm_instance.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
+                async for chunk in chat_stream:
                     break
-                except Exception as e:
-                    logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
+
+        try:
+            loop_static = asyncio.get_event_loop()
+        except RuntimeError:
+            loop_static = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop_static)
+
+        for model_name in preferred_groq_models:
+            try:
+                logger.info(f"Trying to initialize and compile Groq model '{model_name}'...")
+                candidate_llm = lk_openai.LLM(
+                    base_url="https://api.groq.com/openai/v1",
+                    model=model_name,
+                    api_key=global_groq_key,
+                    temperature=0.3
+                )
+                    
+                # Verify schema compilation works
+                loop_static.run_until_complete(asyncio.wait_for(_test_compile_groq(candidate_llm), timeout=5.0))
+                    
+                global_llm = candidate_llm
+                SELECTED_GROQ_MODEL = model_name
+                global_llm_compiled = True
+                save_cached_models(SELECTED_MODEL, SELECTED_GROQ_MODEL)
+                logger.info(f"✅ [IMPORT TIME COMPLETE] Groq model '{model_name}' successfully compiled and selected!")
+                break
+            except Exception as e:
+                logger.warning(f"Failed to initialize/compile Groq model '{model_name}': {e}")
             
-            if not global_llm:
-                if global_google_key:
-                    logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
-                    from livekit.plugins import google
-                    global_llm = google.LLM(
-                        model="gemini-3.5-flash-lite",
-                        api_key=global_google_key,
-                        temperature=0.3
-                    )
-                    SELECTED_MODEL = "gemini-3.5-flash-lite"
-                    SELECTED_GROQ_MODEL = None
-                else:
-                    logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
-                    global_llm = lk_openai.LLM(
-                        base_url="https://api.groq.com/openai/v1",
-                        model="llama-3.3-70b-versatile",
-                        api_key=global_groq_key,
-                        temperature=0.3
-                    )
-                    SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
-        except Exception as outer_err:
+        if not global_llm:
             if global_google_key:
-                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
+                logger.warning("⚠️ All preferred Groq models failed validation! Falling back to Google Gemini.")
                 from livekit.plugins import google
                 global_llm = google.LLM(
                     model="gemini-3.5-flash-lite",
@@ -985,7 +919,7 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                 SELECTED_MODEL = "gemini-3.5-flash-lite"
                 SELECTED_GROQ_MODEL = None
             else:
-                logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
+                logger.warning("All preferred Groq models failed validation and no GOOGLE_API_KEY is available. Forcing llama-3.3-70b-versatile.")
                 global_llm = lk_openai.LLM(
                     base_url="https://api.groq.com/openai/v1",
                     model="llama-3.3-70b-versatile",
@@ -993,6 +927,26 @@ elif global_groq_key and global_groq_key.startswith("gsk_"):
                     temperature=0.3
                 )
                 SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
+    except Exception as outer_err:
+        if global_google_key:
+            logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Falling back to Google Gemini.")
+            from livekit.plugins import google
+            global_llm = google.LLM(
+                model="gemini-3.5-flash-lite",
+                api_key=global_google_key,
+                temperature=0.3
+            )
+            SELECTED_MODEL = "gemini-3.5-flash-lite"
+            SELECTED_GROQ_MODEL = None
+        else:
+            logger.warning(f"Self-healing Groq LLM selector setup failed: {outer_err}. Forcing llama-3.3-70b-versatile.")
+            global_llm = lk_openai.LLM(
+                base_url="https://api.groq.com/openai/v1",
+                model="llama-3.3-70b-versatile",
+                api_key=global_groq_key,
+                temperature=0.3
+            )
+            SELECTED_GROQ_MODEL = "llama-3.3-70b-versatile"
 else:
     logger.warning("Neither GOOGLE_API_KEY nor GROQ_API_KEY is configured.")
 
@@ -1089,16 +1043,6 @@ def prewarm_fnc(proc: JobProcess):
             time.sleep(1.0)
             
             # Loop and sleep while another call is active
-            while os.path.exists("bookings/active_call.lock"):
-                try:
-                    with open("bookings/active_call.lock", "r") as f:
-                        lock_pid = int(f.read().strip())
-                    if lock_pid == os.getpid():
-                        # We are the active call! Abort background thread to protect CPU!
-                        return
-                except Exception:
-                    pass
-                time.sleep(1.5)
                 
             logger.info("🔥 [PRE-WARMING] System is idle. Compiling LLM schemas lazily in background...")
             try:
@@ -1109,9 +1053,9 @@ def prewarm_fnc(proc: JobProcess):
                 chat_ctx_dummy.add_message(role="user", content="hello")
 
                 async def _compile_schemas_lazy():
-                    async with global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy) as chat_stream:
-                        async for chunk in chat_stream:
-                            break
+                    chat_stream = global_llm.chat(chat_ctx=chat_ctx_dummy, tools=agent_tools_dummy)
+                    async for chunk in chat_stream:
+                        break
 
                 loop_lazy = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop_lazy)
@@ -1144,11 +1088,11 @@ def prewarm_fnc(proc: JobProcess):
     # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 200ms silence)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.65,
-        min_speech_duration=0.15,
-        activation_threshold=0.55,
-        deactivation_threshold=0.40,
-        prefix_padding_duration=0.15,
+        min_silence_duration=0.25,
+        min_speech_duration=0.10,
+        activation_threshold=0.50,
+        deactivation_threshold=0.35,
+        prefix_padding_duration=0.10,
         sample_rate=16000
     )
 
@@ -1490,22 +1434,10 @@ async def entrypoint(ctx: JobContext):
         ctx._session_directory = persistent_rec_dir
         logger.info(f"📁 [AUDIO RECORDING] Bound session directory to persistent path: {persistent_rec_dir}")
 
-        with open("bookings/active_call.lock", "w") as f:
-            f.write(str(os.getpid()))
-        logger.info("🔒 Active call lock created.")
     except Exception as e:
         logger.warning(f"Failed to create lock file: {e}")
 
     # Register cleanup callback on job shutdown to release the lock file
-    async def cleanup_lock():
-        try:
-            if os.path.exists("bookings/active_call.lock"):
-                os.remove("bookings/active_call.lock")
-                logger.info("🔓 Active call lock released.")
-        except Exception as e:
-            logger.warning(f"Failed to remove lock file: {e}")
-
-    ctx.add_shutdown_callback(cleanup_lock)
 
     await ctx.connect()
     t_connected = (time.perf_counter() - t_start) * 1000
@@ -1677,11 +1609,11 @@ async def entrypoint(ctx: JobContext):
     if not vad:
         logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
         vad = silero.VAD.load(
-            min_silence_duration=0.65,
-            min_speech_duration=0.15,
-            activation_threshold=0.55,
-            deactivation_threshold=0.40,
-            prefix_padding_duration=0.15,
+            min_silence_duration=0.25,
+            min_speech_duration=0.10,
+            activation_threshold=0.50,
+            deactivation_threshold=0.35,
+            prefix_padding_duration=0.10,
             sample_rate=16000
         )
     
@@ -1707,19 +1639,19 @@ async def entrypoint(ctx: JobContext):
             "turn_detection": "vad",
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.20,
+                "min_delay": 0.08,
             },
             "preemptive_generation": {
-                "enabled": True,
-                "preemptive_tts": True,
+                "enabled": True,  # Starts LLM streaming in advance based on interim STT
+                "preemptive_tts": True,  # Pre-synthesizes audio during caller pause for instantaneous 0ms playout
             },
             "interruption": {
                 "enabled": True,
                 "mode": "vad",
-                "min_words": 2,
-                "min_duration": 0.45,
+                "min_words": 1,
+                "min_duration": 0.25,
                 "resume_false_interruption": True,
-                "false_interruption_timeout": 1.5,
+                "false_interruption_timeout": 1.0,
             }
         }
     )
@@ -2289,6 +2221,17 @@ async def entrypoint(ctx: JobContext):
             await ctx.room.disconnect()
         except Exception as e:
             logger.debug(f"Disconnect error: {e}")
+        try:
+            from livekit import api
+            cloud_lk_url = os.getenv("LIVEKIT_URL", "https://cold-calling-j7qhnkas.livekit.cloud")
+            cloud_lk_key = os.getenv("LIVEKIT_API_KEY", "APIAkEXqBNfS2LP")
+            cloud_lk_secret = os.getenv("LIVEKIT_API_SECRET", "dtfb0ghSFBTudiAtRkckjaCrHnAuIhQpF2JJCRDtYlT")
+            lk_client = api.LiveKitAPI(url=cloud_lk_url, api_key=cloud_lk_key, api_secret=cloud_lk_secret)
+            await lk_client.room.delete_room(api.DeleteRoomRequest(room=ctx.room.name))
+            await lk_client.aclose()
+            logger.info("✅ LiveKit room cleanly deleted after caller hangup.")
+        except Exception as del_err:
+            logger.debug(f"Room delete after hangup note: {del_err}")
 
     @ctx.room.on("participant_disconnected")
     def _on_participant_disconnected(participant):
@@ -2811,9 +2754,9 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"⏱️ [PERF] session.start() returned! Took {t_session_ready:.1f}ms. Total job-to-ready time: {t_total_ready:.1f}ms")
     logger.info(f"⏱️ [PERF +{t_total_ready:.1f}ms] Agent Session Started & Ready in <50ms!")
 
-    # Allow 1.3s for carrier audio bridge and SIP RTP connection to unmute cleanly
-    logger.info("⏳ Allowing 1.3s for carrier audio bridge and SIP RTP connection to settle & unmute naturally...")
-    await asyncio.sleep(1.3)
+    # Allow 1.1s for carrier audio bridge and SIP RTP connection to unmute cleanly
+    logger.info("⏳ Allowing 1.1s for carrier audio bridge and SIP RTP connection to settle & unmute naturally...")
+    await asyncio.sleep(1.1)
 
     if not _hangup_scheduled:
         is_cartesia = session.tts and "cartesia" in session.tts.__class__.__module__
@@ -2826,13 +2769,14 @@ async def entrypoint(ctx: JobContext):
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
 
-        logger.info("🎙️ [INITIAL GREETING] Speaking warm initial hello to caller...")
+        logger.info("🎙️ [INITIAL GREETING] Speaking complete Sai Garden introduction to caller...")
+        intro_text = "हलो? नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ 1 और 2 BHK लग्ज़री फ्लैट्स 36 लाख से शुरू हो रहे हैं। क्या आप अपने लिए 1 BHK देख रहे हैं या 2 BHK?"
         try:
-            record_dialogue_turn("agent", "हलो?")
-            session.say("हलो?", allow_interruptions=True)
+            record_dialogue_turn("agent", intro_text)
+            session.say(intro_text, allow_interruptions=True)
             t_last_activity = time.time()
         except Exception as e:
-            logger.warning(f"Error speaking initial hello: {e}")
+            logger.warning(f"Error speaking initial introduction: {e}")
         intro_finished = True
 
     # Silence Watchdog: 2s (Initial Hello) -> 5s Interval Prompts -> 15s (Auto Hangup)
@@ -2875,11 +2819,11 @@ async def entrypoint(ctx: JobContext):
                 if now - t_call_pickup >= 2.0:
                     initial_hello_done = True
                     last_prompt_time = now
-                    logger.info("🎙️ [SILENCE WATCHDOG] 2.5s elapsed after pickup with caller silent. Prompting in Hindi...")
+                    logger.info("🎙️ [SILENCE WATCHDOG] 3.5s elapsed with caller silent. Prompting in Hindi...")
                     try:
                         t_user_stop = 0.0
-                        record_dialogue_turn("agent", "हलो? क्या आप सुन रहे हैं?")
-                        session.say("हलो? क्या आप सुन रहे हैं?", allow_interruptions=True)
+                        record_dialogue_turn("agent", "हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?")
+                        session.say("हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?", allow_interruptions=True)
                         t_last_activity = time.time()
                     except Exception as e:
                         logger.warning(f"Error speaking initial 2s hello: {e}")
@@ -2915,9 +2859,9 @@ async def entrypoint(ctx: JobContext):
                     prompt_text = "Hello? Are you able to hear me?"
                 else:
                     if not caller_has_spoken:
-                        prompt_text = "Hello?"
+                        prompt_text = "हलो? क्या आप 1 BHK फ्लैट देख रहे हैं या 2 BHK?"
                     else:
-                        prompt_text = "Hello? Kya aap sun rahe hain?"
+                        prompt_text = "हलो? क्या आपका साई गार्डन के बारे में कोई सवाल है?"
                 try:
                     t_user_stop = 0.0
                     record_dialogue_turn("agent", prompt_text)
@@ -2945,7 +2889,7 @@ if __name__ == "__main__":
             entrypoint_fnc=entrypoint,
             request_fnc=request_fnc,
             prewarm_fnc=prewarm_fnc,
-            num_idle_processes=1,
+            num_idle_processes=2,
             load_threshold=100.0,
             initialize_process_timeout=90.0,
         )

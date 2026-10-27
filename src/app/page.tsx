@@ -455,7 +455,7 @@ export default function ColdCallingHomePage() {
             const sid = (item.callSid || item.id || '').toLowerCase();
             if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
             // Purge any corrupted dummy entries containing the fake fallback template
-            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Complex Dombivli East se. Humare paas premium one BHK'))) return false;
+            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Garden Dombivli East se. Humare paas premium one BHK'))) return false;
             if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
             return true;
           });
@@ -640,6 +640,7 @@ export default function ColdCallingHomePage() {
       const res = await fetch('/api/outbound-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({
           phoneNumber: safeTargetPhone,
           customerName: callerName,
@@ -818,6 +819,7 @@ export default function ColdCallingHomePage() {
         const res = await fetch('/api/outbound-call', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
           body: JSON.stringify({
             phoneNumber: contact.phone,
             customerName: contact.name,
@@ -1053,7 +1055,7 @@ export default function ColdCallingHomePage() {
         {/* Builder Project Pill */}
         <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs">
           <Building2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-          <span className="font-bold text-slate-700 dark:text-slate-300">Sai Complex, Dombivli East (Opp. Xperia Mall)</span>
+          <span className="font-bold text-slate-700 dark:text-slate-300">Sai Garden, Dombivli East (Opp. Xperia Mall)</span>
         </div>
       </div>
 
@@ -1247,7 +1249,7 @@ export default function ColdCallingHomePage() {
                 1-Click Outbound Voice AI Call
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Instantly dial any customer phone number. Gayatri introduces Sai Complex Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
+                Instantly dial any customer phone number. Gayatri introduces Sai Garden Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
               </p>
             </div>
 
@@ -1789,7 +1791,7 @@ export default function ColdCallingHomePage() {
 
                       {/* AI Summary / Notes */}
                       <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
-                        {call.aiSummary || 'Outbound sales call discussing Sai Complex Dombivli East project.'}
+                        {call.aiSummary || 'Outbound sales call discussing Sai Garden Dombivli East project.'}
                       </p>
                     </div>
                   </div>
@@ -1843,7 +1845,7 @@ export default function ColdCallingHomePage() {
                 <div>
                   <div className="flex items-center space-x-2 mb-2">
                     <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
-                      Sai Complex Dombivli East
+                      Sai Garden Dombivli East
                     </span>
                     <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-300 text-[10px] font-mono">
                       Site Visit Management
@@ -1993,7 +1995,7 @@ export default function ColdCallingHomePage() {
                       </div>
                       <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
                         <span className="text-slate-400 font-medium">Project:</span>
-                        <span className="font-bold text-[11px] truncate max-w-[160px]">Sai Complex, Dombivli East</span>
+                        <span className="font-bold text-[11px] truncate max-w-[160px]">Sai Garden, Dombivli East</span>
                       </div>
                     </div>
 
@@ -2009,7 +2011,7 @@ export default function ColdCallingHomePage() {
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                     <a
                       href={`https://wa.me/${visit.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                        `Namaste ${visit.customerName} ji, this is from Sai Complex Dombivli East (Opposite Xperia Mall). We look forward to seeing you for your confirmed site visit on ${visit.visitDay} at ${visit.visitTime}. Location: https://maps.app.goo.gl/SaiComplexDombivli`
+                        `Namaste ${visit.customerName} ji, this is from Sai Garden Dombivli East (Opposite Xperia Mall). We look forward to seeing you for your confirmed site visit on ${visit.visitDay} at ${visit.visitTime}. Location: https://maps.app.goo.gl/SaiComplexDombivli`
                       )}`}
                       target="_blank"
                       rel="noreferrer"
@@ -2102,7 +2104,7 @@ export default function ColdCallingHomePage() {
               <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center justify-between">
                 <div>
                   <span className="font-bold">AI Call Summary: </span>
-                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Complex Dombivli East project.'}
+                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Garden Dombivli East project.'}
                 </div>
                 {(() => {
                   const sTag = getSentimentTag(selectedCall);

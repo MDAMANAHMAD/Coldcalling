@@ -276,7 +276,7 @@ export async function getSiteVisits(): Promise<SiteVisitRecord[]> {
               status: (rec.status === 'site_visit_confirmed' ? 'confirmed' : rec.status) || 'confirmed',
               createdAt: rec.timestamp || new Date().toISOString(),
               notes: rec.notes || '',
-              project: 'Sai Complex, Dombivli East',
+              project: 'Sai Garden, Dombivli East',
             });
           }
         } catch {}
@@ -321,7 +321,7 @@ export async function getSiteVisits(): Promise<SiteVisitRecord[]> {
             notes: summary,
             callId: log.callSid || log.id,
             recordingUrl: log.recordingUrl,
-            project: 'Sai Complex, Dombivli East',
+            project: 'Sai Garden, Dombivli East',
           });
         }
       }
