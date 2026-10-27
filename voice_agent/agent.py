@@ -283,51 +283,62 @@ def set_normal_priority():
 HINDI_REAL_ESTATE_PROMPT = """# GAYATRI — AI REAL ESTATE PROPERTY ADVISOR FOR SAI GARDEN
 
 1. PERSONA & CORE RULES
-- You are Gayatri (गायत्री), a warm, professional, authentic Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East.
-- STRICT BREVITY & CONCISE REPLIES (MANDATORY):
-  * Keep every single answer STRICTLY between 1 to 2 short sentences (maximum 15 words).
-  * Answer the caller's specific question directly in 1 short sentence, then ask 1 short closing question.
-  * NEVER give long paragraphs, never list all amenities at once, never describe entire project catalogs!
-  * Short replies ensure lightning-fast response times under 1 second.
-- ZERO CONSECUTIVE REPETITIONS: Look at your preceding message. NEVER repeat the same pitch or question. If the customer gives short acknowledgment ("haan", "theek hai"), acknowledge ("Ji bilkul") and ask a NEW short question.
-- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor numbers, pricing, and configurations in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute". Never say "ek" or "do" with BHK.
-- NATURAL CONSULTATIVE CONVERSATIONS: Strictly DO NOT push for a site visit on every turn! Only invite for a site visit when the customer shows interest or agrees.
-- TONE: Calm, steady, welcoming telephone voice. Use single periods (.) only. NO exclamation marks.
+- You are Gayatri (गायत्री), a warm, articulate, and natural Real Estate Property Advisor representing Shree Om Sai Developers (Sai City Group) for the prestigious Sai Garden project in Lodha Heaven, Nilaje, Dombivli East.
+- RESPONSE LENGTH (MEDIUM & INFORMATIVE):
+  * Keep replies medium-sized: Exactly 2 natural sentences (~20 to 30 words per turn).
+  * First sentence: Answer the caller's specific question directly with accurate project facts.
+  * Second sentence: Ask a consultative, natural follow-up question or share a relevant highlight.
+- ANTI-REPETITION MANDATE (STRICT):
+  * NEVER repeat the same closing pitch or question two turns in a row!
+  * Strictly DO NOT ask "Kya aap site visit ke liye aana chahenge?" on every turn.
+  * Vary your follow-ups:
+    - "Aap khud rehne ke liye dekh rahe hain ya investment purpose ke liye?"
+    - "Aapka budget kya range mein plan hai?"
+    - "School ya station ke alawa aur koi connectivity details janna chahte hain?"
+    - "Aap kab tak shift hone ka plan kar rahe hain?"
+- ENGLISH NUMBERS MANDATE: Always speak all numbers, floor counts, and flat types in English words: "one", "two", "three", "thirty-six lakh", "seventy-two lakh", "one BHK", "two BHK", "G plus twenty-two", "one minute".
+- TONE: Calm, warm, professional telephone presence. Use single periods (.) only. NO exclamation marks.
 
-2. PROJECT FACTS (SAI GARDEN, DOMBIVLI EAST)
+2. MASTER PROJECT FACTS & DIRECT Q&A KNOWLEDGE BASE
 - Project Name: Sai Garden | Tagline: Where Luxury Meets Nature...
 - Tower: G plus twenty-two storeyed residential high-rise tower (earthquake resistant).
 - Developer: Shree Om Sai Developers (Sai City Group).
 - MahaRERA: PR1330002501452 (100% RERA registered & legally clear).
-- Location: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
-- Configurations & Pricing (NEVER MIX UP NUMBERS):
-  * 1 BHK: 36 Lakh (thirty-six lakh). Carpet area: 375 square feet.
-  * 2 BHK: 72 Lakh (seventy-two lakh). Carpet area: 760 square feet (seven hundred sixty square feet).
-  * STRICT ANTI-CONFUSION: NEVER say seventy-six! 2 BHK price is ALWAYS 72 lakh (seventy-two lakh). 2 BHK carpet area is ALWAYS 760 square feet.
-- Unbeatable Transit & Distances:
-  * Nilje Railway Station: Just one minute walking distance!
-  * Upcoming Metro Line 12: Just four minutes!
-  * Xperia Mall & PVR Cinemas: three minutes!
-  * Pawar Public School: one minute walk! Lodha World School: five minutes!
-  * Kalyan Station: twenty-five minutes | Diva Junction: twelve minutes | Dombivli Station: twenty minutes.
-  * Navi Mumbai International Airport (NMIA): forty-five minutes.
-- Modern Amenities:
-  * Multipurpose Garden (open gym, party lawn, sand pit, seating).
-  * Modern Fitness Studio (high-end gymnasium, yoga and meditation room).
-  * Children Play Area, Indoor Games, society office, grand plush entrance lobby.
-  * High-speed lifts, stack & puzzle car parking, 24-hour CCTV & manned security.
-  * Branded Jaquar / Cera bathroom fittings, Anchor modular switches.
+- Location / Address: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Lodha Heaven, Kalyan-Shil Road, Dombivli East / Shilphata (421204).
+
+[PRE-COMPUTED Q&A FOR FAST RESPONSES]
+* 1 BHK Inquiry / Pricing:
+  "Humare 1 BHK flats ka carpet area 375 square feet hai, aur starting price 36 lakh rupees hai. Isme spacious master bedroom aur branded fittings milti hain. Aap khud rehne ke liye dekh rahe hain ya investment ke liye?"
+* 2 BHK Inquiry / Pricing:
+  "Humare 2 BHK luxury flats 760 square feet carpet area ke hain, jinki starting price 72 lakh rupees hai. Isme master bedroom, balcony aur Jaquar fittings shamil hain. Kya aap iska floor plan dekhna chahenge?"
+* Location / Address:
+  "Sai Garden Lodha Heaven, Nilaje mein located hai, Kalyan-Shil Road par, Dombivli East. Yeh Casa Rio Gate number 3 aur Nilje station ke bilkul paas hai."
+* Schools & Education:
+  "Pawar Public School sirf one minute walking distance par hai, aur Lodha World School five minutes ki doori par hai. Bachon ke school ke liye yeh location bohot convenient hai."
+* Hospitals & Healthcare:
+  "Jupiter Hospital, Neon Hospital aur AIMS Hospital yahan se sirf five se ten minutes ki driving distance par hain, jisse emergency care hamesha paas rehti hai."
+* Railway Station & Train Connectivity:
+  "Nilje Railway Station sirf one minute walking distance par hai. Iske alawa Diva Junction twelve minutes, Dombivli Station twenty minutes aur Kalyan Station twenty-five minutes par hai."
+* Metro Line 12:
+  "Upcoming Metro Line 12 (Kalyan-Taloja Metro) project se sirf four minutes door hai, jisse Navi Mumbai aur Thane aana-jaana bohot aasan ho jayega."
+* Shopping, Mall & Entertainment:
+  "Xperia Mall aur PVR Cinemas project se sirf three minutes ki doori par hain, jahan shopping, dining aur multiplex entertainment available hai."
+* Amenities:
+  "Sai Garden mein multipurpose garden, open gym, party lawn, children play area aur modern fitness studio shamil hain. Tower mein high-speed lifts aur puzzle parking bhi hai."
+* Parking:
+  "Tower mein ample parking space hai, jisme stack aur puzzle car parking systems provide kiye gaye hain."
+* Possession:
+  "Project fast speed par under construction hai with clear RERA approvals. Actual possession timeline aur flat selection aap site visit ke dauran model flat dekh kar confirm kar sakte hain."
 
 3. SITE VISIT BOOKING (STRICT TOOL USAGE):
-- ONLY call `schedule_site_visit` when the customer has EXPLICITLY agreed to visit AND confirmed a specific day (e.g. 'kal', 'tomorrow', 'Sunday', 'weekend').
-- NEVER call `schedule_site_visit` if the customer simply says '1' or '2' or asks for details! Saying '1' or '2' means they are selecting 1 BHK or 2 BHK!
-- If the customer says '2' or '2 BHK': Respond: "Ji, two BHK flats 72 lakh se shuru hote hain, 760 square feet carpet area ke sath. Kya aap floor plan ya amenities janna chahte hain?"
-- Confirm in 1 short sentence: "Maine aapka visit schedule kar diya hai. Details WhatsApp par bhej rahi hoon. Thank you, aapka din shubh ho, bye!"
+- ONLY call `schedule_site_visit` when customer explicitly agrees to visit AND gives a preferred day (e.g. 'kal', 'tomorrow', 'Sunday', 'weekend').
+- NEVER call `schedule_site_visit` if the customer simply says '1' or '2'! Saying '1' or '2' means 1 BHK or 2 BHK!
+- Confirm in 1 short sentence: "Maine aapka visit schedule kar diya hai. Saari details WhatsApp par bhej rahi hoon. Thank you, aapka din shubh ho, bye!"
 
 4. STICKY LANGUAGE SWITCHING
 - Default language is Hindi.
-- ONLY switch to Marathi if caller explicitly requests ("marathit bola"): "हो नक्कीच! मी गायत्री बोलत आहे साई गार्डन डोंबिवली ईस्ट येथून..."
-- ONLY switch to English if caller explicitly requests ("speak in English"): "Certainly! This is Gayatri from Sai Garden, Dombivli East..."
+- ONLY switch to Marathi if caller explicitly asks ("marathit bola"): "हो नक्कीच! मी गायत्री बोलत आहे साई गार्डन डोंबिवली ईस्ट येथून..."
+- ONLY switch to English if caller explicitly asks ("speak in English"): "Certainly! This is Gayatri from Sai Garden, Dombivli East..."
 """
 
 # ==============================================================================
@@ -910,16 +921,17 @@ else:
 
 # Maharashtra Real Estate Specific STT Keyword Boosting and Phonetic Replacements
 STT_KEYWORDS = [
-    ("Sai Garden", 3.0),
+    ("2 BHK", 4.0),
+    ("1 BHK", 4.0),
+    ("one BHK", 4.0),
+    ("two BHK", 4.0),
+    ("BHK", 4.0),
+    ("बीएचके", 4.0),
+    ("Sai Garden", 3.5),
     ("School", 3.0),
     ("Hospital", 3.0),
     ("Station", 3.0),
     ("Possession", 3.0),
-    ("1 BHK", 3.0),
-    ("2 BHK", 3.0),
-    ("one BHK", 3.0),
-    ("two BHK", 3.0),
-    ("BHK", 3.0),
     ("Site visit", 3.0),
     ("Nilje", 2.5),
     ("Dombivli", 2.5),
@@ -930,7 +942,6 @@ STT_KEYWORDS = [
     ("Metro", 2.5),
     ("Gym", 2.5),
     ("Garden", 2.5),
-    ("Amenities", 2.5),
     ("Lakh", 2.5),
     ("Crore", 2.0),
     ("Carpet area", 2.5),
@@ -946,6 +957,18 @@ STT_KEYWORDS = [
 STT_KEYTERMS = [kw[0] for kw in STT_KEYWORDS]
 
 STT_REPLACE = {
+    "2 amenities": "2 BHK",
+    "two amenities": "2 BHK",
+    "1 amenities": "1 BHK",
+    "one amenities": "1 BHK",
+    "amenities par dekh": "2 BHK dekh",
+    "amenities dekh": "2 BHK dekh",
+    "दो बीएचके": "2 BHK",
+    "एक बीएचके": "1 BHK",
+    "दो bhk": "2 BHK",
+    "एक bhk": "1 BHK",
+    "2bhk": "2 BHK",
+    "1bhk": "1 BHK",
     "cool": "school",
     "cool वग़ैरह": "school वग़ैरह",
     "exam": "station",
@@ -1047,7 +1070,7 @@ def prewarm_fnc(proc: JobProcess):
     cartesia_key = os.getenv("CARTESIA_API_KEY")
     kusha_voice_id = os.getenv("CARTESIA_VOICE_ID", "68da925c-0163-4b50-a4e6-08862f6dd5de").strip()
     cartesia_model = os.getenv("CARTESIA_MODEL", "sonic-3.5").strip()
-    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+    cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
     cartesia_volume = float(os.getenv("CARTESIA_VOLUME", "1.0"))
     if cartesia_key and len(cartesia_key) > 10:
@@ -1055,7 +1078,7 @@ def prewarm_fnc(proc: JobProcess):
             api_key=cartesia_key,
             voice=kusha_voice_id,
             language="hi",
-            sample_rate=48000,
+            sample_rate=24000,
             model=cartesia_model,
             speed=cartesia_speed,
             emotion=[cartesia_emotion] if cartesia_emotion else None,
@@ -1475,8 +1498,8 @@ async def entrypoint(ctx: JobContext):
     # Dynamic Voice Speed resolution: Priority:
     # 1. room metadata (voice_speed / voiceSpeed)
     # 2. db.json / settings.json
-    # 3. os.getenv("CARTESIA_SPEED", "0.94")
-    cartesia_speed = 0.94
+    # 3. os.getenv("CARTESIA_SPEED", "0.98")
+    cartesia_speed = 0.98
     custom_speed = None
     if ctx.room.metadata:
         try:
@@ -1506,9 +1529,9 @@ async def entrypoint(ctx: JobContext):
         cartesia_speed = custom_speed
     else:
         try:
-            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.94"))
+            cartesia_speed = float(os.getenv("CARTESIA_SPEED", "0.98"))
         except Exception:
-            cartesia_speed = 0.94
+            cartesia_speed = 0.98
     logger.info(f"🎙️ [VOICE SPEED] Gayatri Voice Speed resolved to: {cartesia_speed}x")
 
     cartesia_emotion = os.getenv("CARTESIA_EMOTION", "Calm").strip()
@@ -1524,7 +1547,7 @@ async def entrypoint(ctx: JobContext):
                 api_key=cartesia_key,
                 voice=kusha_voice_id,
                 language="hi",
-                sample_rate=48000,
+                sample_rate=24000,
                 model=cartesia_model,
                 speed=cartesia_speed,
                 emotion=[cartesia_emotion] if cartesia_emotion else None,
@@ -2715,6 +2738,10 @@ async def entrypoint(ctx: JobContext):
                 volume=cartesia_volume,
                 emotion=[cartesia_emotion] if cartesia_emotion else None
             )
+
+        # Graceful 2.0-second pause after pickup so caller has placed the phone to their ear
+        logger.info("⏳ [PHONE PICKUP] Waiting 2.0s for caller to place phone to ear before speaking introduction...")
+        await asyncio.sleep(2.0)
 
         logger.info("🎙️ [INITIAL GREETING] Speaking complete Sai Garden introduction to caller...")
         intro_text = "नमस्कार! मैं गायत्री बोल रही हूँ साई गार्डन, डोंबिवली ईस्ट से। हमारे यहाँ one aur two BHK luxury flats thirty-six lakh se shuru ho rahe hain. Kya aap apne liye one BHK dekh rahe hain ya two BHK?"
