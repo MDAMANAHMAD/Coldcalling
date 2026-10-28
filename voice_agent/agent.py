@@ -178,6 +178,13 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b(do|दो|दोन)\s*(बी\s*एच\s*के|बीएचके)\b', 'two BHK'),
             (r'\bBHK\b', 'BHK'),
             (r'\bRK\b', 'RK'),
+            (r'\b24\s*/\s*7\b', 'चौबीसों घंटे'),
+            (r'\b24/7\b', 'चौबीसों घंटे'),
+            (r'\b24x7\b', 'चौबीसों घंटे'),
+            (r'\b24\s*hours\b', 'चौबीसों घंटे'),
+            (r'\bvashi\b', 'वाशी'),
+            (r'\b4\.5\s*(?:to|se|-)\s*7\s*(lakh|लाख)?\b', 'four point five to seven lakh'),
+            (r'\b4\.5\s*(lakh|लाख)?\b', 'four point five lakh'),
             (r'\b(chhattis|छत्तीस)\s*(lakh|लाख)?\b', 'thirty-six lakh'),
             (r'\b(tees|तीस)\s*(lakh|लाख)?\b', 'thirty lakh'),
             (r'\b(paintalis|panchtalis|पंचेचाळीस|पैंतालीस)\s*(lakh|लाख)?\b', 'forty-five lakh'),
@@ -187,7 +194,7 @@ def normalize_phonetics(text: str, lang: str | None = None) -> str:
             (r'\b45\b', 'forty-five'),
             (r'\b3\s*to\s*5\s*lakh\b', 'three to five lakh'),
             (r'\b3\s*se\s*5\s*lakh\b', 'three to five lakh'),
-            (r'\bxperia\s*mall\b', 'एक्सपेरिया मॉल'),
+            (r'\b(xperia|एक्सपिरिया|एक्सपेरिया)\s*mall\b', 'एक्सपिरिया मॉल'),
             (r'\bsai\s*city\s*group\b', 'साई सिटी ग्रुप'),
             (r'\b(bahattar|बहात्तर)\s*(lakh|लाख)?\b', 'seventy-two lakh'),
             (r'\b36\s*(lakh|लाख)\b', 'thirty-six lakh'),
@@ -295,10 +302,10 @@ HINDI_REAL_ESTATE_PROMPT = """# गायत्री (GAYATRI) — साई �
 भूमिका और व्यक्तित्व (ROLE & PERSONA):
 - नाम: गायत्री (Gayatri)
 - भूमिका: साई सिटी ग्रुप के 'साई गार्डन' (SAI GARDEN) प्रोजेक्ट की रियल एस्टेट प्रॉपर्टी एडवाइज़र।
-- प्रोजेक्ट लोकेशन: डोंबिवली ईस्ट, निल्जे, ठीक एक्सपिरिया मॉल के सामने, कल्याण-शिल्फाटा रोड।
+- प्रोजेक्ट लोकेशन: डोंबिवली ईस्ट, निल्जे, ठीक एक्सपिरिया मॉल के सामने, कल्याण-शिल्फाटा रोड (पिनकोड: 421204)।
 - महारेरा (MahaRERA) नंबर: PR1330002501452
 
-फिक्स्ड ओपनिंग ग्रीटिंग (FIRST SPOKEN LINE - MANDATORY):
+फिक्स्ड ओपनिंग ग्रीटिंग (FIRST SPOKEN LINE - ONLY ONCE AT CALL START):
 "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
 
 सख्त जेंडर-न्यूट्रल भाषा के नियम (STRICT GENDER-NEUTRAL RULES):
@@ -312,31 +319,52 @@ HINDI_REAL_ESTATE_PROMPT = """# गायत्री (GAYATRI) — साई �
   * "अगर आपकी फैमिली या फ्रेंड्स में किसी को 1 या 2 BHK चाहिए हो, तो हमारा नंबर ज़रूर शेयर कीजिएगा।"
 - आप खुद गायत्री हैं, इसलिए अपने लिए महिला वाचक क्रिया का उपयोग करें ("मैं बात कर रही हूँ", "मैं बोल रही हूँ", "मैं भेज रही हूँ")।
 
-प्रॉपर्टी विवरण और सही मूल्य (PROPERTY DETAILS & PRICING):
-- 1 BHK: ₹30 लाख से शुरू। डाउन पेमेंट ₹3 से ₹5 लाख (बैंक लोन सुविधाएं: SBI, HDFC, ICICI)।
-- 2 BHK: ₹45 लाख से शुरू। G+22 मंजिला भव्य टॉवर, 35+ लग्जरी सुविधाओं के साथ।
-- 3 BHK / 1 RK: उपलब्ध नहीं हैं। विनम्रता से स्पष्ट करें कि केवल 1 BHK और 2 BHK ही उपलब्ध हैं।
-- सुविधाएं (Amenities): मॉडर्न जिम, स्विमिंग पूल, क्लबहाउस, बच्चों का खेल क्षेत्र, लैंडस्केप गार्डन, 24/7 सुरक्षा।
-- प्रमुख कनेक्टिविटी:
-  * निल्जे रेलवे स्टेशन: 1 से 2 मिनट पैदल दूरी।
-  * एक्सपिरिया मॉल: ठीक सामने (3 मिनट)।
-  * आगामी मेट्रो लाइन 12 (कल्याण-तलोझा): 4 मिनट।
-  * डोंबिवली स्टेशन: 20 मिनट।
-  * ऐरोली-कटाई टनल: 10 मिनट।
+सत्यापित प्रॉपर्टी विवरण और मूल्य (VERIFIED PROPERTY DETAILS & PRICING):
+- 1 BHK: ₹30 लाख से शुरू। डाउन पेमेंट लगभग ₹3 से ₹5 लाख (लगभग 10-15%)। बैंक लोन (SBI, HDFC, ICICI, Axis) से 85-90% तक फाइनेंस। कारपेट एरिया लगभग 375 से 425 वर्ग फुट।
+- 2 BHK: ₹45 लाख से शुरू। डाउन पेमेंट लगभग ₹4.5 से ₹7 लाख (लगभग 10-15%)। बैंक लोन (SBI, HDFC, ICICI, Axis) से 85-90% तक फाइनेंस। भव्य G+22 मंजिला टॉवर, 35+ लग्जरी एमिनिटीज के साथ। कारपेट एरिया लगभग 550 से 650 वर्ग फुट।
+- 3 BHK / 1 RK: उपलब्ध नहीं हैं। सीधे और स्पष्ट बताएं: "साई गार्डन में 3 BHK उपलब्ध नहीं है, हमारे यहाँ केवल 1 BHK और 2 BHK उपलब्ध हैं। अगर आप चाहें तो मैं 2 BHK की डिटेल्स बता सकती हूँ।"
+- पज़ेशन स्थिति (Property Status):
+  * Ready-to-move: तुरंत पज़ेशन उपलब्ध है, 10-15% डाउन पेमेंट और तुरंत बैंक लोन।
+  * Under-construction: निर्माण के विभिन्न चरणों के आधार पर लचीला स्टेज-वाइज पेमेंट प्लान (construction-linked payment) और बैंक लोन डिस्बर्समेंट उपलब्ध है।
 
-बातचीत का प्रवाह और 4 स्टेप्स (CONVERSATION FLOW & STEPS):
-- हर वाक्य छोटा और स्पष्ट रखें (20-25 शब्दों के अंदर)। हर उत्तर के बाद एक विनम्र सवाल ज़रूर पूछें।
-- ओपनिंग: "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
-- स्टेप 1 (फ्लैट की पसंद और पज़ेशन):
-  "1 BHK ₹30 लाख से और 2 BHK ₹45 लाख से शुरू होता है। आपको ready-to-move चाहिए या under-construction चलेगा?"
-- स्टेप 2 (अन्य पूछताछ / एमेनिटीज):
-  यदि ग्राहक कोई सवाल पूछे, 20-25 शब्दों में संक्षिप्त उत्तर दें और पूछें: "क्या आप प्रोजेक्ट या सुविधाओं के बारे में कुछ और जानना चाहते हैं, या प्रत्यक्ष साईट विजिट प्लान करें?"
-- स्टेप 3 (साइट विजिट बुक करना - मुख्य लक्ष्य):
-  "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
-- स्टेप 4 (तुरंत कन्फर्मेशन - वॉइस पहले, बैकग्राउंड सेव):
-  "बिल्कुल! आपकी साईट विजिट कन्फर्म कर दी है। सारी जानकारी व्हाट्सऐप पर भेज रही हूँ। धन्यवाद!"
-- यदि ग्राहक रुचि न दिखाए:
-  "कोई बात नहीं! अगर आपकी फैमिली या फ्रेंड्स में किसी को 1 या 2 BHK चाहिए हो तो हमारा नंबर ज़रूर शेयर कीजिएगा। धन्यवाद!"
+सत्यापित कनेक्टिविटी और दूरियां (CONNECTIVITY & DISTANCES KNOWLEDGE BASE):
+- निल्जे रेलवे स्टेशन (Nilje Station): 1 से 2 मिनट पैदल दूरी (लगभग 200 मीटर)।
+- एक्सपिरिया मॉल (Xperia Mall, Palava): ठीक सामने, केवल 3 मिनट पैदल दूरी।
+- आगामी मेट्रो लाइन 12 (कल्याण-तलोझा): सिर्फ 4 मिनट दूर।
+- ऐरोली-कटाई टनल (Airoli-Katai Tunnel): सिर्फ 10 मिनट दूर (जिससे ऐरोली और नवी मुंबई बहुत जल्दी पहुँच सकते हैं)।
+- डोंबिवली रेलवे स्टेशन (Dombivli Station): लगभग 8 से 9 किलोमीटर (ऑटो या बस से 20-25 मिनट)।
+- कल्याण रेलवे स्टेशन (Kalyan Station): लगभग 10 से 12 किलोमीटर (25-30 मिनट)।
+- वाशी रेलवे स्टेशन (Vashi Station / Navi Mumbai): लगभग 22 से 25 किलोमीटर, ऐरोली-कटाई टनल या महापे मार्ग से लगभग 35 से 40 मिनट की ड्राइव।
+- ठाणे (Thane - Majiwada / Viviana): लगभग 18 से 20 किलोमीटर (30-35 मिनट)।
+
+सत्यापित आसपास के स्कूल और कॉलेज (NEARBY SCHOOLS):
+- लोढा वर्ल्ड स्कूल (Lodha World School, Palava): 5-7 मिनट (~1.5 किमी)।
+- पवार पब्लिक स्कूल (Pawar Public School): 8-10 मिनट (~2 किमी)।
+- गार्जियन स्कूल (Guardian School, Dombivli): 12-15 मिनट।
+- ओंकार कैम्ब्रिज इंटरनेशनल स्कूल: 10 मिनट।
+
+सत्यापित आसपास के अस्पताल (NEARBY HOSPITALS):
+- नेपच्यून सुपर स्पेशियलिटी हॉस्पिटल (Neptune Hospital): 10 मिनट (~3 किमी)।
+- एम्स हॉस्पिटल (AIMS Hospital, Dombivli): 15-20 मिनट (~6 किमी)।
+- आर आर हॉस्पिटल / आइकॉन हॉस्पिटल (Dombivli East): 15 मिनट।
+- बीजांकुर हॉस्पिटल: 10-12 मिनट।
+
+सुविधाएं (AMENITIES):
+- मॉडर्न जिम, स्विमिंग पूल, क्लबहाउस, बच्चों का खेल क्षेत्र, लैंडस्केप गार्डन, इनडोर गेम्स, जॉगिंग ट्रैक और चौबीसों घंटे सुरक्षा (CCTV के साथ)।
+- उच्चारण नियम: कभी भी कच्चा "24/7" न बोलें, हमेशा "चौबीसों घंटे सुरक्षा" बोलें ताकि उच्चारण स्पष्ट रहे।
+
+संवाद प्रबंधन और उत्तर नियम (CONVERSATION MANAGEMENT & PRIORITY RULES):
+1. ग्राहक के तात्कालिक सवाल को प्राथमिकता दें (Answer Current Question First):
+   ग्राहक ने जो सवाल पूछा है (जैसे वाशी स्टेशन की दूरी, 2 BHK डाउन पेमेंट, स्कूल, हॉस्पिटल), सबसे पहले उसका सीधा और सटीक उत्तर दें।
+2. 2 BHK का संदर्भ न भूलें (Strict State Retention):
+   अगर ग्राहक ने 2 BHK चुन लिया है, तो हमेशा 2 BHK का ही मूल्य (₹45 लाख) और डाउन पेमेंट (लगभग ₹4.5 से ₹7 लाख) बताएं। कभी भी 1 BHK की जानकारी न दोहराएं!
+3. दोहराव पूरी तरह रोकें (No Repetition Loops):
+   अगर ग्राहक 'Under-construction' या 'Ready-to-move' बता चुका है, तो वही सवाल दोबारा न पूछें। उनके उत्तर को स्वीकार करें और आगे बढ़ें।
+4. ग्रीटिंग केवल एक बार (No Duplicate Greeting):
+   ओपनिंग ग्रीटिंग कॉल की शुरुआत में दी जा चुकी है। बातचीत के बीच में कभी भी दोबारा अपना नाम या परिचय न दोहराएं।
+5. साइट विजिट का स्वाभाविक प्रस्ताव (Natural Site Visit Pitch):
+   साइट विजिट का प्रस्ताव तभी रखें जब ग्राहक के सवाल का उत्तर पूरा हो जाए या ग्राहक सकारात्मक रुचि दिखाए। हर सवाल के बाद जबरदस्ती साइट विजिट न थोपें।
+6. उत्तर की लंबाई: हर उत्तर 20-25 शब्दों के अंदर संक्षिप्त, सटीक और विनम्र रखें।
 
 कॉल हैंडलिंग नियम:
 - अधिकतम कॉल अवधि: 5 मिनट।
@@ -620,6 +648,60 @@ def send_whatsapp_background(customer_phone: str, customer_name: str, flat_type:
     requests.post(url, data={"From": from_number, "To": f"whatsapp:{clean_phone}", "Body": body}, auth=auth, timeout=10)
     logger.info(f"📱 [WHATSAPP DISPATCHED] Sent official Sai Garden brochure to {clean_phone}")
 
+class ConversationState:
+    """
+    Robust Conversation State Manager for Gayatri AI Property Advisor.
+    Maintains persistent slots across all turns:
+    - selected_bhk: '1 BHK' | '2 BHK' | None
+    - property_status: 'ready-to-move' | 'under-construction' | None
+    - greeting_delivered: bool (prevents greeting from repeating)
+    - discussed_topics: set of topics already discussed
+    """
+    def __init__(self):
+        self.selected_bhk: Optional[str] = None
+        self.property_status: Optional[str] = None
+        self.greeting_delivered: bool = False
+        self.site_visit_confirmed: bool = False
+        self.site_visit_day: Optional[str] = None
+        self.site_visit_time: Optional[str] = None
+        self.discussed_topics: set[str] = set()
+
+    def update_from_utterance(self, text: str):
+        if not text:
+            return
+        t = text.lower()
+        
+        # 1. Flat Configuration Detection & Preservation
+        if re.search(r'\b(3\s*bhk|three\s*bhk|teen\s*bhk|तीन\s*बीएचके|३\s*बीएचके)\b', t) or '3 bhk' in t or '3bhk' in t or 'तीन बीएचके' in t:
+            self.discussed_topics.add("3_bhk_inquiry")
+        elif re.search(r'\b(2\s*bhk|two\s*bhk|do\s*bhk|dono\s*bhk|दोन\s*बीएचके|दो\s*बीएचके|second\s*bhk|२\s*बीएचके)\b', t) or '2 bhk' in t or '2bhk' in t or 'दो बीएचके' in t:
+            self.selected_bhk = "2 BHK"
+            self.discussed_topics.add("2_bhk_selected")
+        elif (re.search(r'\b(1\s*bhk|one\s*bhk|ek\s*bhk|एक\s*बीएचके|first\s*bhk|१\s*बीएचके)\b', t) or '1 bhk' in t or '1bhk' in t or 'एक बीएचके' in t) and not re.search(r'\b(2|do|two|दोन|दो)\b', t):
+            self.selected_bhk = "1 BHK"
+            self.discussed_topics.add("1_bhk_selected")
+
+        # 2. Property Status Detection (Ready-to-move vs Under-construction)
+        if any(w in t for w in ["under construction", "under-construction", "under", "construction", "chalega", "अंडर कंस्ट्रक्शन", "अंडर", "कंस्ट्रक्शन", "चालू", "काम चालू"]):
+            self.property_status = "under-construction"
+            self.discussed_topics.add("under_construction_selected")
+        elif any(w in t for w in ["ready to move", "ready-to-move", "ready", "ready possession", "रेडी", "रेडी टू मूव", "तैयार", "तुरंत"]):
+            self.property_status = "ready-to-move"
+            self.discussed_topics.add("ready_to_move_selected")
+
+        # 3. Topic Flags
+        if any(w in t for w in ["vashi", "वाशी", "navi mumbai", "नवी मुंबई"]):
+            self.discussed_topics.add("vashi_connectivity")
+        if any(w in t for w in ["hospital", "हॉस्पिटल", "aspataal", "अस्पताल", "doctor", "डॉक्टर", "school", "स्कूल", "college", "कॉलेज", "vidyalaya", "विद्यालय", "pawar", "lodha world"]):
+            self.discussed_topics.add("schools_hospitals")
+        if any(w in t for w in ["down payment", "डाउन पेमेंट", "kitna bharna", "kitna dena", "pehle kitna", "डाउन", "पेमेंट"]):
+            self.discussed_topics.add("down_payment")
+        if any(w in t for w in ["amenities", "सुविधा", "सुविधाएं", "gym", "जिम", "pool", "पूल", "swimming", "स्विमिंग", "garden", "गार्डन", "clubhouse", "क्लबहाउस", "security", "सुरक्षा"]):
+            self.discussed_topics.add("amenities")
+        if any(w in t for w in ["metro", "मेट्रो", "station", "स्टेशन", "train", "ट्रेन", "nilje", "निल्जे", "dombivli", "डोंबिवली", "kalyan", "कल्याण", "xperia", "एक्सपिरिया", "एक्सपेरिया"]):
+            self.discussed_topics.add("connectivity")
+
+
 class PriyaRealEstateAgent(Agent):
     def __init__(self, customer_name: str = "Aman ji", customer_phone: str = "", hangup_fnc=None, on_speech_captured=None):
         self.customer_name = customer_name
@@ -629,6 +711,8 @@ class PriyaRealEstateAgent(Agent):
         self.off_topic_count = 0
         self.selected_flat_type = '2BHK'
         self.room_name = ''
+        self.state = ConversationState()
+        self._base_instructions = ""
         
         now = datetime.now()
         day_names_en = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -646,6 +730,7 @@ class PriyaRealEstateAgent(Agent):
             f"Aap abhi {customer_name} se call par baat kar rahi hain. "
             "STRICT RULE: Do NOT say the client's name in your responses. You must talk to them directly without repeating or saying their name at all. NEVER prefix your sentences with their name."
         )
+        self._base_instructions = instructions
         super().__init__(instructions=instructions)
 
     async def llm_node(
@@ -655,10 +740,11 @@ class PriyaRealEstateAgent(Agent):
         model_settings: Any,
     ):
         """
-        Universal Intelligent LLM Node:
-        Every conversational turn routes 100% through the Gemini 3.5 Flash Lite LLM brain.
-        Zero hardcoded keyword regex matches; full reasoning, empathy, and context awareness.
-        Streams tokens directly into Cartesia Neural TTS for instantaneous voice playout.
+        Universal Intelligent LLM Node with Dynamic Conversation State:
+        - Every turn updates slot tracking (selected_bhk, property_status, topic intent).
+        - Injects live state directives to guarantee zero context-loss (2 BHK stays 2 BHK).
+        - Prioritizes directly answering the customer's latest question (e.g., Vashi, down payment, schools).
+        - Eliminates repetitive scripting and ensures natural barge-in / conversation flow.
         """
         def speak(text: str) -> str:
             if self._on_speech_captured:
@@ -670,6 +756,7 @@ class PriyaRealEstateAgent(Agent):
 
         # Synchronize language detection if caller requested a language switch
         user_msgs = [m for m in chat_ctx.items if getattr(m, "role", "") in ["user", "customer"]]
+        raw_text = ""
         if user_msgs:
             last_msg = user_msgs[-1]
             raw_text = getattr(last_msg, "text_content", "") or ""
@@ -692,8 +779,14 @@ class PriyaRealEstateAgent(Agent):
                     ACTIVE_TTS_LANGUAGE = det_lang
                     logger.info(f"🗣️ [LANGUAGE SWITCH] Updated ACTIVE_TTS_LANGUAGE to '{ACTIVE_TTS_LANGUAGE}' from: '{raw_text}'")
 
+        # Update Conversation State slots from customer utterance
+        if raw_text:
+            self.state.update_from_utterance(raw_text)
+            if self.state.selected_bhk:
+                self.selected_flat_type = self.state.selected_bhk.replace(" ", "")
+
         # ==============================================================================
-        # FAST RESPONSE DISPATCHER (<80ms): "Reply First, Do Rest in Background"
+        # FAST RESPONSE DISPATCHER: Only for Definitive Confirmation & Explicit Declines
         # ==============================================================================
         lower_raw = raw_text.lower()
         
@@ -707,9 +800,12 @@ class PriyaRealEstateAgent(Agent):
                 c = getattr(last_agent_msg, "content", "")
                 last_agent_text = " ".join(str(x) for x in c if x) if isinstance(c, list) else str(c or "")
 
-        # 1. SITE VISIT CONFIRMATION (STEP 5): Reply FIRST immediately (<80ms), then save in background!
+        # 1. SITE VISIT CONFIRMATION: Reply FIRST immediately (<80ms), then save in background!
         is_sv, sv_day, sv_time = is_site_visit_confirmation(raw_text, last_agent_text)
         if is_sv:
+            self.state.site_visit_confirmed = True
+            self.state.site_visit_day = sv_day
+            self.state.site_visit_time = sv_time
             if ACTIVE_TTS_LANGUAGE == "mr":
                 conf_text = "नक्कीच! तुमची साईट व्हिजिट कन्फर्म केली आहे. सर्व माहिती व्हाट्सअॅपवर पाठवत आहे. धन्यवाद!"
             elif ACTIVE_TTS_LANGUAGE == "en":
@@ -736,7 +832,7 @@ class PriyaRealEstateAgent(Agent):
         is_not_interested = any(p in lower_raw for p in [
             "nahi chahiye", "not interested", "nahi lena", "interest nahi", "koi interest nahi",
             "nakko", "no thanks", "no requirement", "wrong number", "galat number"
-        ]) and not any(p in lower_raw for p in ["bhk", "flat", "price", "kitna", "kya", "ready", "under"])
+        ]) and not any(p in lower_raw for p in ["bhk", "flat", "price", "kitna", "kya", "ready", "under", "vashi", "station", "school", "hospital"])
 
         if is_not_interested:
             if ACTIVE_TTS_LANGUAGE == "mr":
@@ -752,84 +848,35 @@ class PriyaRealEstateAgent(Agent):
             yield ni_text
             return
 
-        # 3. 1 BHK / 2 BHK / 3 BHK / 1 RK INQUIRY (STEP 1 & STEP 2)
-        is_3bhk_or_1rk = bool(re.search(r'\b(3\s*bhk|three\s*bhk|तीन\s*बीएचके|1\s*rk|one\s*rk|एक\s*आरके|rk)\b', lower_raw))
-        is_1bhk = bool(re.search(r'\b(1\s*bhk|one\s*bhk|ek\s*bhk|एक\s*बीएचके|1|one|ek)\b', lower_raw)) and not is_3bhk_or_1rk and not bool(re.search(r'\b(2\s*bhk|two\s*bhk|do\s*bhk|दोन\s*बीएचके|दो\s*बीएचके)\b', lower_raw))
-        is_2bhk = bool(re.search(r'\b(2\s*bhk|two\s*bhk|do\s*bhk|dono\s*bhk|दोन\s*बीएचके|दो\s*बीएचके|2|two|do)\b', lower_raw)) and not is_3bhk_or_1rk
+        # 3. DYNAMIC STATE DIRECTIVE INJECTION FOR GEMINI 3.5 FLASH LITE
+        # Injects current slot values and explicit turn rules so the LLM ALWAYS has full context!
+        bhk_val = self.state.selected_bhk or "Not yet chosen (Customer asked 3 BHK or undecided)"
+        status_val = self.state.property_status or "Not yet specified"
 
-        is_greeting_context = any(k in last_agent_text.lower() for k in ["1 bhk", "2 bhk", "would you prefer", "chahiye", "havay"])
+        state_directive = (
+            f"\n\n[LIVE CONVERSATION STATE & TURN DIRECTIVE]\n"
+            f"- Customer Selected Configuration: {bhk_val}\n"
+            f"- Customer Property Status: {status_val}\n"
+            f"- Opening Greeting: ALREADY DELIVERED at call start. (DO NOT introduce yourself or repeat opening greeting!)\n"
+            f"- Customer's Latest Question: \"{raw_text}\"\n\n"
+            f"STRICT RULES FOR THIS TURN:\n"
+            f"1. DIRECTLY ANSWER CURRENT QUESTION FIRST: The customer just said: \"{raw_text}\". You must answer this specific question directly and factually before anything else!\n"
+            f"2. 3 BHK INQUIRY: If customer asked about 3 BHK, explicitly say 3 BHK is NOT available in Sai Garden, and offer 2 BHK as the nearest spacious luxury alternative.\n"
+            f"3. 2 BHK CONTEXT PRESERVATION: If customer selected 2 BHK (or asked down payment for 2 BHK), 2 BHK starts at ₹45 Lakh and down payment is approx ₹4.5 to ₹7 Lakh (10-15%). NEVER quote 1 BHK values (₹30L or ₹3-5L)!\n"
+            f"4. 1 BHK CONTEXT PRESERVATION: If customer selected 1 BHK, 1 BHK starts at ₹30 Lakh and down payment is approx ₹3 to ₹5 Lakh.\n"
+            f"5. UNDER-CONSTRUCTION CONTEXT: If customer mentions under-construction, acknowledge it once and explain construction-linked stage payments. DO NOT ask if they want ready or under-construction again!\n"
+            f"6. VASHI STATION: If customer asked about Vashi station, state clearly that Vashi is approx 22-25 km away, around 35-40 minutes drive via the Airoli-Katai Tunnel / freeway.\n"
+            f"7. SCHOOLS & HOSPITALS: Cite Lodha World School (1.5 km), Pawar Public School (2 km), Neptune Super Speciality Hospital (3 km), AIMS Hospital (6 km).\n"
+            f"8. AMENITIES: Modern gym, swimming pool, clubhouse, play area, garden, and चौबीसों घंटे सुरक्षा (never say '24/7').\n"
+            f"9. GENDER NEUTRAL: Always use 'आप' / neutral language. Never say sir, madam, or dekh rahe hain.\n"
+            f"10. BREVITY & PROGRESSION: Keep reply under 20-25 words, then gently guide towards the next natural step or site visit.\n"
+        )
 
-        if is_3bhk_or_1rk:
-            if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "क्षमस्व, आमच्याकडे फक्त 1 BHK आणि 2 BHK उपलब्ध आहेत. आपल्याला 1 BHK बद्दल जाणून घ्यायचे आहे की 2 BHK?"
-            elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "I apologize, we only have 1 BHK and 2 BHK flats available. Would you prefer details for 1 BHK or 2 BHK?"
-            else:
-                reply = "माफ़ कीजिएगा, हमारे यहाँ सिर्फ 1 BHK और 2 BHK उपलब्ध हैं। आपको 1 BHK के बारे में जानना है या 2 BHK?"
-            logger.info("⚡ [FAST 3BHK/1RK REFUSAL (<80ms)]")
-            speak(reply)
-            yield reply
-            return
+        if chat_ctx.items and getattr(chat_ctx.items[0], "role", "") == "system":
+            base_inst = getattr(self, "_base_instructions", "") or HINDI_REAL_ESTATE_PROMPT
+            chat_ctx.items[0].content = base_inst + state_directive
 
-        if is_greeting_context and is_1bhk:
-            self.selected_flat_type = "1BHK"
-            if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "आमचे 1 BHK फ्लॅट्स 30 लाखांपासून सुरू होतात, डाऊन पेमेंट 3 ते 5 लाख आहे. आपल्याला ready-to-move हवंय की under-construction चालेल?"
-            elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "Our 1 BHK flats start from 30 Lakh onwards with down payment of 3 to 5 Lakh. Would you prefer ready-to-move or under-construction?"
-            else:
-                reply = "हमारे 1 BHK फ्लैट्स 30 लाख से शुरू होते हैं, डाउन पेमेंट 3 से 5 लाख है। आपको ready-to-move चाहिए या under-construction चलेगा?"
-            logger.info("⚡ [FAST 1 BHK PRICING (<80ms)]")
-            speak(reply)
-            yield reply
-            return
-
-        if is_greeting_context and is_2bhk:
-            self.selected_flat_type = "2BHK"
-            if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "आमचे 2 BHK लक्झरी फ्लॅट्स 45 लाखांपासून सुरू होतात, G+22 टॉवरमध्ये 35+ सुविधांसह. आपल्याला ready-to-move हवंय की under-construction चालेल?"
-            elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "Our 2 BHK luxury flats start from 45 Lakh onwards in a G+22 tower with 35+ amenities. Would you prefer ready-to-move or under-construction?"
-            else:
-                reply = "हमारे 2 BHK लग्जरी फ्लैट्स 45 लाख से शुरू होते हैं, G+22 टॉवर में 35 से ज़्यादा सुविधाओं के साथ। आपको ready-to-move चाहिए या under-construction चलेगा?"
-            logger.info("⚡ [FAST 2 BHK PRICING (<80ms)]")
-            speak(reply)
-            yield reply
-            return
-
-        # 4. READY-TO-MOVE VS UNDER-CONSTRUCTION (STEP 2 -> ASK OTHER INQUIRY OR SITE VISIT)
-        is_rtm_query = any(k in last_agent_text.lower() for k in ["ready-to-move", "ready to move", "under-construction", "under construction"])
-        is_rtm_reply = any(k in lower_raw for k in ["ready", "ready to move", "ready-to-move", "under", "under construction", "under-construction", "dono", "koi bhi", "chalega"])
-
-        if is_rtm_query and is_rtm_reply:
-            if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "समजले. आपल्याला प्रोजेक्ट किंवा सुविधांबद्दल अजून काही विचारायचे आहे, की थेट साईट व्हिजिट प्लॅन करूया?"
-            elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "Understood. Would you like to know more about the amenities or connectivity, or shall we plan a direct site visit?"
-            else:
-                reply = "समझ गई। क्या आप प्रोजेक्ट या सुविधाओं के बारे में कुछ और पूछना चाहते हैं, या प्रत्यक्ष साईट विजिट प्लान करें?"
-            logger.info("⚡ [FAST INQUIRY CHECK QUESTION (<80ms)]")
-            speak(reply)
-            yield reply
-            return
-
-        # 4B. TRANSITION FROM INQUIRY CHECK TO SITE VISIT
-        is_inquiry_check = any(k in last_agent_text.lower() for k in ["कुछ और पूछना चाहते हैं", "साईट विजिट प्लान करें", "अजून काही विचारायचे आहे", "site visit plan"])
-        is_direct_visit_intent = any(k in lower_raw for k in ["site visit", "visit", "nahi", "kuch nahi", "direct", "dekhne", "aana", "plan kar", "theek hai", "chalega", "aayenge"])
-
-        if is_inquiry_check and is_direct_visit_intent:
-            if ACTIVE_TTS_LANGUAGE == "mr":
-                reply = "प्रत्यक्ष साईट व्हिजिटसाठी कोणता दिवस आणि कोणती वेळ सोयीची ठरेल?"
-            elif ACTIVE_TTS_LANGUAGE == "en":
-                reply = "Which day and time would be convenient for a direct site visit?"
-            else:
-                reply = "प्रत्यक्ष साईट विजिट के लिए कौन सा दिन और समय सुविधाजनक रहेगा?"
-            logger.info("⚡ [FAST SITE VISIT PROMPT (<80ms)]")
-            speak(reply)
-            yield reply
-            return
-
-        # 5. ALL OTHER FREE-FORM QUERIES: Stream directly through Gemini LLM Brain!
+        # Stream directly through Gemini 3.5 Flash Lite LLM Brain!
         collected_chunks = []
         async for chunk in Agent.default.llm_node(self, chat_ctx, tools, model_settings):
             if isinstance(chunk, str):
@@ -1480,13 +1527,13 @@ def prewarm_fnc(proc: JobProcess):
         api_key=deepgram_key
     )
 
-    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.35 activation, 50ms speech, 200ms silence)
+    # 3. Pre-warm Silero VAD (Telephony calibrated: 0.32 activation, 80ms speech, responsive barge-in)
     from livekit.plugins import silero
     proc.userdata["vad"] = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.10,
-        activation_threshold=0.38,
-        deactivation_threshold=0.22,
+        min_silence_duration=0.20,
+        min_speech_duration=0.08,
+        activation_threshold=0.32,
+        deactivation_threshold=0.20,
         prefix_padding_duration=0.15,
         sample_rate=16000
     )
@@ -1999,18 +2046,18 @@ async def entrypoint(ctx: JobContext):
     
 
 
-    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.35 threshold, 60ms speech, 220ms silence)
+    # VAD is pre-warmed, but load as fallback if not present (Sensitive telephony calibration: 0.32 threshold, 80ms speech, 200ms silence)
     vad = ctx.proc.userdata.get("vad")
     if not vad:
-        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 60ms min speech, 0.35 threshold)...")
+        logger.info("⏱️ [VAD] Loading Silero VAD model on demand (Sensitive: 80ms min speech, 0.32 threshold)...")
         vad = silero.VAD.load(
-        min_silence_duration=0.25,
-        min_speech_duration=0.10,
-        activation_threshold=0.38,
-        deactivation_threshold=0.22,
-        prefix_padding_duration=0.15,
-        sample_rate=16000
-    )
+            min_silence_duration=0.20,
+            min_speech_duration=0.08,
+            activation_threshold=0.32,
+            deactivation_threshold=0.20,
+            prefix_padding_duration=0.15,
+            sample_rate=16000
+        )
     
     # Reset TTS options only if it is Cartesia (ElevenLabs uses different options structure)
     is_cartesia = tts and "cartesia" in tts.__class__.__module__
@@ -2044,7 +2091,7 @@ async def entrypoint(ctx: JobContext):
                 "enabled": True,
                 "mode": "vad",
                 "min_words": 1,
-                "min_duration": 0.35,  # Responsive listening sensitivity for clean caller interruptions
+                "min_duration": 0.25,  # Responsive 250ms listening sensitivity for clean caller interruptions
                 "resume_false_interruption": False,
             }
         }
@@ -2798,6 +2845,10 @@ async def entrypoint(ctx: JobContext):
                 opening_greeting = "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
                 logger.info(f"👤 [HUMAN VOICE CONFIRMED] Caller spoke. Delivering opening greeting: '{opening_greeting}'")
                 record_dialogue_turn("agent", opening_greeting)
+                if hasattr(session, "_chat_ctx") and session._chat_ctx:
+                    session._chat_ctx.add_message(role="assistant", content=opening_greeting)
+                if agent and hasattr(agent, "state"):
+                    agent.state.greeting_delivered = True
                 try:
                     session.say(opening_greeting, allow_interruptions=True)
                 except Exception as intro_err:
@@ -3027,9 +3078,9 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logger.debug(f"Error in on_item_added check: {e}")
 
-        # Keep up to 6 recent dialogue items + system prompt (keeps TTFT ultra-fast while preserving immediate context)
+        # Keep up to 24 recent dialogue items + system prompt (preserves full context across all turns)
         if hasattr(session, "_chat_ctx") and session._chat_ctx:
-            max_dialogue_items = 4
+            max_dialogue_items = 24
             items = session._chat_ctx.items
             if len(items) > max_dialogue_items + 1:
                 sys_prompt = items[0]
@@ -3220,6 +3271,10 @@ async def entrypoint(ctx: JobContext):
             opening_greeting = "नमस्ते! मैं गायत्री बोल रही हूँ, साई गार्डन, डोंबिवली ईस्ट से, एक्सपिरिया मॉल के बिल्कुल सामने। आपको 1 BHK चाहिए या 2 BHK?"
             logger.info(f"🎙️ [IMMEDIATE OPENING GREETING] Speaking fixed opening greeting: '{opening_greeting}'")
             record_dialogue_turn("agent", opening_greeting)
+            if hasattr(session, "_chat_ctx") and session._chat_ctx:
+                session._chat_ctx.add_message(role="assistant", content=opening_greeting)
+            if agent and hasattr(agent, "state"):
+                agent.state.greeting_delivered = True
             try:
                 session.say(opening_greeting, allow_interruptions=True)
             except Exception as e:
