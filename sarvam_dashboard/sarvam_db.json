@@ -1,0 +1,26 @@
+{
+  "calls": [],
+  "campaigns": [
+    {
+      "campaignId": "camp-sai-garden-live",
+      "campaignName": "Sai Garden Calling Sheet",
+      "totalContacts": 0,
+      "completedCalls": 0,
+      "remainingCalls": 0,
+      "ongoingCalls": 0,
+      "successfulCalls": 0,
+      "failedCalls": 0,
+      "interestedCount": 0,
+      "siteVisitCount": 0,
+      "startedAt": "2026-10-31T00:00:00.000Z",
+      "updatedAt": "2026-10-31T00:00:00.000Z",
+      "status": "idle",
+      "currentBatchFile": ""
+    }
+  ],
+  "config": {
+    "apiKey": "sk_samvaad_zwb1zcz6_1iukvGXfgQG21wlwTrclbhJI",
+    "agentId": "Gayatari-0922c4e8-551f",
+    "fromNumber": "+918071580297"
+  }
+}

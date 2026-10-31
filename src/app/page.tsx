@@ -1,2234 +1,251 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect } from 'react';
+import CsvVerificationUploader from '@/components/sarvam/CsvVerificationUploader';
+import LiveCallingCard from '@/components/sarvam/LiveCallingCard';
+import PeriodFilterBar from '@/components/sarvam/PeriodFilterBar';
+import RetainedCallCard from '@/components/sarvam/RetainedCallCard';
 import { 
-  getCallLogsWithLeads, 
-  getColdCallingStats,
-  deleteCallLog,
-  getSiteVisits,
-  updateSiteVisitStatus
-} from '@/app/actions';
-import { CallLog, SiteVisitRecord } from '@/lib/types';
-import { getCallTimestampMs, getCallPickedInfo, formatCallDuration } from '@/lib/callUtils';
+  SarvamCallRecord, 
+  LiveCampaignProgress, 
+  SarvamAnalyticsSummary, 
+  TimeFilterPeriod, 
+  CsvValidationResult 
+} from '@/lib/sarvamTypes';
 import { 
-  PhoneCall, 
-  PhoneOutgoing, 
-  PhoneOff,
-  User, 
-  Clock, 
-  Calendar, 
-  CheckCircle2, 
-  XCircle, 
-  AlertCircle, 
-  Search, 
-  RefreshCw, 
-  MessageSquare, 
-  X, 
-  Sparkles, 
   Building2, 
-  Tag, 
-  Volume2, 
-  ArrowRight,
-  TrendingUp,
-  Trash2,
-  Download,
-  Upload,
-  List,
-  Play,
-  Square,
-  FileText,
-  ChevronDown,
-  BarChart3,
-  MapPin,
-  ExternalLink,
-  FileSpreadsheet,
-  Share2
+  PhoneCall, 
+  Calendar, 
+  Flame, 
+  ArrowUpRight, 
+  ShieldCheck, 
+  CheckCircle2,
+  FileSpreadsheet
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { exportLeadsToPdf, PdfReportCategory } from '@/lib/pdfExport';
+import Link from 'next/link';
 
-// Helper to determine status tag styling and label with strict precedence
-const getOutcomeTag = (call: CallLog) => {
-  const outcome = (call.outcome || '').toLowerCase();
-  const summary = (call.aiSummary || '').toLowerCase();
-  const transcript = (call.transcript || '').toLowerCase();
+export default function HomePage() {
+  const [period, setPeriod] = useState<TimeFilterPeriod>('all');
+  const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
+  const [analytics, setAnalytics] = useState<SarvamAnalyticsSummary | null>(null);
+  const [campaign, setCampaign] = useState<LiveCampaignProgress | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Not Interested (Top priority: Check if customer expressed disinterest or declined)
-  const isNotInterested = 
-    outcome.includes('not interested') || 
-    summary.includes('not interested') ||
-    summary.includes('declined') ||
-    summary.includes('rejected') ||
-    summary.includes('nahi chahiye') ||
-    call.sentiment === 'negative';
-
-  if (isNotInterested) {
-    return {
-      label: 'Not Interested',
-      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-      dot: 'bg-rose-500',
-      icon: XCircle
-    };
-  }
-
-  // 2. Future Plan / Need Afterwards (Busy, call later, after 2-3 months, next year)
-  const isFuturePlan = 
-    outcome.includes('future plan') ||
-    outcome.includes('need afterwards') ||
-    outcome.includes('afterwards') ||
-    summary.includes('call later') ||
-    summary.includes('after 2') ||
-    summary.includes('after 3') ||
-    summary.includes('next year') ||
-    summary.includes('baad mein') ||
-    summary.includes('follow up later');
-
-  if (isFuturePlan) {
-    return {
-      label: 'Future Plan / Need Afterwards',
-      bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-      dot: 'bg-amber-500',
-      icon: Clock
-    };
-  }
-
-  // 3. Location Mismatch (Kalyan)
-  if (outcome.includes('location mismatch') || outcome.includes('kalyan') || summary.includes('kalyan')) {
-    return {
-      label: 'Location Mismatch',
-      bg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
-      dot: 'bg-purple-500',
-      icon: AlertCircle
-    };
-  }
-
-  // 4. Site Visit Scheduled (Must be an actual confirmation)
-  const isSiteVisit = 
-    outcome.includes('site visit scheduled') || 
-    (outcome.includes('site visit') && !outcome.includes('not') && !outcome.includes('dropped')) ||
-    summary.includes('confirmed site visit') ||
-    summary.includes('scheduled site visit') ||
-    summary.includes('site visit confirmed') ||
-    transcript.includes('site visit confirm');
-
-  if (isSiteVisit) {
-    return {
-      label: 'Site Visit Scheduled',
-      bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
-      dot: 'bg-blue-500',
-      icon: Calendar
-    };
-  }
-
-  // 5. Interested (Customer interested in flats, pricing, WhatsApp details)
-  const isInterested = 
-    outcome === 'interested' || 
-    (outcome.includes('interested') && !outcome.includes('not')) ||
-    summary.includes('showed interest') ||
-    summary.includes('expressed interest') ||
-    (call.sentiment === 'positive' && !outcome.includes('not'));
-
-  if (isInterested) {
-    return {
-      label: 'Interested',
-      bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-      dot: 'bg-emerald-500',
-      icon: CheckCircle2
-    };
-  }
-
-  // 6. Not Picked Up / Missed (Customer didn't answer or hung up before pickup)
-  if (
-    outcome.includes('not picked') || 
-    outcome.includes('unanswered') || 
-    outcome.includes('missed') ||
-    (Number(call.durationSeconds || 0) === 0 && !outcome.includes('calling') && !outcome.includes('ringing'))
-  ) {
-    return {
-      label: 'Not Picked Up / Missed',
-      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-      dot: 'bg-rose-500',
-      icon: PhoneOff
-    };
-  }
-
-  // 7. Ringing / Calling
-  if (outcome.includes('calling') || outcome.includes('ringing')) {
-    return {
-      label: 'Ringing / Calling',
-      bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
-      dot: 'bg-amber-500 animate-pulse',
-      icon: Clock
-    };
-  }
-
-  // 8. Short / Dropped (Connected, but call ended after 1-2 quick greetings)
-  if (outcome.includes('dropped') || outcome.includes('short')) {
-    return {
-      label: 'Short / Dropped',
-      bg: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-      dot: 'bg-slate-400',
-      icon: Clock
-    };
-  }
-
-  return {
-    label: 'Inquiry Completed',
-    bg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-    dot: 'bg-slate-400',
-    icon: CheckCircle2
-  };
-};
-
-const getSentimentTag = (call: CallLog) => {
-  const sentiment = (call.sentiment || '').toLowerCase();
-  if (sentiment === 'positive') {
-    return {
-      label: 'Positive',
-      bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
-      dot: 'bg-emerald-500',
-      emoji: '😊'
-    };
-  }
-  if (sentiment === 'negative') {
-    return {
-      label: 'Negative',
-      bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800',
-      dot: 'bg-rose-500',
-      emoji: '😟'
-    };
-  }
-  return {
-    label: 'Neutral',
-    bg: 'bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
-    dot: 'bg-slate-400',
-    emoji: '😐'
-  };
-};
-
-export default function ColdCallingHomePage() {
-  const [callLogs, setCallLogs] = useState<(CallLog & { leadName: string; leadPhone?: string })[]>([]);
-  const [stats, setStats] = useState({ totalCalls: 0, siteVisits: 0, interested: 0, notInterested: 0, futurePlan: 0 });
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Builder Active Tab: 'campaign' (CSV Upload & Dialer) | 'calls' (Call Logs) | 'visits' (Site Visit Schedule)
-  const [activeTab, setActiveTab] = useState<'campaign' | 'calls' | 'visits'>('campaign');
-  const [siteVisits, setSiteVisits] = useState<SiteVisitRecord[]>([]);
-  const [siteVisitSearch, setSiteVisitSearch] = useState('');
-  const [siteVisitFilter, setSiteVisitFilter] = useState<'All' | 'confirmed' | 'visited' | 'rescheduled'>('All');
-
-  // Dynamic Voice Speed State & Persistence
-  const [voiceSpeed, setVoiceSpeed] = useState<number>(0.94);
-  const [isSavingSpeed, setIsSavingSpeed] = useState<boolean>(false);
-
-  // Analytics Period Filter State
-  const [analyticsPeriod, setAnalyticsPeriod] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all');
-
-  // 1-Click Dialing Form State
-  const [dialName, setDialName] = useState('Raj');
-  const [dialPhone, setDialPhone] = useState('+918693081506');
-  const [isDialing, setIsDialing] = useState(false);
-  const [isTerminating, setIsTerminating] = useState(false);
-  const [dialResult, setDialResult] = useState<{ success: boolean; message: string } | null>(null);
-
-  // ── Batch Campaign State ──
-  type CampaignContact = { name: string; phone: string };
-  type CampaignEntry = CampaignContact & { status: 'queued' | 'calling' | 'done' | 'error'; error?: string };
-  const [batchContacts, setBatchContacts] = useState<CampaignEntry[]>([]);
-  const [campaignRunning, setCampaignRunning] = useState(false);
-  const [campaignStopped, setCampaignStopped] = useState(false);
-  const [manualList, setManualList] = useState('');
-  const [showBatchPanel, setShowBatchPanel] = useState(false);
-  const csvFileRef = useRef<HTMLInputElement>(null);
-  const campaignStopRef = useRef(false);
-
-  // Search & Filter State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Interested' | 'Future Plan' | 'Site Visit' | 'Not Interested'>('All');
-
-  // Selected Call Log for Modal Transcript
-  const [selectedCall, setSelectedCall] = useState<(CallLog & { leadName: string; leadPhone?: string }) | null>(null);
-
-  // Active User Account
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>({
-    name: 'Test User',
-    email: 'test@gmail.com'
-  });
-
-  useEffect(() => {
+  const fetchDashboardData = async (filterPeriod: TimeFilterPeriod) => {
+    setIsLoading(true);
     try {
-      const saved = localStorage.getItem('gayatri_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.email) {
-          if (parsed.email === 'tony@starkindustries.com') {
-            parsed.name = 'Test User';
-            parsed.email = 'test@gmail.com';
-            localStorage.setItem('gayatri_user', JSON.stringify(parsed));
-          }
-          setCurrentUser(parsed);
-        }
-      }
-    } catch (e) {
-      console.warn('Failed reading user from localStorage', e);
-    }
-  }, []);
-
-  // PDF Export Dropdown State
-  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
-  const pdfDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (pdfDropdownRef.current && !pdfDropdownRef.current.contains(event.target as Node)) {
-        setPdfMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Load persisted voice speed on mount
-  useEffect(() => {
-    try {
-      const localSpeed = localStorage.getItem('gayatri_voice_speed');
-      if (localSpeed) {
-        const val = parseFloat(localSpeed);
-        if (!isNaN(val) && val >= 0.6 && val <= 1.6) {
-          setVoiceSpeed(val);
-        }
-      }
-    } catch {}
-
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(data => {
-        if (data?.success && data.settings?.voiceSpeed) {
-          const sp = Number(data.settings.voiceSpeed);
-          if (!isNaN(sp) && sp >= 0.6 && sp <= 1.6) {
-            setVoiceSpeed(sp);
-            try { localStorage.setItem('gayatri_voice_speed', String(sp)); } catch {}
-          }
-        }
-      })
-      .catch(err => console.debug('Could not fetch voice settings:', err));
-  }, []);
-
-  const handleUpdateVoiceSpeed = async (newSpeed: number) => {
-    const rounded = Math.round(newSpeed * 100) / 100;
-    setVoiceSpeed(rounded);
-    try {
-      localStorage.setItem('gayatri_voice_speed', String(rounded));
-    } catch {}
-
-    try {
-      setIsSavingSpeed(true);
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voiceSpeed: rounded }),
-      });
-    } catch (e) {
-      console.warn('Could not save voice speed to server:', e);
-    } finally {
-      setIsSavingSpeed(false);
-    }
-  };
-
-  // Analytics Period Filtering
-  const filteredCallsForAnalytics = useMemo(() => {
-    if (analyticsPeriod === 'all') return callLogs;
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    
-    // Start of week (Monday)
-    const dayOfWeek = now.getDay();
-    const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday).getTime();
-    
-    // Start of month
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    
-    // Start of year
-    const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
-
-    return callLogs.filter(c => {
-      const callMs = getCallTimestampMs(c);
-      if (analyticsPeriod === 'today') return callMs >= todayStart;
-      if (analyticsPeriod === 'week') return callMs >= weekStart;
-      if (analyticsPeriod === 'month') return callMs >= monthStart;
-      if (analyticsPeriod === 'year') return callMs >= yearStart;
-      return true;
-    });
-  }, [callLogs, analyticsPeriod]);
-
-  const periodStats = useMemo(() => {
-    const totalCalls = filteredCallsForAnalytics.length;
-    let siteVisits = 0;
-    let interested = 0;
-    let notInterested = 0;
-    let futurePlan = 0;
-
-    for (const call of filteredCallsForAnalytics) {
-      const tag = getOutcomeTag(call).label;
-      if (tag === 'Site Visit Scheduled') {
-        siteVisits++;
-      } else if (tag === 'Interested') {
-        interested++;
-      } else if (tag === 'Not Interested') {
-        notInterested++;
-      } else if (tag === 'Future Plan / Need Afterwards') {
-        futurePlan++;
-      }
-    }
-
-    return {
-      totalCalls,
-      siteVisits,
-      interested,
-      notInterested,
-      futurePlan
-    };
-  }, [filteredCallsForAnalytics]);
-
-  const handleDownloadPdf = (category: PdfReportCategory) => {
-    setPdfMenuOpen(false);
-    exportLeadsToPdf({
-      category,
-      calls: filteredCallsForAnalytics,
-      getOutcomeTag,
-      userEmail: currentUser?.email || 'test@gmail.com',
-    });
-  };
-
-  const loadData = async () => {
-    try {
-      // 1. Fetch server logs & site visits from database (Server Action + direct API endpoint)
-      let [serverLogs, statsData, visitsData] = await Promise.all([
-        getCallLogsWithLeads(),
-        getColdCallingStats(),
-        getSiteVisits()
-      ]);
-      setSiteVisits(visitsData || []);
-
-      try {
-        const apiRes = await fetch(`/api/webhooks/voice-agent?t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        if (apiRes.ok) {
-          const apiData = await apiRes.json();
-          if (apiData.callLogs && Array.isArray(apiData.callLogs)) {
-            const existingKeys = new Set(serverLogs.map(l => l.callSid || l.id));
-            for (const log of apiData.callLogs) {
-              const k = log.callSid || log.id;
-              if (!existingKeys.has(k)) {
-                serverLogs.push(log);
-                existingKeys.add(k);
-              } else {
-                const exIdx = serverLogs.findIndex(l => (l.callSid || l.id) === k);
-                if (exIdx >= 0) {
-                  const currentTranscript = serverLogs[exIdx].transcript || '';
-                  const newTranscript = log.transcript || '';
-                  const isServerInProgress = serverLogs[exIdx].outcome === 'Calling...' || serverLogs[exIdx].outcome === 'Ringing / Calling' || currentTranscript.includes('[Call In Progress]');
-                  if (isServerInProgress || newTranscript.length >= currentTranscript.length) {
-                    serverLogs[exIdx] = { ...serverLogs[exIdx], ...log };
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (apiErr) {
-        console.warn('Could not fetch from /api/webhooks/voice-agent:', apiErr);
-      }
-
-      // 2. Read preserved call history from browser storage (purging corrupted fake templates)
-      let permanentHistory: (CallLog & { leadName: string; leadPhone?: string })[] = [];
-      try {
-        const stored = localStorage.getItem('gayatri_permanent_history');
-        if (stored) {
-          permanentHistory = JSON.parse(stored).filter((item: any) => {
-            if (!item) return false;
-            const name = (item.customerName || item.leadName || '').toLowerCase();
-            const sid = (item.callSid || item.id || '').toLowerCase();
-            if (sid.includes('probe') || name.includes('probe') || sid === 'gayatri-persistent-storage') return false;
-            // Purge any corrupted dummy entries containing the fake fallback template
-            if (item.transcript && (item.transcript.includes('Haan boliye') || item.transcript.includes('Sai Garden Dombivli East se. Humare paas premium one BHK'))) return false;
-            if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) return false;
-            return true;
-          });
-        }
-      } catch (err) {
-        console.warn('Could not read permanent call history:', err);
-      }
-
-      // 3. Merge server and local history: SERVER LOGS ARE THE SINGLE SOURCE OF TRUTH
-      const map = new Map<string, CallLog & { leadName: string; leadPhone?: string }>();
-
-      // First, seed with all authoritative server logs (LiveKit Cloud persistent storage)
-      const nowMs = Date.now();
-      for (const item of serverLogs) {
-        if (!item || item.callSid === 'gayatri-persistent-storage') continue;
-        const name = (item.customerName || item.leadName || '').toLowerCase();
-        const sid = (item.callSid || item.id || '').toLowerCase();
-        if (sid.includes('probe') || name.includes('probe')) continue;
-        // Purge dummy corrupted records from server logs as well
-        if (item.transcript && item.transcript.includes('Haan boliye')) continue;
-        if (item.aiSummary && item.aiSummary.includes('Conversation recorded and filed.')) continue;
-
-        const key = item.callSid || item.id;
-        if (!item.recordingUrl && item.callSid && !item.callSid.includes('probe')) {
-          item.recordingUrl = `/api/recordings/${item.callSid}.mp3`;
-        }
-        map.set(key, item);
-      }
-
-      // Second, augment with local items that are in-flight or not yet reached the server
-      for (const localItem of permanentHistory) {
-        if (!localItem || localItem.callSid === 'gayatri-persistent-storage') continue;
-        const key = localItem.callSid || localItem.id;
-        const existing = map.get(key);
-
-        if (existing) {
-          // Server log is authoritative for transcript, outcome, duration, and summary.
-          // Preserve local data:audio/ URL only if the server does not provide one.
-          if (localItem.recordingUrl?.startsWith('data:') && !existing.recordingUrl?.startsWith('data:')) {
-            existing.recordingUrl = localItem.recordingUrl;
-          }
-        } else {
-          // If this is a very recent in-flight call placed on this device (< 3 mins), keep it
-          const ageMinutes = (nowMs - new Date(localItem.calledAt).getTime()) / 60000;
-          if (ageMinutes < 3.0 && (localItem.outcome === 'Calling...' || localItem.outcome === 'Ringing / Calling')) {
-            map.set(key, localItem);
-          }
-        }
-      }
-
-      // Third, check if any in-flight calls timed out (> 75 seconds)
-      for (const [key, item] of map.entries()) {
-        const isCallingState = item.outcome === 'Ringing / Calling' || item.outcome === 'Calling...';
-        if (isCallingState) {
-          const itemTime = getCallTimestampMs(item);
-          const callAgeSeconds = itemTime > 0 ? (nowMs - itemTime) / 1000 : 999;
-          if (callAgeSeconds > 75) {
-            item.outcome = 'Not Picked Up';
-            item.durationSeconds = item.durationSeconds || 0;
-            if (!item.transcript || item.transcript.includes('[Call In Progress]') || item.transcript.includes('[Call initiated')) {
-              item.transcript = '[Call was disconnected or unanswered before conversation started]';
-            }
-            if (!item.aiSummary || item.aiSummary.includes('Calling') || item.aiSummary.includes('ringing')) {
-              item.aiSummary = 'Customer did not answer or call was disconnected before conversation.';
-            }
-            map.set(key, item);
-          }
-        }
-      }
-
-      const merged = Array.from(map.values()).sort(
-        (a, b) => getCallTimestampMs(b) - getCallTimestampMs(a)
-      );
-
-      // Persist the clean, validated call history to localStorage for instant offline warm-up
-      try {
-        localStorage.setItem('gayatri_permanent_history', JSON.stringify(merged));
-        localStorage.removeItem('gayatri_live_call_logs'); // clean up legacy key
-      } catch (err) {
-        console.warn('Could not persist permanent call history:', err);
-      }
-
-      setCallLogs(merged);
-
-      // Also keep modal in sync in real-time if active
-      if (selectedCall) {
-        const updated = merged.find(c => (c.callSid && c.callSid === selectedCall.callSid) || c.id === selectedCall.id);
-        if (updated && (
-          updated.transcript !== selectedCall.transcript || 
-          updated.outcome !== selectedCall.outcome || 
-          updated.aiSummary !== selectedCall.aiSummary ||
-          updated.recordingUrl !== selectedCall.recordingUrl
-        )) {
-          setSelectedCall(updated);
-        }
-      }
-
-      // 4. Calculate mathematically precise KPIs using strict outcome detection
-      const totalCalls = merged.length;
-      let siteVisits = 0;
-      let interested = 0;
-      let notInterested = 0;
-      let futurePlan = 0;
-
-      for (const call of merged) {
-        const tag = getOutcomeTag(call).label;
-        if (tag === 'Site Visit Scheduled') {
-          siteVisits++;
-        } else if (tag === 'Interested') {
-          interested++;
-        } else if (tag === 'Not Interested') {
-          notInterested++;
-        } else if (tag === 'Future Plan / Need Afterwards') {
-          futurePlan++;
-        }
-      }
-
-      setStats({
-        totalCalls,
-        siteVisits,
-        interested,
-        notInterested,
-        futurePlan
-      });
+      const res = await fetch(`/api/calls?period=${filterPeriod}`);
+      const data = await res.json();
+      setCalls(data.calls || []);
+      setAnalytics(data.analytics || null);
+      setCampaign(data.liveCampaign || null);
     } catch (err) {
-      console.error('Failed to load call logs:', err);
+      console.error('Error loading data:', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    fetchDashboardData(period);
+  }, [period]);
 
-    // Smart adaptive polling:
-    // 1. Pauses completely when browser tab is inactive/hidden (saves gigabytes of bandwidth)
-    // 2. Polls fast (4s) only when actively dialing a call or running a campaign
-    // 3. Relaxes to 15s when idle
-    const pollIntervalMs = (campaignRunning || isDialing) ? 4000 : 15000;
-    const interval = setInterval(() => {
-      if (typeof document !== 'undefined' && document.hidden) {
-        return; // Do not waste bandwidth if tab is hidden
-      }
-      loadData();
-    }, pollIntervalMs);
-
-    const handleVisibilityChange = () => {
-      if (typeof document !== 'undefined' && !document.hidden) {
-        loadData(); // Instant fresh sync as soon as user returns to the dashboard
-      }
-    };
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    }
-
-    return () => {
-      clearInterval(interval);
-      if (typeof document !== 'undefined') {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      }
-    };
-  }, [campaignRunning, isDialing]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    loadData();
-  };
-
-  const handleOutboundCall = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dialPhone) return;
-
-    setIsDialing(true);
-    setDialResult(null);
-
-    const safeTargetPhone = dialPhone.trim();
-    const callerName = dialName.trim() || 'Valued Client';
-
+  const handleCampaignAction = async (action: 'start' | 'pause' | 'stop') => {
     try {
-      const res = await fetch('/api/outbound-call', {
+      const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
+        body: JSON.stringify({ action })
+      });
+      const data = await res.json();
+      if (data.campaign) {
+        setCampaign(data.campaign);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleCsvValidated = (result: CsvValidationResult, fileName: string) => {
+    if (result.isValid && result.data.length > 0) {
+      setCampaign(prev => ({
+        campaignId: prev?.campaignId || `camp-${Date.now()}`,
+        campaignName: 'Sai Garden 1 & 2 BHK Outreach',
+        totalContacts: result.data.length,
+        completedCalls: 0,
+        remainingCalls: result.data.length,
+        ongoingCalls: 0,
+        successfulCalls: 0,
+        failedCalls: 0,
+        interestedCount: 0,
+        siteVisitCount: 0,
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'idle',
+        currentBatchFile: fileName
+      }));
+    }
+  };
+
+  const handleStartImmediately = async (result: CsvValidationResult, fileName: string) => {
+    try {
+      const res = await fetch('/api/campaign/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phoneNumber: safeTargetPhone,
-          customerName: callerName,
-          userEmail: currentUser?.email || 'test@gmail.com',
-          voiceSpeed: voiceSpeed
+          action: 'start',
+          batchFileName: fileName,
+          totalContacts: result.data.length
         })
       });
-
       const data = await res.json();
-      if (data.success) {
-        setDialResult({
-          success: true,
-          message: `Calling ${callerName} (${safeTargetPhone})... Gayatri is connected and ringing the phone now!`
-        });
-
-        // Instant Live Call Log Entry stored temporarily in browser storage while call is in progress
-        const newLiveLog: CallLog & { leadName: string; leadPhone?: string } = {
-          id: `call-${Date.now()}`,
-          leadId: `lead-${callerName.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-          leadName: callerName,
-          leadPhone: safeTargetPhone,
-          customerName: callerName,
-          customerPhone: safeTargetPhone,
-          userEmail: currentUser?.email || 'test@gmail.com',
-          callSid: data.roomName || `call-${Date.now()}`,
-          durationSeconds: 0,
-          recordingUrl: '',
-          transcript: `[Call In Progress]\nGayatri is currently speaking with ${callerName} (${safeTargetPhone}).\nThe complete turn-by-turn conversation dialogue will be saved and displayed here automatically once the call completes.`,
-          aiSummary: `Outbound AI call initiated to ${callerName}. Phone ringing and connected. Account: ${currentUser?.email || 'test@gmail.com'}.`,
-          sentiment: 'neutral',
-          outcome: 'Ringing / Calling',
-          calledAt: new Date().toISOString(),
-          detectedQuestions: ['Outbound Initiation']
-        };
-
-        try {
-          const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
-          const existing = stored ? JSON.parse(stored) : [];
-          existing.unshift(newLiveLog);
-          localStorage.setItem('gayatri_permanent_history', JSON.stringify(existing));
-        } catch (e) {
-          console.warn('Could not save to localStorage:', e);
-        }
-
-        // Prepend immediately to state
-        setCallLogs(prev => [newLiveLog, ...prev.filter(p => (p.callSid ? p.callSid !== newLiveLog.callSid : p.id !== newLiveLog.id))]);
-        setStats(prev => ({
-          ...prev,
-          totalCalls: prev.totalCalls + 1
-        }));
-      } else {
-        setDialResult({
-          success: false,
-          message: data.message || 'Could not dispatch call. Please check network/credentials.'
-        });
-      }
-    } catch (err: any) {
-      setDialResult({
-        success: false,
-        message: err.message || 'Network exception while placing outbound call.'
-      });
-    } finally {
-      setIsDialing(false);
-    }
-  };
-
-  const handleTerminateAllCalls = async () => {
-    if (!confirm('Are you sure you want to terminate all active calls immediately?')) return;
-
-    setIsTerminating(true);
-    try {
-      const res = await fetch('/api/terminate-calls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (data.success) {
-        setDialResult({
-          success: true,
-          message: data.message || `Terminated ${data.count} active call(s).`
-        });
-        loadData();
-      } else {
-        setDialResult({
-          success: false,
-          message: data.error || 'Failed to terminate active calls.'
-        });
-      }
-    } catch (err: any) {
-      setDialResult({
-        success: false,
-        message: err.message || 'Error connecting to terminate calls API.'
-      });
-    } finally {
-      setIsTerminating(false);
-    }
-  };
-
-  // ── Builder CSV Helpers & Normalized Phone Formatter ──
-  const downloadSampleCsv = () => {
-    const csvContent = "Name,Phone,Preference,Notes\nRajesh Sharma,+918693081506,2 BHK,Ready to move\nPriya Patel,+919876543210,1 BHK,Near Xperia Mall\nAmit Verma,9812345678,2 BHK,Weekend site visit\nSneha Joshi,+919820011223,1 BHK,Under construction";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'sai_complex_leads_sample.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const normalizePhone = (rawPhone: string): string => {
-    const digits = rawPhone.replace(/[^0-9+]/g, '');
-    if (digits.startsWith('+')) return digits;
-    if (digits.length === 10) return `+91${digits}`;
-    if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
-    return digits.startsWith('+') ? digits : `+91${digits}`;
-  };
-
-  const parseCsvOrLines = (raw: string): { name: string; phone: string }[] => {
-    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
-    const contacts: { name: string; phone: string }[] = [];
-    for (const line of lines) {
-      // Skip header rows
-      if (/^(name|phone|contact|number)/i.test(line)) continue;
-      // CSV: "Name, Phone" or "Phone, Name"
-      const parts = line.split(/,/).map(p => p.trim().replace(/^["']|["']$/g, ''));
-      if (parts.length >= 2) {
-        const isFirstPhone = /^\+?[\d\s\-()]{7,}$/.test(parts[0]);
-        const name = isFirstPhone ? (parts[1] || 'Customer') : parts[0];
-        const phone = isFirstPhone ? parts[0] : parts[1];
-        if (/[\d+]/.test(phone)) contacts.push({ name, phone: normalizePhone(phone) });
-      } else if (parts.length === 1) {
-        // Just a phone number
-        if (/[\d+]/.test(parts[0])) contacts.push({ name: 'Customer', phone: normalizePhone(parts[0]) });
-      }
-    }
-    return contacts;
-  };
-
-  const handleCsvUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const parsed = parseCsvOrLines(text);
-      setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
-    };
-    reader.readAsText(file);
-  };
-
-  const handleManualListLoad = () => {
-    const parsed = parseCsvOrLines(manualList);
-    if (parsed.length === 0) return;
-    setBatchContacts(parsed.map(c => ({ ...c, status: 'queued' as const })));
-  };
-
-  const startCampaign = async () => {
-    if (batchContacts.length === 0) return;
-    campaignStopRef.current = false;
-    setCampaignRunning(true);
-    setCampaignStopped(false);
-
-    const MAX_CONCURRENT = 4;
-    let activeCount = 0;
-    let contactIdx = 0;
-    const contacts = [...batchContacts];
-
-    const dialNext = async (idx: number) => {
-      if (campaignStopRef.current) return;
-      const contact = contacts[idx];
-      setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'calling' } : c));
-
-      try {
-        const res = await fetch('/api/outbound-call', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
-          body: JSON.stringify({
-            phoneNumber: contact.phone,
-            customerName: contact.name,
-            userEmail: currentUser?.email || 'test@gmail.com',
-            voiceSpeed: voiceSpeed
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'done' } : c));
-        } else {
-          setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'error', error: data.message } : c));
-        }
-      } catch (err: any) {
-        setBatchContacts(prev => prev.map((c, i) => i === idx ? { ...c, status: 'error', error: err.message } : c));
-      }
-
-      activeCount--;
-      // Trigger next in queue
-      if (!campaignStopRef.current && contactIdx < contacts.length) {
-        const nextIdx = contactIdx++;
-        activeCount++;
-        // Stagger calls by 2 seconds to avoid hammering the API
-        setTimeout(() => dialNext(nextIdx), 2000);
-      } else if (activeCount === 0) {
-        setCampaignRunning(false);
-      }
-    };
-
-    // Seed up to MAX_CONCURRENT simultaneous calls
-    while (contactIdx < contacts.length && activeCount < MAX_CONCURRENT) {
-      const idx = contactIdx++;
-      activeCount++;
-      await new Promise(r => setTimeout(r, 500)); // 500ms stagger
-      dialNext(idx);
-    }
-  };
-
-  const stopCampaign = () => {
-    campaignStopRef.current = true;
-    setCampaignRunning(false);
-    setCampaignStopped(true);
-    // Mark remaining queued items as queued (not started yet, can resume)
-    setBatchContacts(prev => prev.map(c => c.status === 'calling' ? { ...c, status: 'queued' } : c));
-  };
-
-  const handleDeleteCall = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm('Are you sure you want to remove this call log?')) return;
-
-    try {
-      const stored = localStorage.getItem('gayatri_permanent_history') || localStorage.getItem('gayatri_live_call_logs');
-      if (stored) {
-        const filtered = JSON.parse(stored).filter((c: any) => c.id !== id && c.callSid !== id);
-        localStorage.setItem('gayatri_permanent_history', JSON.stringify(filtered));
-        localStorage.removeItem('gayatri_live_call_logs');
+      if (data.campaign) {
+        setCampaign(data.campaign);
       }
     } catch (e) {
-      console.warn('Failed to delete from localStorage:', e);
+      console.error(e);
     }
-
-    setCallLogs(prev => prev.filter(c => c.id !== id));
-    await deleteCallLog(id);
-    await loadData();
-  };
-
-  // Filtered call logs
-  const filteredSiteVisits = useMemo(() => {
-    return siteVisits.filter((v: SiteVisitRecord) => {
-      const q = siteVisitSearch.toLowerCase().trim();
-      const matchesSearch = !q || 
-        v.customerName.toLowerCase().includes(q) || 
-        v.customerPhone.includes(q) || 
-        (v.notes && v.notes.toLowerCase().includes(q));
-      const matchesFilter = siteVisitFilter === 'All' || v.status === siteVisitFilter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [siteVisits, siteVisitSearch, siteVisitFilter]);
-
-  const filteredCalls = callLogs.filter(call => {
-    const nameMatch = (call.customerName || call.leadName || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const phoneMatch = (call.customerPhone || call.leadPhone || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const queryMatches = nameMatch || phoneMatch;
-
-    if (!queryMatches) return false;
-
-    if (statusFilter === 'All') return true;
-    const tag = getOutcomeTag(call).label;
-    if (statusFilter === 'Interested') return tag === 'Interested';
-    if (statusFilter === 'Future Plan') return tag === 'Future Plan / Need Afterwards';
-    if (statusFilter === 'Site Visit') return tag === 'Site Visit Scheduled';
-    if (statusFilter === 'Not Interested') return tag === 'Not Interested';
-
-    return true;
-  });
-
-  // Format Turn-by-Turn transcript with timestamp & speaker detection
-  interface ParsedTurn {
-    speaker: 'agent' | 'customer' | 'system';
-    timestamp?: string;
-    speakerName: string;
-    text: string;
-  }
-
-  const parseTranscript = (rawTranscript: string, fallbackName: string = 'Customer'): ParsedTurn[] => {
-    if (!rawTranscript) return [];
-
-    const lines = rawTranscript.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const parsed: ParsedTurn[] = [];
-
-    for (const line of lines) {
-      // 1. Check for timestamp bracket: [0.5s] or [12s] or [1.2m]
-      const tsMatch = line.match(/^\[([\d.]+(?:s|m)?)\]\s*(.+)$/i);
-      let timestamp: string | undefined = undefined;
-      let content = line;
-
-      if (tsMatch) {
-        timestamp = tsMatch[1];
-        content = tsMatch[2].trim();
-      }
-
-      // 2. Check for Speaker: Message format
-      const colonIdx = content.indexOf(':');
-      if (colonIdx !== -1) {
-        const rawSpeaker = content.slice(0, colonIdx).trim();
-        const messageText = content.slice(colonIdx + 1).trim();
-        const lowerSpeaker = rawSpeaker.toLowerCase();
-
-        if (
-          lowerSpeaker.includes('gayatri') ||
-          lowerSpeaker.includes('agent') ||
-          lowerSpeaker.includes('priya') ||
-          lowerSpeaker.includes('ai')
-        ) {
-          parsed.push({
-            speaker: 'agent',
-            timestamp,
-            speakerName: 'Gayatri (AI Property Advisor)',
-            text: messageText
-          });
-          continue;
-        } else {
-          const cleanName = rawSpeaker.replace(/\s*ji$/i, '').trim();
-          parsed.push({
-            speaker: 'customer',
-            timestamp,
-            speakerName: cleanName || fallbackName,
-            text: messageText
-          });
-          continue;
-        }
-      }
-
-      // 3. System messages e.g. [Call In Progress]
-      if (line.startsWith('[') && line.endsWith(']')) {
-        parsed.push({
-          speaker: 'system',
-          speakerName: 'System',
-          text: line.slice(1, -1).trim()
-        });
-      } else {
-        parsed.push({
-          speaker: 'system',
-          speakerName: 'System',
-          text: line
-        });
-      }
-    }
-
-    return parsed;
   };
 
   return (
-    <div className="space-y-8 pb-12">
-      
-            {/* ── REAL ESTATE BUILDER NAVIGATION BAR ── */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setActiveTab('campaign')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'campaign'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Upload className="h-4 w-4" />
-            <span>1. Upload Leads & Campaign Dialer</span>
-            {batchContacts.length > 0 && (
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                activeTab === 'campaign' ? 'bg-white/20 text-white' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'
-              }`}>
-                {batchContacts.length} Leads
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('calls')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'calls'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 ring-2 ring-blue-500/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <PhoneCall className="h-4 w-4" />
-            <span>2. Gayatri Call Logs</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'calls' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-            }`}>
-              {callLogs.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('visits')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
-              activeTab === 'visits'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20 ring-2 ring-emerald-500/30'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Calendar className="h-4 w-4" />
-            <span>3. Site Visit Schedule</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'visits' ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-            }`}>
-              {siteVisits.length} Confirmed
-            </span>
-          </button>
-        </div>
-
-        {/* Builder Project Pill */}
-        <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs">
-          <Building2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-          <span className="font-bold text-slate-700 dark:text-slate-300">Sai Garden, Dombivli East (Opp. Xperia Mall)</span>
+    <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Hero Welcome Banner: Strictly Sai Garden & Qualivo */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="relative z-10 max-w-3xl space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>MahaRERA: PR1330002501452 | Sai City Group</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight leading-tight">
+            Sai Garden — Calling & Lead Acquisition Command Center
+          </h1>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            Dedicated automated calling suite for Sai Garden, Nilje, Dombivli East (opp. Xperia Mall). Upload calling sheets, start/pause live campaigns, track real-time pacing, and view high-intent buyers with full unmasked phone numbers.
+          </p>
         </div>
       </div>
 
-      {/* ── 1. UPLOAD LEADS & CAMPAIGN DIALER VIEW ── */}
-      {activeTab === 'campaign' && (
-        <div className="space-y-6">
-          {/* 1b. BATCH CAMPAIGN DIALER */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
-        <button
-          onClick={() => setShowBatchPanel(p => !p)}
-          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="h-9 w-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
-              <List className="h-5 w-5 text-violet-600 dark:text-violet-400" />
-            </div>
-            <div>
-              <p className="font-bold text-sm text-slate-900 dark:text-white">Batch Campaign Dialer</p>
-              <p className="text-[11px] text-slate-400 font-medium">Upload a CSV or paste numbers to dial up to 4 calls simultaneously</p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            {batchContacts.length > 0 && (
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300">
-                {batchContacts.length} contacts
-              </span>
-            )}
-            <span className="text-slate-400 text-lg">{showBatchPanel ? '▲' : '▼'}</span>
-          </div>
-        </button>
+      {/* Live Calling Sheet Progress with Start, Pause & Stop Controls */}
+      <LiveCallingCard
+        campaign={campaign}
+        onRefresh={() => fetchDashboardData(period)}
+        isLoading={isLoading}
+        onAction={handleCampaignAction}
+      />
 
-        {true && (
-          <div className="border-t border-slate-200 dark:border-slate-800 p-6 space-y-5">
-            {/* Input Area */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* CSV Upload */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5" /> Upload CSV File
-                </p>
-                <div
-                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-violet-400 transition-colors"
-                  onClick={() => csvFileRef.current?.click()}
-                >
-                  <Upload className="h-7 w-7 text-slate-400" />
-                  <p className="text-xs text-slate-500 text-center">
-                    Click to upload <span className="font-semibold text-violet-600">.csv</span><br />
-                    <span className="text-[11px]">Format: Name, Phone or Phone, Name</span>
-                  </p>
-                  <input ref={csvFileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleCsvUpload} />
-                  <div className="flex items-center justify-between w-full pt-1">
-                    <span className="text-[11px] text-slate-400">Need a format?</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); downloadSampleCsv(); }}
-                      className="text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:underline flex items-center gap-1"
-                    >
-                      <Download className="h-3 w-3" /> Download Sample CSV
-                    </button>
-                  </div>
-                </div>
-              </div>
+      {/* CSV Uploader & Auto-Repair Tool */}
+      <CsvVerificationUploader
+        onValidated={handleCsvValidated}
+        onStartCampaignImmediately={handleStartImmediately}
+      />
 
-              {/* Manual Paste */}
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <List className="h-3.5 w-3.5" /> Paste Numbers Manually
-                </p>
-                <textarea
-                  value={manualList}
-                  onChange={e => setManualList(e.target.value)}
-                  placeholder={"Raj, +918693081506\nPriya, +919876543210\n+918800001234"}
-                  rows={5}
-                  className="w-full text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2.5 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none font-mono"
-                />
-                <button
-                  onClick={handleManualListLoad}
-                  disabled={!manualList.trim()}
-                  className="text-xs font-bold px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg disabled:opacity-40 transition-colors"
-                >
-                  Load {manualList.trim() ? `(${parseCsvOrLines(manualList).length} contacts)` : ''}
-                </button>
-              </div>
-            </div>
-
-            {/* Contact Queue */}
-            {batchContacts.length > 0 && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                    Call Queue — {batchContacts.length} contacts
-                  </p>
-                  <div className="flex items-center gap-2 text-[11px] font-semibold">
-                    <span className="text-slate-500">✓ Done: {batchContacts.filter(c => c.status === 'done').length}</span>
-                    <span className="text-amber-500">📞 Calling: {batchContacts.filter(c => c.status === 'calling').length}</span>
-                    <span className="text-slate-400">⏳ Queued: {batchContacts.filter(c => c.status === 'queued').length}</span>
-                    <span className="text-rose-500">✗ Error: {batchContacts.filter(c => c.status === 'error').length}</span>
-                  </div>
-                </div>
-                <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-                  {batchContacts.map((c, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
-                          c.status === 'done' ? 'bg-emerald-500' :
-                          c.status === 'calling' ? 'bg-amber-400 animate-pulse' :
-                          c.status === 'error' ? 'bg-rose-500' : 'bg-slate-300'
-                        }`} />
-                        <span className="font-medium text-slate-700 dark:text-slate-300">{c.name}</span>
-                        <span className="text-slate-400 font-mono">{c.phone}</span>
-                      </div>
-                      <span className={`font-semibold ${
-                        c.status === 'done' ? 'text-emerald-600' :
-                        c.status === 'calling' ? 'text-amber-500' :
-                        c.status === 'error' ? 'text-rose-500' : 'text-slate-400'
-                      }`}>
-                        {c.status === 'done' ? '✓ Called' : c.status === 'calling' ? '📞 Calling…' : c.status === 'error' ? `✗ ${c.error?.slice(0, 30) ?? 'Error'}` : 'Queued'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-violet-500 to-indigo-500 h-2 rounded-full transition-all"
-                    style={{ width: `${(batchContacts.filter(c => c.status === 'done' || c.status === 'error').length / batchContacts.length) * 100}%` }}
-                  />
-                </div>
-
-                {/* Campaign Controls */}
-                <div className="flex items-center gap-3 pt-1">
-                  {!campaignRunning ? (
-                    <button
-                      onClick={startCampaign}
-                      disabled={batchContacts.filter(c => c.status === 'queued').length === 0}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg disabled:opacity-40 transition-all"
-                    >
-                      <Play className="h-3.5 w-3.5" />
-                      {campaignStopped ? 'Resume Campaign' : 'Start Campaign'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={stopCampaign}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
-                    >
-                      <Square className="h-3.5 w-3.5" />
-                      Stop Campaign
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { setBatchContacts([]); setCampaignRunning(false); setCampaignStopped(false); }}
-                    className="text-xs text-slate-500 hover:text-rose-500 font-medium transition-colors"
-                  >
-                    Clear Queue
-                  </button>
-                  {campaignStopped && (
-                    <span className="text-xs text-amber-600 font-semibold">⚠️ Campaign paused</span>
-                  )}
-                  {!campaignRunning && !campaignStopped && batchContacts.every(c => c.status === 'done' || c.status === 'error') && batchContacts.length > 0 && (
-                    <span className="text-xs text-emerald-600 font-semibold">✓ Campaign complete!</span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-          {/* 1. 1-CLICK OUTBOUND VOICE AI DIALER */}
-      <div className="bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-blue-800/40 rounded-3xl p-6 sm:p-8 text-white shadow-2xl shadow-blue-950/40 relative overflow-hidden">
-        
-        {/* Background glow effects */}
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 space-y-6">
-          {/* Top Row: Description on Left, Dial Form on Right */}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="max-w-xl space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-semibold">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>Gayatri AI • Kusha Cloned Voice Engine</span>
-                </div>
-                <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
-                  <User className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Account: <strong className="text-white">{currentUser?.email || 'test@gmail.com'}</strong></span>
-                </div>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                1-Click Outbound Voice AI Call
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 font-medium leading-relaxed">
-                Instantly dial any customer phone number. Gayatri introduces Sai Garden Dombivli East, handles objections in Hindi or pure Marathi, and books site visits dynamically. All call transcripts are saved under <span className="text-emerald-400 font-semibold">{currentUser?.email || 'test@gmail.com'}</span>.
-              </p>
-            </div>
-
-            {/* Dialing Form */}
-            <form onSubmit={handleOutboundCall} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 bg-white/5 p-3.5 sm:p-4 rounded-2xl border border-white/10 backdrop-blur-md shadow-xl">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
-                  Customer Name
-                </label>
-                <input
-                  type="text"
-                  value={dialName}
-                  onChange={(e) => setDialName(e.target.value)}
-                  placeholder="e.g. Raj"
-                  className="w-full sm:w-36 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-1 px-1">
-                  Phone Number (E.164)
-                </label>
-                <input
-                  type="text"
-                  value={dialPhone}
-                  onChange={(e) => setDialPhone(e.target.value)}
-                  placeholder="+918693081506"
-                  className="w-full sm:w-48 px-3.5 py-2.5 bg-black/40 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400 font-medium"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center gap-2">
-                <button
-                  type="submit"
-                  disabled={isDialing || isTerminating}
-                  className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isDialing ? (
-                    <>
-                      <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Dialing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <PhoneOutgoing className="h-4 w-4" />
-                      <span>Call Phone Now</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleTerminateAllCalls}
-                  disabled={isTerminating}
-                  title="Immediately hang up and terminate all active carrier phone calls"
-                  className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 flex items-center justify-center space-x-2 transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isTerminating ? (
-                    <>
-                      <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Ending Calls...</span>
-                    </>
-                  ) : (
-                    <>
-                      <PhoneOff className="h-4 w-4" />
-                      <span>Terminate All Calls</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Full-Width Voice Speed Control Bar */}
-          <div className="pt-4 border-t border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs bg-white/[0.03] p-3.5 rounded-2xl border border-white/5">
-            <div className="flex flex-wrap items-center gap-3 text-slate-300 font-medium">
-              <div className="flex items-center space-x-2 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 text-emerald-300">
-                <Volume2 className="h-4 w-4 text-emerald-400" />
-                <span className="font-bold">Gayatri Voice Speed:</span>
-                <span className="font-mono font-black text-white px-2 py-0.5 rounded bg-emerald-500/30 text-xs">
-                  {voiceSpeed.toFixed(2)}x
-                </span>
-              </div>
-              <span className="text-xs text-slate-400">
-                {voiceSpeed < 0.90 ? '(Relaxed & Clear)' : voiceSpeed <= 0.96 ? '(Natural Indian Rhythm — Recommended)' : voiceSpeed <= 1.05 ? '(Standard)' : '(Fast)'}
-              </span>
-              {isSavingSpeed && (
-                <span className="text-[11px] text-teal-300 animate-pulse font-semibold">● Saved to Cloud</span>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="range"
-                min="0.80"
-                max="1.20"
-                step="0.02"
-                value={voiceSpeed}
-                onChange={(e) => handleUpdateVoiceSpeed(parseFloat(e.target.value))}
-                className="w-36 accent-emerald-400 cursor-pointer h-1.5 bg-white/20 rounded-lg appearance-none"
-                title="Adjust Gayatri speaking speed (0.80x to 1.20x)"
-              />
-              <div className="flex items-center space-x-1.5">
-                {[
-                  { speed: 0.85, label: '0.85x' },
-                  { speed: 0.90, label: '0.90x' },
-                  { speed: 0.94, label: '0.94x' },
-                  { speed: 1.00, label: '1.0x' },
-                  { speed: 1.05, label: '1.05x' },
-                  { speed: 1.10, label: '1.1x' },
-                ].map(p => (
-                  <button
-                    key={p.speed}
-                    type="button"
-                    onClick={() => handleUpdateVoiceSpeed(p.speed)}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      Math.abs(voiceSpeed - p.speed) < 0.01
-                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                        : 'bg-white/10 hover:bg-white/20 text-slate-300'
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Real-Time Call Feedback */}
-        {dialResult && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`mt-4 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between ${
-              dialResult.success 
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              {dialResult.success ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <AlertCircle className="h-4 w-4 text-rose-400" />}
-              <span>{dialResult.message}</span>
-            </div>
-            <button
-              onClick={() => setDialResult(null)}
-              className="text-xs opacity-70 hover:opacity-100"
-            >
-              ✕
-            </button>
-          </motion.div>
-        )}
-      </div>
-        </div>
-      )}
-
-      {/* ── 2. CALL LOGS & ANALYTICS VIEW ── */}
-      {activeTab === 'calls' && (
-        <div className="space-y-6">
-          {/* 2. ANALYTICS & KPI METRICS */}
-      <div className="space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+      {/* Basic Metrics Overview with Time Filter */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="font-black text-sm text-slate-900 dark:text-white flex items-center space-x-2">
-              <BarChart3 className="h-4 w-4 text-blue-600" />
-              <span>Real-Time Call Analytics</span>
+            <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+              Project Performance & Call Outcomes
             </h3>
-            <p className="text-[11px] text-slate-400 font-medium">
-              Showing metrics for: <strong className="text-slate-700 dark:text-slate-200 capitalize">{analyticsPeriod === 'all' ? 'All Time' : analyticsPeriod === 'today' ? 'Today (Day-wise)' : analyticsPeriod === 'week' ? 'This Week' : analyticsPeriod === 'month' ? 'This Month' : 'This Year'}</strong> ({filteredCallsForAnalytics.length} total calls)
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Overview of retained high-intent prospects for Sai Garden
             </p>
           </div>
-
-          {/* Time Period Filter Pills */}
-          <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-            {[
-              { id: 'today', label: 'Today' },
-              { id: 'week', label: 'This Week' },
-              { id: 'month', label: 'This Month' },
-              { id: 'year', label: 'Yearly' },
-              { id: 'all', label: 'All Time' },
-            ].map(p => {
-              const active = analyticsPeriod === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setAnalyticsPeriod(p.id as any)}
-                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    active
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
+          <PeriodFilterBar currentPeriod={period} onPeriodChange={setPeriod} />
         </div>
 
-        {/* 5 KPI METRICS CARDS */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          
-          <div onClick={() => setActiveTab("visits")} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group cursor-pointer hover:border-blue-400 transition-colors">
-            <div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Calls</p>
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{periodStats.totalCalls}</h3>
-              <span className="text-[10px] text-slate-400 font-medium">Logged calls</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handleDownloadPdf('All')}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                title="Download All Call Logs PDF"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <PhoneCall className="h-4.5 w-4.5" />
+        {/* 4 Stat Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Calls Processed</span>
+              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <PhoneCall className="w-4 h-4" />
               </div>
             </div>
+            <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || 0}</p>
+            <span className="text-[11px] text-slate-400 font-medium">Verified completed calls</span>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-            <div>
-              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Interested</p>
-              <h3 className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{periodStats.interested}</h3>
-              <span className="text-[10px] text-slate-400 font-medium">High positive intent</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handleDownloadPdf('Interested')}
-                className="p-1.5 rounded-xl text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors"
-                title="Download Interested Leads PDF"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <CheckCircle2 className="h-4.5 w-4.5" />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">Site Visits Booked</span>
+              <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <Calendar className="w-4 h-4" />
               </div>
             </div>
+            <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{analytics?.siteVisitCount || 0}</p>
+            <Link href="/site-visits" className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 mt-1">
+              <span>View Site Visits</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-            <div>
-              <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Site Visits</p>
-              <h3 className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{periodStats.siteVisits}</h3>
-              <span className="text-[10px] text-slate-400 font-medium">Appointments</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handleDownloadPdf('Site Visit')}
-                className="p-1.5 rounded-xl text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition-colors"
-                title="Download Site Visits PDF"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <Calendar className="h-4.5 w-4.5" />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Interested Buyers</span>
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Flame className="w-4 h-4" />
               </div>
             </div>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{analytics?.interestedCount || 0}</p>
+            <Link href="/interested" className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1 mt-1">
+              <span>View Interested Leads</span>
+              <ArrowUpRight className="w-3 h-3" />
+            </Link>
           </div>
 
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-            <div>
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider">Future Plan</p>
-              <h3 className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{periodStats.futurePlan}</h3>
-              <span className="text-[10px] text-slate-400 font-medium">Follow-up needed</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handleDownloadPdf('Future Plan')}
-                className="p-1.5 rounded-xl text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/60 transition-colors"
-                title="Download Future Plan Leads PDF"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                <Clock className="h-4.5 w-4.5" />
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-amber-600 uppercase tracking-wider">BHK Distribution</span>
+              <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Building2 className="w-4 h-4" />
               </div>
             </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between group">
-            <div>
-              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">Not Interested</p>
-              <h3 className="text-2xl font-black text-rose-500 mt-1">{periodStats.notInterested}</h3>
-              <span className="text-[10px] text-slate-400 font-medium">Opted out / DNC</span>
-            </div>
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => handleDownloadPdf('Not Interested')}
-                className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition-colors"
-                title="Download Not Interested PDF"
-              >
-                <Download className="h-3.5 w-3.5" />
-              </button>
-              <div className="h-10 w-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
-                <XCircle className="h-4.5 w-4.5" />
+            <div className="flex items-center gap-4">
+              <div>
+                <span className="text-[11px] text-slate-400">1 BHK</span>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">{analytics?.oneBhkCount || 0}</p>
+              </div>
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+              <div>
+                <span className="text-[11px] text-slate-400">2 BHK</span>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">{analytics?.twoBhkCount || 0}</p>
               </div>
             </div>
+            <span className="text-[11px] text-slate-400 font-medium">₹30L (1 BHK) | ₹45L (2 BHK)</span>
           </div>
-
         </div>
       </div>
-          {/* 3. GAYATRI CALL LOGS & INTELLIGENCE TABLE */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
-        
-        {/* Table Header Controls */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
+      {/* Retained High-Intent Call Logs (Interested & Site Visit Only) */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center space-x-2">
-              <PhoneCall className="h-5 w-5 text-blue-600" />
-              <span>Gayatri AI Call Logs & Transcripts</span>
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+              <span>Retained Prospect Calls</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                Full Phone Numbers & Audio
+              </span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5 font-medium">
-              Every customer conversation recorded, transcribed, and tagged with lead sentiment.
+            <p className="text-xs text-slate-400">
+              Only high-intent prospects (Site Visit & Interested) are archived here with dialogue recordings.
             </p>
           </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search name or phone..."
-                className="pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium w-48 sm:w-56"
-              />
-            </div>
-
-            {/* Filter Pills */}
-            <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl text-xs">
-              {(['All', 'Interested', 'Future Plan', 'Site Visit', 'Not Interested'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setStatusFilter(tab)}
-                  className={`px-3 py-1 font-bold rounded-lg transition-all ${
-                    statusFilter === tab
-                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Export PDF Dropdown */}
-            <div className="relative" ref={pdfDropdownRef}>
-              <button
-                onClick={() => setPdfMenuOpen(!pdfMenuOpen)}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
-                title="Download Categorized PDF Reports"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>Export PDF</span>
-                <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${pdfMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {pdfMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-30 py-2 text-xs divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3.5 py-1.5 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                    <span>Download Category Report</span>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold">PDF</span>
-                  </div>
-
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleDownloadPdf('Interested')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                        <span>Interested Clients</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-200/60 dark:border-emerald-800/60">
-                        {stats.interested}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Site Visit')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-blue-500" />
-                        <span>Site Visits Scheduled</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold border border-blue-200/60 dark:border-blue-800/60">
-                        {stats.siteVisits}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Future Plan')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" />
-                        <span>Future Plan / Follow-up</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold border border-amber-200/60 dark:border-amber-800/60">
-                        {stats.futurePlan || 0}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadPdf('Not Interested')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-rose-50/80 dark:hover:bg-rose-950/40 text-slate-700 dark:text-slate-200 flex items-center justify-between font-semibold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <span className="h-2 w-2 rounded-full bg-rose-500" />
-                        <span>Not Interested / DNC</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold border border-rose-200/60 dark:border-rose-800/60">
-                        {stats.notInterested}
-                      </span>
-                    </button>
-                  </div>
-
-                  <div className="pt-1">
-                    <button
-                      onClick={() => handleDownloadPdf('All')}
-                      className="w-full text-left px-3.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-between font-bold transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <List className="h-3.5 w-3.5 text-slate-400" />
-                        <span>Complete All Call Logs</span>
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold border border-slate-200/60 dark:border-slate-700/60">
-                        {callLogs.length}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Refresh Button */}
-            <button
-              onClick={handleRefresh}
-              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Refresh Call Logs"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin text-blue-600' : ''}`} />
-            </button>
+        {calls.length === 0 ? (
+          <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <p className="text-sm font-semibold text-slate-500">No calls recorded yet for the selected period.</p>
+            <p className="text-xs text-slate-400 mt-1">Upload a calling sheet above and start calling to populate real-time prospect interactions.</p>
           </div>
-        </div>
-
-        {/* Call Logs Feed / Table */}
-        <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-          {loading ? (
-            <div className="py-16 text-center text-xs text-slate-400">
-              <div className="h-6 w-6 border-2 border-blue-600/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-3" />
-              Loading Gayatri call logs...
-            </div>
-          ) : filteredCalls.length === 0 ? (
-            <div className="py-16 text-center text-xs text-slate-400 space-y-2">
-              <MessageSquare className="h-8 w-8 mx-auto text-slate-300 dark:text-slate-700" />
-              <p className="font-bold text-slate-600 dark:text-slate-300 text-sm">No call logs found</p>
-              <p>Place an outbound call above to populate the live transcript feed.</p>
-            </div>
-          ) : (
-            filteredCalls.map((call) => {
-              const tag = getOutcomeTag(call);
-              const TagIcon = tag.icon;
-              const pickedInfo = getCallPickedInfo(call);
-              const timeMs = getCallTimestampMs(call);
-              const dateStr = timeMs > 0 ? new Date(timeMs).toLocaleString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              }) : 'Recent';
-
-              const durationFormatted = formatCallDuration(call);
-
-              return (
-                <div
-                  key={call.id}
-                  onClick={() => setSelectedCall(call)}
-                  className="p-4 sm:p-6 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 cursor-pointer transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 group"
-                >
-                  {/* Left: Customer Info & Summary */}
-                  <div className="flex items-start space-x-4 max-w-2xl">
-                    <div className="h-10 w-10 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                      <User className="h-5 w-5" />
-                    </div>
-
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">
-                          {call.customerName || call.leadName || 'Valued Customer'}
-                        </h4>
-                        <span className="text-xs text-slate-400 font-medium">
-                          {call.customerPhone || call.leadPhone || '+918693081506'}
-                        </span>
-                        
-                        {/* Account Badge */}
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-mono font-medium border border-slate-200/60 dark:border-slate-700/60">
-                          {call.userEmail || currentUser?.email || 'test@gmail.com'}
-                        </span>
-
-                        {/* Picked Up Status Tag */}
-                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${pickedInfo.bg} ${pickedInfo.border} ${pickedInfo.textColor}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${pickedInfo.dot}`} />
-                          <span>{pickedInfo.label}</span>
-                        </span>
-
-                        {/* Outcome Tag */}
-                        <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${tag.bg}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
-                          <span>{tag.label}</span>
-                        </span>
-
-                        {/* Sentiment Tag */}
-                        {(() => {
-                          const sTag = getSentimentTag(call);
-                          return (
-                            <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${sTag.bg}`}>
-                              <span className={`h-1.5 w-1.5 rounded-full ${sTag.dot}`} />
-                              <span>{sTag.emoji} {sTag.label}</span>
-                            </span>
-                          );
-                        })()}
-
-                        {/* Audio Recording Badge: ONLY show if call was picked up with audio */}
-                        {pickedInfo.isPicked && Number(call.durationSeconds || 0) > 0 && (
-                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
-                            <Volume2 className="h-3 w-3" />
-                            <span>Audio</span>
-                          </span>
-                        )}
-                      </div>
-
-                      {/* AI Summary / Notes */}
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 font-medium">
-                        {call.aiSummary || 'Outbound sales call discussing Sai Garden Dombivli East project.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Right: Timing, Duration & View Script Button */}
-                  <div className="flex items-center space-x-4 self-end md:self-center shrink-0">
-                    <div className="text-right">
-                      <div className="flex items-center space-x-1 text-xs font-semibold text-slate-700 dark:text-slate-300 justify-end">
-                        <Clock className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{durationFormatted}</span>
-                      </div>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {dateStr}
-                      </span>
-                    </div>
-
-                    {/* View Script Button */}
-                    <button
-                      onClick={() => setSelectedCall(call)}
-                      className="px-3.5 py-2 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 hover:text-white text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold border border-blue-200/60 dark:border-blue-800/60 flex items-center space-x-1.5 transition-all group-hover:bg-blue-600 group-hover:text-white"
-                    >
-                      <MessageSquare className="h-3.5 w-3.5" />
-                      <span>View Full Script</span>
-                    </button>
-
-                    {/* Delete button */}
-                    <button
-                      onClick={(e) => handleDeleteCall(call.id, e)}
-                      className="p-2 text-slate-300 hover:text-rose-500 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                      title="Delete log"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-        </div>
-      )}
-
-      {/* ── 3. SITE VISIT SCHEDULE VIEW FOR BUILDER ── */}
-      {activeTab === 'visits' && (
-        <div className="space-y-6">
-          {/* Executive Header Banner */}
-          <div className="bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 border border-emerald-600/30 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
-            <div className="relative z-10 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                  <div className="flex items-center space-x-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase tracking-wider border border-emerald-500/30">
-                      Sai Garden Dombivli East
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-white/10 text-slate-300 text-[10px] font-mono">
-                      Site Visit Management
-                    </span>
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white flex items-center space-x-2.5">
-                    <Calendar className="h-6 w-6 text-emerald-400" />
-                    <span>Confirmed Site Visit Schedule</span>
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-300 max-w-2xl font-medium mt-1">
-                    Direct appointments agreed by customers during Gayatri AI calls with confirmed dates, times, and flat configurations.
-                  </p>
-                </div>
-
-                {/* Export & Refresh */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDownloadPdf('Site Visit')}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Export Visits (PDF)</span>
-                  </button>
-                  <button
-                    onClick={handleRefresh}
-                    className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/15 transition-all cursor-pointer"
-                    title="Refresh Visit Appointments"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-              </div>
-
-              {/* 4 Metric Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Confirmed</p>
-                  <p className="text-2xl font-black text-emerald-400 mt-1">{siteVisits.length}</p>
-                  <p className="text-[10px] text-slate-400">Scheduled Visits</p>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">2 BHK Preference</p>
-                  <p className="text-2xl font-black text-blue-400 mt-1">
-                    {siteVisits.filter(v => (v.flatType || '').toLowerCase().includes('2')).length}
-                  </p>
-                  <p className="text-[10px] text-slate-400">High Demand</p>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">1 BHK Preference</p>
-                  <p className="text-2xl font-black text-amber-400 mt-1">
-                    {siteVisits.filter(v => (v.flatType || '').toLowerCase().includes('1')).length}
-                  </p>
-                  <p className="text-[10px] text-slate-400">Budget Inquiries</p>
-                </div>
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Project Location</p>
-                  <p className="text-xs font-bold text-white mt-1 flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                    <span className="truncate">Opp. Xperia Mall</span>
-                  </p>
-                  <p className="text-[10px] text-emerald-300">Dombivli East</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Search & Status Filter */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                value={siteVisitSearch}
-                onChange={e => setSiteVisitSearch(e.target.value)}
-                placeholder="Search visitor by name, phone, or notes..."
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              />
-            </div>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
-              {(['All', 'confirmed', 'visited', 'rescheduled'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setSiteVisitFilter(tab)}
-                  className={`px-3 py-1 rounded-lg transition-all capitalize cursor-pointer ${
-                    siteVisitFilter === tab
-                      ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                >
-                  {tab === 'All' ? 'All Visits' : tab}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Cards Grid */}
-          {filteredSiteVisits.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-16 text-center text-xs text-slate-400 space-y-2">
-              <Calendar className="h-8 w-8 mx-auto text-slate-300 dark:text-slate-700" />
-              <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">No site visits found matching criteria</p>
-              <p>Upload your leads CSV in the Campaign tab to begin automated calling and scheduling.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSiteVisits.map((visit, idx) => (
-                <div
-                  key={visit.id || idx}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-3">
-                    {/* Header: Date Badge & Status */}
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center space-x-1.5 px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 font-black text-xs">
-                        <Calendar className="h-3.5 w-3.5" />
-                        <span>{visit.visitDay}</span>
-                        <span className="text-slate-400 font-normal">•</span>
-                        <Clock className="h-3 w-3" />
-                        <span>{visit.visitTime}</span>
-                      </div>
-                      <span className={`text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-full border ${
-                        visit.status === 'visited' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200' :
-                        visit.status === 'rescheduled' ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200' :
-                        'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200'
-                      }`}>
-                        {visit.status}
-                      </span>
-                    </div>
-
-                    {/* Client Info */}
-                    <div>
-                      <h4 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center gap-2">
-                        <User className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        <span>{visit.customerName}</span>
-                      </h4>
-                      <p className="text-xs text-slate-500 font-mono mt-0.5">
-                        {visit.customerPhone}
-                      </p>
-                    </div>
-
-                    {/* Property Details */}
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1">
-                      <div className="flex items-center justify-between text-slate-700 dark:text-slate-300 font-semibold">
-                        <span className="text-slate-400 font-medium">Flat Preference:</span>
-                        <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-bold text-[11px]">
-                          {visit.flatType || '2 BHK'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-slate-700 dark:text-slate-300">
-                        <span className="text-slate-400 font-medium">Project:</span>
-                        <span className="font-bold text-[11px] truncate max-w-[160px]">Sai Garden, Dombivli East</span>
-                      </div>
-                    </div>
-
-                    {/* Notes / Summary */}
-                    {visit.notes && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 italic">
-                        "{visit.notes}"
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions: WhatsApp & Direct Call & Mark Status */}
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    <a
-                      href={`https://wa.me/${visit.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                        `Namaste ${visit.customerName} ji, this is from Sai Garden Dombivli East (Opposite Xperia Mall). We look forward to seeing you for your confirmed site visit on ${visit.visitDay} at ${visit.visitTime}. Location: https://maps.app.goo.gl/SaiComplexDombivli`
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-all"
-                    >
-                      <span>💬 WhatsApp</span>
-                    </a>
-
-                    <a
-                      href={`tel:${visit.customerPhone}`}
-                      className="py-1.5 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1 transition-all"
-                      title="Call Customer Directly"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5 text-slate-500" />
-                      <span>Call</span>
-                    </a>
-
-                    <button
-                      onClick={async () => {
-                        const nextStatus = visit.status === 'confirmed' ? 'visited' : visit.status === 'visited' ? 'rescheduled' : 'confirmed';
-                        await updateSiteVisitStatus(visit.id, nextStatus as any);
-                        setSiteVisits(prev => prev.map(v => v.id === visit.id ? { ...v, status: nextStatus as any } : v));
-                      }}
-                      className="py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                      title="Cycle status: Confirmed -> Visited -> Rescheduled"
-                    >
-                      ✓ Status
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 4. CONVERSATION SCRIPT MODAL / DRAWER */}
-      <AnimatePresence>
-        {selectedCall && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
-            >
-              {/* Modal Header */}
-              <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between bg-slate-50/50 dark:bg-slate-800/40">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
-                      Conversation with {selectedCall.customerName || selectedCall.leadName || 'Customer'}
-                    </h3>
-                    {(() => {
-                      const tag = getOutcomeTag(selectedCall);
-                      const sTag = getSentimentTag(selectedCall);
-                      const pTag = getCallPickedInfo(selectedCall);
-                      return (
-                        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
-                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${pTag.bg} ${pTag.border} ${pTag.textColor}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${pTag.dot}`} />
-                            <span>{pTag.label}</span>
-                          </span>
-                          <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${tag.bg}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${tag.dot}`} />
-                            <span>{tag.label}</span>
-                          </span>
-                          <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${sTag.bg}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${sTag.dot}`} />
-                            <span>{sTag.emoji} {sTag.label}</span>
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <p className="text-xs text-slate-400 font-medium">
-                    Phone: {selectedCall.customerPhone || selectedCall.leadPhone || '+918693081506'} • Duration: <span className="font-semibold text-slate-700 dark:text-slate-200">{formatCallDuration(selectedCall)}</span> • Account: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</span>
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setSelectedCall(null)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* AI Summary Banner */}
-              <div className="px-6 py-3 bg-blue-50/50 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 text-xs text-blue-800 dark:text-blue-300 font-medium flex items-center justify-between">
-                <div>
-                  <span className="font-bold">AI Call Summary: </span>
-                  {selectedCall.aiSummary || 'Outbound consultation regarding Sai Garden Dombivli East project.'}
-                </div>
-                {(() => {
-                  const sTag = getSentimentTag(selectedCall);
-                  return (
-                    <span className={`shrink-0 ml-3 inline-flex items-center space-x-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${sTag.bg}`}>
-                      <span>{sTag.emoji} {sTag.label} Sentiment</span>
-                    </span>
-                  );
-                })()}
-              </div>
-
-              {/* Call Audio Player */}
-              {(() => {
-                const picked = getCallPickedInfo(selectedCall);
-                const audioUrl = selectedCall.recordingUrl || `/api/recordings/${selectedCall.callSid}.mp3`;
-
-                if (!picked.isPicked || Number(selectedCall.durationSeconds || 0) === 0) {
-                  return (
-                    <div className="px-6 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700/60 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center space-x-2">
-                        <PhoneOff className="h-4 w-4 text-rose-500" />
-                        <span>No audio recording (Call was not picked up by the customer).</span>
-                      </span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="px-6 py-3.5 bg-gradient-to-r from-blue-50/70 to-indigo-50/70 dark:from-slate-800/80 dark:to-blue-950/40 border-b border-blue-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-2 rounded-xl bg-blue-600 text-white shadow-sm shrink-0">
-                        <Volume2 className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">Call Audio Recording</p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Dual-channel stereo (Caller + Gayatri AI)</p>
-                      </div>
-                    </div>
-                    <div className="flex-1 max-w-sm flex items-center gap-2">
-                      <audio 
-                        key={audioUrl}
-                        controls 
-                        className="w-full h-8 rounded-lg accent-blue-600" 
-                        src={audioUrl} 
-                        preload="metadata"
-                      >
-                        Your browser does not support audio playback.
-                      </audio>
-                      <a
-                        href={audioUrl}
-                        download={`${selectedCall.callSid || 'recording'}.mp3`}
-                        className="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shrink-0"
-                        title="Download MP3"
-                      >
-                        <Download className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Modal Body: Turn-by-Turn Dialogue */}
-              <div className="p-6 overflow-y-auto space-y-4 flex-1">
-                {parseTranscript(selectedCall.transcript, selectedCall.customerName || selectedCall.leadName || 'Customer').map((turn, idx) => {
-                  if (turn.speaker === 'system') {
-                    return (
-                      <div key={idx} className="text-center my-3">
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 px-3.5 py-1.5 rounded-full font-medium shadow-sm inline-block">
-                          {turn.text}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  const isAgent = turn.speaker === 'agent';
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`flex flex-col ${isAgent ? 'items-start' : 'items-end'}`}
-                    >
-                      <div className={`flex items-center space-x-1.5 mb-1 px-1 ${isAgent ? 'flex-row' : 'flex-row-reverse space-x-reverse'}`}>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isAgent ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                          {turn.speakerName}
-                        </span>
-                        {turn.timestamp && (
-                          <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                            {turn.timestamp}
-                          </span>
-                        )}
-                      </div>
-
-                      <div
-                        className={`max-w-[85%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
-                          isAgent
-                            ? 'bg-blue-50 dark:bg-blue-950/60 text-slate-900 dark:text-slate-100 border border-blue-200 dark:border-blue-900/60 rounded-tl-sm'
-                            : 'bg-emerald-600 text-white rounded-tr-sm'
-                        }`}
-                      >
-                        {turn.text}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Modal Footer */}
-              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between">
-                <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center space-x-1.5 font-medium">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Stored in account: <strong className="text-slate-800 dark:text-slate-200">{selectedCall.userEmail || currentUser?.email || 'test@gmail.com'}</strong></span>
-                </span>
-                <button
-                  onClick={() => setSelectedCall(null)}
-                  className="px-5 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all"
-                >
-                  Close Script
-                </button>
-              </div>
-            </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3.5">
+            {calls.map(call => (
+              <RetainedCallCard key={call.id} call={call} />
+            ))}
           </div>
         )}
-      </AnimatePresence>
-
+      </div>
     </div>
   );
 }

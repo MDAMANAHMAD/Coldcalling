@@ -5,9 +5,9 @@ import PeriodFilterBar from '@/components/sarvam/PeriodFilterBar';
 import RetainedCallCard from '@/components/sarvam/RetainedCallCard';
 import { SarvamCallRecord, TimeFilterPeriod } from '@/lib/sarvamTypes';
 import { exportToCsv, exportToPdf } from '@/lib/sarvamExport';
-import { CalendarCheck, FileSpreadsheet, FileDown, Clock, ShieldCheck, MapPin } from 'lucide-react';
+import { CalendarCheck, FileSpreadsheet, FileDown, MapPin } from 'lucide-react';
 
-export default function SarvamSiteVisitsPage() {
+export default function SiteVisitsPage() {
   const [period, setPeriod] = useState<TimeFilterPeriod>('all');
   const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,7 +16,7 @@ export default function SarvamSiteVisitsPage() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/sarvam/calls?period=${period}&category=Site Visit`);
+        const res = await fetch(`/api/calls?period=${period}&category=Site Visit`);
         const data = await res.json();
         setCalls(data.calls || []);
       } catch (err) {
@@ -90,7 +90,7 @@ export default function SarvamSiteVisitsPage() {
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
           <CalendarCheck className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No Site Visits Found</p>
-          <p className="text-xs text-slate-400 mt-1">There are no site visit appointments in this selected time range.</p>
+          <p className="text-xs text-slate-400 mt-1">Confirmed appointments from incoming call completions will appear here automatically.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">

@@ -20,7 +20,6 @@ export function exportToCsv(
     'Site Visit Time',
     'Duration (Seconds)',
     'Call Date',
-    'Agent ID',
     'Summary'
   ];
 
@@ -34,7 +33,6 @@ export function exportToCsv(
     r.siteVisitTime || '—',
     r.durationSeconds,
     r.callDate,
-    r.agentId,
     `"${(r.summary || '').replace(/"/g, '""')}"`
   ]);
 
@@ -50,7 +48,7 @@ export function exportToCsv(
 }
 
 /**
- * Downloads leads in branded PDF with unmasked phone numbers, visit times, and summaries
+ * Downloads leads in branded Qualivo / Sai Garden PDF with unmasked phone numbers, visit times, and summaries
  */
 export function exportToPdf(
   records: SarvamCallRecord[],
@@ -73,7 +71,7 @@ export function exportToPdf(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.text(
-    `Sarvam AI Agent: Gayatari-0922c4e8-551f  |  Period: ${period.toUpperCase()}  |  Total Leads: ${records.length}  |  Exported: ${new Date().toLocaleString()}`,
+    `Qualivo Voice Intelligence  |  Period: ${period.toUpperCase()}  |  Total Leads: ${records.length}  |  Exported: ${new Date().toLocaleString()}`,
     14,
     18
   );
@@ -86,7 +84,7 @@ export function exportToPdf(
     isSiteVisit ? `${r.siteVisitDay || '—'} ${r.siteVisitTime ? '@ ' + r.siteVisitTime : ''}` : r.outcome,
     `${Math.floor(r.durationSeconds / 60)}m ${r.durationSeconds % 60}s`,
     new Date(r.callDate).toLocaleDateString(),
-    r.summary || 'Lead captured from Sarvam AI automated call.'
+    r.summary || 'Lead captured from automated call.'
   ]);
 
   autoTable(doc, {

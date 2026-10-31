@@ -2,34 +2,27 @@
 
 import { useState, useEffect } from 'react';
 import PeriodFilterBar from '@/components/sarvam/PeriodFilterBar';
-import { SarvamAnalyticsSummary, TimeFilterPeriod, SarvamCallRecord } from '@/lib/sarvamTypes';
+import { SarvamAnalyticsSummary, TimeFilterPeriod } from '@/lib/sarvamTypes';
 import { 
   BarChart3, 
   TrendingUp, 
-  PhoneForwarded, 
-  CheckCircle2, 
-  Calendar, 
   Clock, 
-  Award,
-  Zap,
-  Building,
+  Building, 
   Target
 } from 'lucide-react';
 
-export default function SarvamAnalyticsPage() {
+export default function AnalyticsPage() {
   const [period, setPeriod] = useState<TimeFilterPeriod>('all');
   const [analytics, setAnalytics] = useState<SarvamAnalyticsSummary | null>(null);
-  const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/sarvam/calls?period=${period}`);
+        const res = await fetch(`/api/calls?period=${period}`);
         const data = await res.json();
         setAnalytics(data.analytics || null);
-        setCalls(data.calls || []);
       } catch (e) {
         console.error(e);
       } finally {
@@ -40,9 +33,9 @@ export default function SarvamAnalyticsPage() {
   }, [period]);
 
   const totalCalls = analytics?.totalCalls || 0;
-  const connectionRate = analytics?.connectionRate || 92;
-  const interestedRate = analytics?.interestedRate || 24;
-  const siteVisitRate = analytics?.siteVisitRate || 10;
+  const connectionRate = analytics?.connectionRate || 0;
+  const interestedRate = analytics?.interestedRate || 0;
+  const siteVisitRate = analytics?.siteVisitRate || 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -54,7 +47,7 @@ export default function SarvamAnalyticsPage() {
             <span>Sai Garden Telephony Analytics</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Performance metrics retrieved from Sarvam AI Voice Agent (Agent ID: Gayatari-0922c4e8-551f)
+            Real-time conversion & conversation metrics for Sai Garden Dombivli East
           </p>
         </div>
         <PeriodFilterBar currentPeriod={period} onPeriodChange={setPeriod} />
@@ -96,7 +89,7 @@ export default function SarvamAnalyticsPage() {
 
       {/* Deep Metric Grids */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Call Duration & Voice Metrics */}
+        {/* Call Duration */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
           <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
             <Clock className="w-4 h-4 text-indigo-600" />
@@ -107,7 +100,7 @@ export default function SarvamAnalyticsPage() {
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Average Call Duration</span>
               <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
-                {analytics?.avgDurationSeconds ? `${Math.floor(analytics.avgDurationSeconds / 60)}m ${analytics.avgDurationSeconds % 60}s` : '1m 45s'}
+                {analytics?.avgDurationSeconds ? `${Math.floor(analytics.avgDurationSeconds / 60)}m ${analytics.avgDurationSeconds % 60}s` : '0m 0s'}
               </span>
             </div>
 
@@ -119,7 +112,7 @@ export default function SarvamAnalyticsPage() {
             </div>
 
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60">
-              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Sarvam Agent Latency (TTS / LLM)</span>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Voice Response Latency</span>
               <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">&lt; 0.9s Sub-second</span>
             </div>
           </div>
@@ -142,7 +135,7 @@ export default function SarvamAnalyticsPage() {
                 <div
                   className="h-full bg-blue-600 rounded-full"
                   style={{
-                    width: `${totalCalls > 0 ? ((analytics?.twoBhkCount || 0) / totalCalls) * 100 : 60}%`
+                    width: `${totalCalls > 0 ? ((analytics?.twoBhkCount || 0) / totalCalls) * 100 : 0}%`
                   }}
                 />
               </div>
@@ -157,7 +150,7 @@ export default function SarvamAnalyticsPage() {
                 <div
                   className="h-full bg-emerald-500 rounded-full"
                   style={{
-                    width: `${totalCalls > 0 ? ((analytics?.oneBhkCount || 0) / totalCalls) * 100 : 40}%`
+                    width: `${totalCalls > 0 ? ((analytics?.oneBhkCount || 0) / totalCalls) * 100 : 0}%`
                   }}
                 />
               </div>

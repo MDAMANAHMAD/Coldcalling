@@ -2,16 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BarChart3, CalendarCheck, HeartHandshake, PhoneCall, Sparkles } from 'lucide-react';
+import { Home, BarChart3, CalendarCheck, HeartHandshake } from 'lucide-react';
 
 export default function SarvamNavBar() {
   const pathname = usePathname();
 
   const navItems = [
-    { href: '/sarvam-dashboard', label: 'Home & Upload', icon: Home, exact: true },
-    { href: '/sarvam-dashboard/analytics', label: 'Analytics', icon: BarChart3 },
-    { href: '/sarvam-dashboard/site-visits', label: 'Site Visits', icon: CalendarCheck },
-    { href: '/sarvam-dashboard/interested', label: 'Interested Leads', icon: HeartHandshake }
+    { href: '/', label: 'Home & Upload', icon: Home, exact: true },
+    { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+    { href: '/site-visits', label: 'Site Visits', icon: CalendarCheck },
+    { href: '/interested', label: 'Interested Leads', icon: HeartHandshake }
   ];
 
   return (
@@ -23,7 +23,7 @@ export default function SarvamNavBar() {
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Sai Garden <span className="text-blue-600 dark:text-blue-400">Sarvam AI</span>
+                Sai Garden <span className="text-blue-600 dark:text-blue-400">Qualivo Voice</span>
               </h2>
             </div>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">

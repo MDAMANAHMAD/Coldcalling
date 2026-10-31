@@ -2,13 +2,14 @@
 
 import { useState, useRef } from 'react';
 import { CsvValidationResult } from '@/lib/sarvamTypes';
-import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, ArrowRight, RefreshCw, Sparkles } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, ArrowRight, RefreshCw, Sparkles, Play } from 'lucide-react';
 
 interface CsvVerificationUploaderProps {
-  onValidated: (result: CsvValidationResult) => void;
+  onValidated: (result: CsvValidationResult, fileName: string) => void;
+  onStartCampaignImmediately?: (result: CsvValidationResult, fileName: string) => void;
 }
 
-export default function CsvVerificationUploader({ onValidated }: CsvVerificationUploaderProps) {
+export default function CsvVerificationUploader({ onValidated, onStartCampaignImmediately }: CsvVerificationUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [result, setResult] = useState<CsvValidationResult | null>(null);
@@ -24,14 +25,14 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/sarvam/csv-fix', {
+      const res = await fetch('/api/csv-fix', {
         method: 'POST',
         body: formData
       });
 
       const validation: CsvValidationResult = await res.json();
       setResult(validation);
-      onValidated(validation);
+      onValidated(validation, file.name);
     } catch (err) {
       console.error('Failed to process CSV:', err);
     } finally {
@@ -52,7 +53,7 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `Sarvam_Verified_${fileName || 'cohort.csv'}`);
+    link.setAttribute('download', `Sai_Garden_Verified_${fileName || 'cohort.csv'}`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -68,7 +69,7 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
           </span>
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Upload any contact list. Our engine automatically verifies headers, extracts 10-digit Indian phone numbers, repairs inverted fields, and guarantees exact Sarvam AI compliance.
+          Upload any contact list. Our engine automatically verifies headers, extracts 10-digit Indian phone numbers, repairs inverted fields, and validates the calling sheet.
         </p>
       </div>
 
@@ -108,7 +109,7 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
               {isVerifying ? 'Verifying & Healing CSV Format...' : fileName ? fileName : 'Click to Browse or Drag & Drop CSV'}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
-              Supports raw contacts, CSV files, and Sarvam cohorts
+              Supports contact lists, CSVs, and Excel exported text files
             </p>
           </div>
         </div>
@@ -122,7 +123,7 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
               {result.isValid ? (
                 <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>CSV Verified & Ready for Sarvam Calling</span>
+                  <span>CSV Verified & Ready for Calling</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 text-xs font-bold">
@@ -132,19 +133,31 @@ export default function CsvVerificationUploader({ onValidated }: CsvVerification
               )}
             </div>
 
-            <button
-              onClick={handleDownloadFixedCsv}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
-            >
-              <FileDown className="w-3.5 h-3.5" />
-              <span>Download Verified Sarvam AI CSV</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {onStartCampaignImmediately && result.isValid && (
+                <button
+                  onClick={() => onStartCampaignImmediately(result, fileName)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Start Campaign with this Sheet</span>
+                </button>
+              )}
+
+              <button
+                onClick={handleDownloadFixedCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>Download Verified CSV</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-              <span className="text-[11px] text-slate-500 font-medium">Total Rows</span>
+              <span className="text-[11px] text-slate-500 font-medium">Total Contacts</span>
               <p className="text-lg font-extrabold text-slate-900 dark:text-white">{result.totalRows}</p>
             </div>
             <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40">
