@@ -12,6 +12,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
+    // Enforce light mode strictly
+    document.documentElement.classList.remove('dark');
+    document.documentElement.classList.add('light');
+    try {
+      localStorage.removeItem('theme');
+    } catch {}
+
     const user = localStorage.getItem('gayatri_user');
     if (!user && pathname !== '/login') {
       router.push('/login');
@@ -20,18 +27,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoginPage) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+      <div className="min-h-screen bg-slate-50 text-slate-900">
         {children}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/80 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       <Header />
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+      <div className="flex-1 w-full">
         {children}
-      </main>
+      </div>
     </div>
   );
 }

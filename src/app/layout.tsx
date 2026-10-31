@@ -17,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 flex flex-col`}>
+    <html lang="en" className="h-full antialiased light" suppressHydrationWarning>
+      <body className={`${inter.className} min-h-full bg-slate-50 text-slate-900 flex flex-col`}>
         <AppLayout>
           <SarvamNavBar />
           <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

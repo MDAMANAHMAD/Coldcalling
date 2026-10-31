@@ -2,16 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PhoneCall, Lock, Mail, User, Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { PhoneCall, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [isRegister, setIsRegister] = useState(false);
-  const [name, setName] = useState('Test User');
-  const [email, setEmail] = useState('test@gmail.com');
-  const [password, setPassword] = useState('test123');
-  const [role, setRole] = useState('Property Advisor');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -19,8 +15,8 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
 
-    if (!email || !password || (isRegister && !name)) {
-      setError('Please fill in all required fields.');
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.');
       return;
     }
 
@@ -28,9 +24,9 @@ export default function LoginPage() {
     setTimeout(() => {
       const cleanEmail = email.trim().toLowerCase();
       const userProfile = {
-        name: isRegister ? name : (name && name !== 'Tony Stark' ? name : 'Test User'),
+        name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || 'Property Advisor',
         email: cleanEmail,
-        role: role || 'Property Advisor',
+        role: 'Property Advisor',
         loggedInAt: new Date().toISOString()
       };
       localStorage.setItem('gayatri_user', JSON.stringify(userProfile));
@@ -40,79 +36,43 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 text-slate-900">
       <div className="w-full max-w-md">
         
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30 mb-3">
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/25 mb-3">
             <PhoneCall className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            Gayatri AI
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">
+            Sai Garden <span className="text-blue-600">Qualivo Voice</span>
           </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
-            AI Real Estate Telephony & Cold Calling Platform
+          <p className="text-xs text-slate-500 mt-1 font-medium">
+            AI Real Estate Telephony & Calling Command Center
           </p>
         </div>
 
-        {/* Card Container */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xl shadow-slate-200/50 dark:shadow-none">
+        {/* Card Container (Strictly Light Mode, Only Login) */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl shadow-slate-200/60">
           
-          {/* Tabs */}
-          <div className="flex bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl mb-6">
-            <button
-              type="button"
-              onClick={() => { setIsRegister(false); setError(''); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                !isRegister 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' 
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsRegister(true); setError(''); }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                isRegister 
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' 
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
+          <div className="mb-6">
+            <h2 className="text-base font-extrabold text-slate-900">
+              Sign In to Dashboard
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Enter your credentials to access the Sai Garden calling center
+            </p>
           </div>
 
           {error && (
-            <div className="p-3 mb-5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-medium">
+            <div className="p-3 mb-5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isRegister && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-                    required={isRegister}
-                  />
-                </div>
-              </div>
-            )}
-
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Email Address
               </label>
               <div className="relative">
@@ -121,15 +81,15 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                  placeholder="Enter your email address"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium placeholder:text-slate-400"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -138,29 +98,12 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+                  placeholder="Enter your password"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium placeholder:text-slate-400"
                   required
                 />
               </div>
             </div>
-
-            {isRegister && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Role
-                </label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-                >
-                  <option value="Property Advisor">Property Advisor</option>
-                  <option value="Sales Manager">Sales Manager</option>
-                  <option value="Administrator">Administrator</option>
-                </select>
-              </div>
-            )}
 
             <button
               type="submit"
@@ -171,18 +114,17 @@ export default function LoginPage() {
                 <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <span>{isRegister ? 'Create Account' : 'Sign In to Dashboard'}</span>
+                  <span>Sign In to Dashboard</span>
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Quick Demo Help */}
-          <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800 text-center">
-            <p className="text-[11px] text-slate-400 font-medium">
-              Account: <span className="font-bold text-slate-600 dark:text-slate-300">test@gmail.com</span> • Password: <span className="font-bold text-slate-600 dark:text-slate-300">test123</span>
-            </p>
+          {/* Security & RERA notice */}
+          <div className="mt-6 pt-5 border-t border-slate-100 flex items-center justify-center gap-1.5 text-slate-400 text-[11px] font-medium">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+            <span>MahaRERA: PR1330002501452 | Sai City Group</span>
           </div>
         </div>
 

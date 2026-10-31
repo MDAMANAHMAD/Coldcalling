@@ -7,6 +7,9 @@ import { Home, BarChart3, CalendarCheck, HeartHandshake, PhoneCall } from 'lucid
 export default function SarvamNavBar() {
   const pathname = usePathname();
 
+  // Do not render navigation bar on login page
+  if (pathname === '/login') return null;
+
   const navItems = [
     { href: '/', label: 'Home & Upload', icon: Home, exact: true },
     { href: '/analytics', label: 'Analytics', icon: BarChart3 },
