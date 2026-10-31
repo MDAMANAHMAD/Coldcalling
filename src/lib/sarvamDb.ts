@@ -121,10 +121,11 @@ export function filterCallsByPeriod(calls: SarvamCallRecord[], period: TimeFilte
  */
 export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSummary {
   const totalCalls = calls.length;
-  const completedCalls = calls.filter(c => c.status === 'completed');
-  const totalDuration = completedCalls.reduce((acc, c) => acc + (c.durationSeconds || 0), 0);
-  const avgDuration = completedCalls.length > 0 ? Math.round(totalDuration / completedCalls.length) : 0;
-  const connectionRate = totalCalls > 0 ? Math.round((completedCalls.length / totalCalls) * 100) : 0;
+  // A call is considered connected if durationSeconds > 0 or status is completed
+  const connectedCalls = calls.filter(c => (c.durationSeconds && c.durationSeconds > 0) || c.status === 'completed');
+  const totalDuration = connectedCalls.reduce((acc, c) => acc + (c.durationSeconds || 0), 0);
+  const avgDuration = connectedCalls.length > 0 ? Math.round(totalDuration / connectedCalls.length) : 0;
+  const connectionRate = totalCalls > 0 ? Math.round((connectedCalls.length / totalCalls) * 100) : 0;
 
   const interestedCalls = calls.filter(c => c.outcome === 'Interested');
   const siteVisitCalls = calls.filter(c => c.outcome === 'Site Visit');
@@ -150,7 +151,7 @@ export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSumm
 
   return {
     totalCalls,
-    totalDurationSeconds: totalDuration,
+    totalDurationSeconds: Math.round(totalDuration),
     avgDurationSeconds: avgDuration,
     connectionRate,
     interestedCount: interestedCalls.length,

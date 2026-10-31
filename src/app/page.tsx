@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import CsvVerificationUploader from '@/components/sarvam/CsvVerificationUploader';
 import LiveCallingCard from '@/components/sarvam/LiveCallingCard';
 import PeriodFilterBar from '@/components/sarvam/PeriodFilterBar';
 import RetainedCallCard from '@/components/sarvam/RetainedCallCard';
+import CampaignConfigModal from '@/components/sarvam/CampaignConfigModal';
+import { exportToCsv, exportToPdf } from '@/lib/sarvamExport';
 import { 
   SarvamCallRecord, 
   LiveCampaignProgress, 
   SarvamAnalyticsSummary, 
   TimeFilterPeriod, 
-  CsvValidationResult 
+  CsvValidationResult,
+  CampaignSettings
 } from '@/lib/sarvamTypes';
 import { 
   Building2, 
@@ -18,17 +21,27 @@ import {
   Calendar, 
   Flame, 
   ArrowUpRight, 
-  ShieldCheck
+  ShieldCheck,
+  Search,
+  FileDown,
+  PhoneForwarded,
+  CheckCircle2,
+  Sparkles,
+  Radio
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function HomePage() {
   const [period, setPeriod] = useState<TimeFilterPeriod>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'site_visit' | 'interested' | 'connected'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [analytics, setAnalytics] = useState<SarvamAnalyticsSummary | null>(null);
   const [campaign, setCampaign] = useState<LiveCampaignProgress | null>(null);
   const [uploadedContacts, setUploadedContacts] = useState<any[]>([]);
+  const [uploadedFileName, setUploadedFileName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
   const fetchDashboardData = async (filterPeriod: TimeFilterPeriod) => {
     setIsLoading(true);
@@ -71,6 +84,7 @@ export default function HomePage() {
   const handleCsvValidated = (result: CsvValidationResult, fileName: string) => {
     if (result.isValid && result.data.length > 0) {
       setUploadedContacts(result.data);
+      setUploadedFileName(fileName);
       setCampaign(prev => ({
         campaignId: prev?.campaignId || `camp-${Date.now()}`,
         campaignName: 'Sai Garden 1 & 2 BHK Outreach',
@@ -93,6 +107,7 @@ export default function HomePage() {
   const handleStartImmediately = async (result: CsvValidationResult, fileName: string) => {
     try {
       setUploadedContacts(result.data);
+      setUploadedFileName(fileName);
       const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -112,6 +127,56 @@ export default function HomePage() {
     }
   };
 
+  const handleLaunchWithCustomSettings = async (settings: CampaignSettings) => {
+    try {
+      const res = await fetch('/api/campaign/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'start',
+          batchFileName: uploadedFileName || 'Direct Campaign',
+          totalContacts: uploadedContacts.length || campaign?.totalContacts || 0,
+          contacts: uploadedContacts,
+          settings
+        })
+      });
+      const data = await res.json();
+      if (data.campaign) {
+        setCampaign(data.campaign);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Filtered and searched calls
+  const filteredCalls = useMemo(() => {
+    let list = calls;
+
+    if (activeTab === 'site_visit') {
+      list = list.filter(c => c.outcome === 'Site Visit');
+    } else if (activeTab === 'interested') {
+      list = list.filter(c => c.outcome === 'Interested');
+    } else if (activeTab === 'connected') {
+      list = list.filter(c => c.outcome === 'Connected');
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(c => 
+        (c.customerPhone && c.customerPhone.toLowerCase().includes(q)) ||
+        (c.customerName && c.customerName.toLowerCase().includes(q)) ||
+        (c.summary && c.summary.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [calls, activeTab, searchQuery]);
+
+  const siteVisitsCount = calls.filter(c => c.outcome === 'Site Visit').length;
+  const interestedCount = calls.filter(c => c.outcome === 'Interested').length;
+  const connectedCount = calls.filter(c => c.outcome === 'Connected').length;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Hero Welcome Banner */}
@@ -125,23 +190,25 @@ export default function HomePage() {
             Sai Garden — Calling & Lead Acquisition Command Center
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Connected live to voice agent Gayatri. Upload calling sheets, start real outbound calling, track live progress, and review high-intent buyers with full unmasked phone numbers.
+            Connected live to voice agent Gayatri (v2). Upload calling sheets, adjust schedule & telephony pacing, track live progress, and review verified buyer conversations with unmasked phone numbers.
           </p>
         </div>
       </div>
 
-      {/* Live Calling Sheet Progress with Start, Pause & Stop Controls */}
+      {/* Live Calling Sheet Progress & Controller */}
       <LiveCallingCard
         campaign={campaign}
         onRefresh={() => fetchDashboardData(period)}
         isLoading={isLoading}
         onAction={handleCampaignAction}
+        onOpenSettings={() => setIsConfigModalOpen(true)}
       />
 
       {/* CSV Uploader & Auto-Repair Tool */}
       <CsvVerificationUploader
         onValidated={handleCsvValidated}
         onStartCampaignImmediately={handleStartImmediately}
+        onOpenCampaignConfig={() => setIsConfigModalOpen(true)}
       />
 
       {/* Basic Metrics Overview with Time Filter */}
@@ -152,7 +219,7 @@ export default function HomePage() {
               Project Performance & Call Outcomes
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Overview of retained high-intent prospects for Sai Garden
+              Live telephony records synced directly from voice agent Gayatri
             </p>
           </div>
           <PeriodFilterBar currentPeriod={period} onPeriodChange={setPeriod} />
@@ -167,8 +234,8 @@ export default function HomePage() {
                 <PhoneCall className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || 0}</p>
-            <span className="text-[11px] text-slate-400 font-medium">Live synced from voice platform</span>
+            <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || calls.length}</p>
+            <span className="text-[11px] text-slate-400 font-medium">Avg Duration: {analytics?.avgDurationSeconds || 0}s</span>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
@@ -178,7 +245,7 @@ export default function HomePage() {
                 <Calendar className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{analytics?.siteVisitCount || 0}</p>
+            <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{analytics?.siteVisitCount || siteVisitsCount}</p>
             <Link href="/site-visits" className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 mt-1">
               <span>View Site Visits</span>
               <ArrowUpRight className="w-3 h-3" />
@@ -192,7 +259,7 @@ export default function HomePage() {
                 <Flame className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{analytics?.interestedCount || 0}</p>
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{analytics?.interestedCount || interestedCount}</p>
             <Link href="/interested" className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1 mt-1">
               <span>View Interested Leads</span>
               <ArrowUpRight className="w-3 h-3" />
@@ -222,35 +289,121 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Retained High-Intent Call Logs (Interested & Site Visit Only) */}
+      {/* Call Logs & Transcripts Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Retained Prospect Calls</span>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                Full Phone Numbers & Audio
+              <span>Live Outbound Call Logs</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                {calls.length} Verified Calls
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Only high-intent prospects (Site Visit & Interested) are archived here with dialogue recordings.
+              Complete call records with unmasked numbers, duration, audio recordings, and conversation summaries.
             </p>
+          </div>
+
+          {/* Export Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => exportToCsv(filteredCalls, activeTab === 'site_visit' ? 'Site_Visit' : activeTab === 'interested' ? 'Interested' : 'All')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+            <button
+              onClick={() => exportToPdf(filteredCalls, activeTab === 'site_visit' ? 'Site Visit' : activeTab === 'interested' ? 'Interested' : 'All', period)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export PDF</span>
+            </button>
           </div>
         </div>
 
-        {calls.length === 0 ? (
-          <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <p className="text-sm font-semibold text-slate-500">No calls recorded yet for the selected period.</p>
-            <p className="text-xs text-slate-400 mt-1">Upload a calling sheet above and start calling to populate real-time prospect interactions.</p>
+        {/* Filters and Search Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+          {/* Tabs */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'all'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              All Calls ({calls.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('site_visit')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'site_visit'
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Site Visits ({siteVisitsCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('interested')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'interested'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Interested ({interestedCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('connected')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'connected'
+                  ? 'bg-slate-800 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              Connected ({connectedCount})
+            </button>
+          </div>
+
+          {/* Search box */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search phone or name..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-full sm:w-56"
+            />
+          </div>
+        </div>
+
+        {/* Calls List */}
+        {filteredCalls.length === 0 ? (
+          <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+            <p className="text-sm font-semibold text-slate-500">No calls found matching the selected filter.</p>
+            <p className="text-xs text-slate-400 mt-1">Try switching to &quot;All Calls&quot; or changing the time filter.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3.5">
-            {calls.map(call => (
+            {filteredCalls.map(call => (
               <RetainedCallCard key={call.id} call={call} />
             ))}
           </div>
         )}
       </div>
+
+      {/* Campaign Configuration & Scheduling Modal */}
+      <CampaignConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        onLaunch={handleLaunchWithCustomSettings}
+        totalContacts={uploadedContacts.length || campaign?.totalContacts || 0}
+      />
     </div>
   );
 }

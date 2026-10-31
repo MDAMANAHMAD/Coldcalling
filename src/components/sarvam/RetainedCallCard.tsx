@@ -9,11 +9,9 @@ import {
   Clock, 
   Volume2, 
   FileText, 
-  Building2, 
   CheckCircle2, 
-  X,
-  Play,
-  Pause
+  Globe2,
+  MessageSquare
 } from 'lucide-react';
 
 interface RetainedCallCardProps {
@@ -22,31 +20,49 @@ interface RetainedCallCardProps {
 
 export default function RetainedCallCard({ call }: RetainedCallCardProps) {
   const [showTranscript, setShowTranscript] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
 
   const isSiteVisit = call.outcome === 'Site Visit';
+  const isInterested = call.outcome === 'Interested';
+  const isConnected = call.outcome === 'Connected';
+  const isNotInterested = call.outcome === 'Not Interested';
+
+  const badgeColor = isSiteVisit
+    ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+    : isInterested
+    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+    : isConnected
+    ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+    : isNotInterested
+    ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+    : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         {/* Customer Information */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2.5">
+        <div className="space-y-1.5 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <h4 className="text-base font-bold text-slate-900 dark:text-white">
               {call.customerName || 'Valued Customer'}
             </h4>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                isSiteVisit
-                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
-                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-              }`}
-            >
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${badgeColor}`}>
               {call.outcome}
             </span>
             {call.bhkPreference && (
               <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                 {call.bhkPreference}
+              </span>
+            )}
+            {call.language && (
+              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                <Globe2 className="w-3 h-3" />
+                <span>{call.language}</span>
+              </span>
+            )}
+            {call.numMessages && (
+              <span className="flex items-center gap-1 text-[11px] text-slate-400 font-medium">
+                <MessageSquare className="w-3 h-3" />
+                <span>{call.numMessages} msgs</span>
               </span>
             )}
           </div>
@@ -62,14 +78,18 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
               <Calendar className="w-3.5 h-3.5" />
               <span>{new Date(call.callDate).toLocaleString()}</span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
               <Clock className="w-3.5 h-3.5" />
-              <span>{Math.floor(call.durationSeconds / 60)}m {call.durationSeconds % 60}s</span>
+              <span>
+                {call.durationSeconds >= 60 
+                  ? `${Math.floor(call.durationSeconds / 60)}m ${Math.round(call.durationSeconds % 60)}s` 
+                  : `${call.durationSeconds}s`}
+              </span>
             </div>
             {isSiteVisit && call.siteVisitDay && (
               <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-semibold">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Visit: {call.siteVisitDay} {call.siteVisitTime ? `@ ${call.siteVisitTime}` : ''}</span>
+                <span>Site Visit: {call.siteVisitDay}</span>
               </div>
             )}
           </div>
@@ -82,7 +102,7 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
           >
             <FileText className="w-3.5 h-3.5 text-slate-500" />
-            <span>{showTranscript ? 'Hide Transcript' : 'View Transcript'}</span>
+            <span>{showTranscript ? 'Hide Dialogue' : 'View Dialogue'}</span>
           </button>
         </div>
       </div>
@@ -90,7 +110,7 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
       {/* Summary box */}
       {call.summary && (
         <div className="mt-3.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-          <span className="font-semibold text-slate-800 dark:text-slate-200">AI Call Summary: </span>
+          <span className="font-semibold text-slate-800 dark:text-slate-200">AI Conversation Summary: </span>
           {call.summary}
         </div>
       )}

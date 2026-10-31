@@ -24,11 +24,11 @@ export interface SarvamCallRecord {
   id: string;
   interactionId?: string;
   customerName: string;
-  customerPhone: string; // Stored in FULL unmasked format e.g. +919821361686
+  customerPhone: string; // Full unmasked phone number e.g. +919920764663
   callDate: string; // ISO string
   durationSeconds: number;
   status: 'completed' | 'ongoing' | 'failed' | 'no-answer' | 'busy' | 'scheduled';
-  outcome: 'Interested' | 'Site Visit' | 'Not Interested' | 'Call Back' | 'Voicemail' | 'Other';
+  outcome: 'Interested' | 'Site Visit' | 'Connected' | 'Not Interested' | 'Call Back' | 'No Answer' | 'Other';
   bhkPreference?: '1 BHK' | '2 BHK' | 'Both' | 'None';
   siteVisitDay?: string;
   siteVisitTime?: string;
@@ -38,6 +38,29 @@ export interface SarvamCallRecord {
   summary: string;
   agentId: string;
   fromNumber: string;
+  language?: string;
+  numMessages?: number;
+}
+
+export interface CampaignSettings {
+  campaignName: string;
+  appType: string;
+  agentId: string;
+  agentVersion: number;
+  connectionId: string;
+  fromNumber: string;
+  attemptsPerSecond: number; // CPS default 0.5
+  allowedStartTime: string; // '09:00'
+  allowedEndTime: string; // '18:00'
+  allowedDays: string[]; // ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  startDateType: 'now' | 'custom';
+  endDateType: 'today' | 'custom';
+  customStartDate?: string;
+  customEndDate?: string;
+  retryEnabled: boolean;
+  maxRetries?: number;
+  retryIntervalMinutes?: number;
+  phoneRotation: boolean;
 }
 
 export interface LiveCampaignProgress {
@@ -53,8 +76,9 @@ export interface LiveCampaignProgress {
   siteVisitCount: number;
   startedAt: string;
   updatedAt: string;
-  status: 'running' | 'paused' | 'completed' | 'idle';
+  status: 'running' | 'paused' | 'completed' | 'idle' | 'active';
   currentBatchFile?: string;
+  settings?: CampaignSettings;
 }
 
 export interface SarvamAnalyticsSummary {
@@ -74,3 +98,4 @@ export interface SarvamAnalyticsSummary {
 }
 
 export type TimeFilterPeriod = 'today' | 'yesterday' | 'last_7_days' | 'last_30_days' | 'all';
+

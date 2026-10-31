@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSarvamDb, saveSarvamDb } from '@/lib/sarvamDb';
+import { CampaignSettings } from '@/lib/sarvamTypes';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,13 +13,55 @@ const FROM_NUMBER = '+918071580297';
 
 export async function POST(req: NextRequest) {
   try {
-    const { action, batchFileName, totalContacts, contacts } = await req.json();
+    const { action, batchFileName, totalContacts, contacts, settings, testPhoneNumber } = await req.json();
     const db = getSarvamDb();
+
+    // Handle instant test dial
+    if (action === 'test-dial') {
+      if (!testPhoneNumber) {
+        return NextResponse.json({ error: 'testPhoneNumber is required for test dial' }, { status: 400 });
+      }
+
+      const cleanDigits = testPhoneNumber.replace(/\D/g, '');
+      const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : testPhoneNumber.startsWith('+') ? testPhoneNumber : `+${cleanDigits}`;
+
+      const outboundUrl = `https://apps.sarvam.ai/api/outbounds/v1/orgs/${ORG_ID}/workspaces/${WORKSPACE_ID}/outbounds`;
+      const payload = {
+        app_config: {
+          app_id: settings?.agentId || AGENT_ID,
+          app_version: settings?.agentVersion || 2,
+          connection_config: {
+            connection_id: settings?.connectionId || CONNECTION_ID,
+            agent_phone_number: settings?.fromNumber || FROM_NUMBER
+          }
+        },
+        user_config: {
+          user_phone_number: fullPhone
+        }
+      };
+
+      const res = await fetch(outboundUrl, {
+        method: 'POST',
+        headers: {
+          'X-API-Key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        return NextResponse.json({ error: `Test dial failed (${res.status}): ${errText}` }, { status: res.status });
+      }
+
+      const resData = await res.json();
+      return NextResponse.json({ success: true, message: `Test dial initiated to ${fullPhone}`, attempt_id: resData.attempt_id });
+    }
 
     if (!db.campaigns || db.campaigns.length === 0) {
       db.campaigns = [{
         campaignId: `camp-${Date.now()}`,
-        campaignName: 'Sai Garden 1 & 2 BHK Calling Sheet',
+        campaignName: settings?.campaignName || 'Sai Garden 1 & 2 BHK Calling Sheet',
         totalContacts: totalContacts || 0,
         completedCalls: 0,
         remainingCalls: totalContacts || 0,
@@ -30,7 +73,8 @@ export async function POST(req: NextRequest) {
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         status: 'idle',
-        currentBatchFile: batchFileName || ''
+        currentBatchFile: batchFileName || '',
+        settings
       }];
     }
 
@@ -38,6 +82,12 @@ export async function POST(req: NextRequest) {
 
     if (action === 'start') {
       campaign.status = 'running';
+      if (settings?.campaignName) {
+        campaign.campaignName = settings.campaignName;
+      }
+      if (settings) {
+        campaign.settings = settings;
+      }
       if (totalContacts !== undefined && totalContacts > 0) {
         campaign.totalContacts = totalContacts;
         campaign.remainingCalls = totalContacts - campaign.completedCalls;
@@ -48,11 +98,12 @@ export async function POST(req: NextRequest) {
       campaign.ongoingCalls = 1;
       campaign.updatedAt = new Date().toISOString();
 
-      // If contact numbers were passed from the verified CSV upload, trigger dialing via Sarvam Outbound API!
+      // If contact numbers were passed from the verified CSV upload, trigger pacing dispatch
       if (Array.isArray(contacts) && contacts.length > 0) {
-        console.log(`🚀 [Campaign Trigger]: Triggering live outbound calls for ${contacts.length} numbers via Sarvam API...`);
+        const cps = settings?.attemptsPerSecond || 0.5;
+        const delayBetweenCallsMs = Math.max(500, Math.round(1000 / cps));
+        console.log(`🚀 [Campaign Trigger]: Triggering live outbound calls for ${contacts.length} numbers at ${cps} CPS (${delayBetweenCallsMs}ms delay)...`);
         
-        // Trigger asynchronous dispatch for each contact in batch
         (async () => {
           for (const c of contacts) {
             const rawPhone = c.phone_number || c.phone || '';
@@ -64,11 +115,11 @@ export async function POST(req: NextRequest) {
               const outboundUrl = `https://apps.sarvam.ai/api/outbounds/v1/orgs/${ORG_ID}/workspaces/${WORKSPACE_ID}/outbounds`;
               const payload = {
                 app_config: {
-                  app_id: AGENT_ID,
-                  app_version: 2,
+                  app_id: settings?.agentId || AGENT_ID,
+                  app_version: settings?.agentVersion || 2,
                   connection_config: {
-                    connection_id: CONNECTION_ID,
-                    agent_phone_number: FROM_NUMBER
+                    connection_id: settings?.connectionId || CONNECTION_ID,
+                    agent_phone_number: settings?.fromNumber || FROM_NUMBER
                   }
                 },
                 user_config: {
@@ -96,8 +147,8 @@ export async function POST(req: NextRequest) {
               console.error(`❌ [Outbound Call Failed]: ${fullPhone}`, dialErr);
             }
 
-            // Pacing delay (1.5 seconds between dialing requests)
-            await new Promise(r => setTimeout(r, 1500));
+            // Pacing delay based on attempts_per_second configuration
+            await new Promise(r => setTimeout(r, delayBetweenCallsMs));
           }
         })().catch(err => console.error('Background batch dialer error:', err));
       }
