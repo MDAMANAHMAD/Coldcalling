@@ -41,8 +41,8 @@ export default function LoginPage() {
         
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/25 mb-3">
-            <PhoneCall className="h-7 w-7" />
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl overflow-hidden shadow-xl shadow-blue-500/20 mb-3 border border-slate-200 bg-slate-950">
+            <img src="/logo.jpg" alt="Qualivo Logo" className="h-full w-full object-cover" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-slate-900">
             Sai Garden <span className="text-blue-600">Qualivo Voice</span>

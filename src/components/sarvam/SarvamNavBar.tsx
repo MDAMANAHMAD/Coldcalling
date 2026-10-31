@@ -24,10 +24,12 @@ export default function SarvamNavBar() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3">
           {/* Project Title & Badge */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Sai Garden <span className="text-blue-600 dark:text-blue-400">Qualivo Voice</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg overflow-hidden border border-slate-200 bg-slate-950 flex-shrink-0">
+                <img src="/logo.jpg" alt="Qualivo" className="w-full h-full object-cover" />
+              </div>
+              <h2 className="text-base font-extrabold text-slate-900">
+                Sai Garden <span className="text-blue-600">Qualivo Voice</span>
               </h2>
             </div>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800">

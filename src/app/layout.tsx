@@ -9,6 +9,10 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Sai Garden — Qualivo Voice Calling Command Center",
   description: "AI Telephony & Lead Acquisition Engine for Sai Garden, Nilje, Dombivli East.",
+  icons: {
+    icon: "/logo.jpg",
+    apple: "/logo.jpg"
+  }
 };
 
 export default function RootLayout({

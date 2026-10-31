@@ -40,8 +40,8 @@ export default function Header() {
       {/* Brand / Title: Strictly Qualivo & Sai Garden */}
       <div className="flex items-center space-x-3 md:space-x-4">
         <Link href="/" className="flex items-center space-x-3 group">
-          <div className="h-9 w-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-            <PhoneCall className="h-5 w-5" />
+          <div className="h-10 w-10 rounded-xl overflow-hidden shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform flex items-center justify-center bg-slate-950 border border-slate-200">
+            <img src="/logo.jpg" alt="Qualivo Logo" className="h-full w-full object-cover" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
