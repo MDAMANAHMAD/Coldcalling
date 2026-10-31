@@ -5,6 +5,20 @@ import { SarvamCallRecord } from '@/lib/sarvamTypes';
 export const dynamic = 'force-dynamic';
 
 /**
+ * Health check / verification endpoint for Sarvam webhook validation & browser visits.
+ */
+export async function GET(req: NextRequest) {
+  return NextResponse.json({
+    status: 'online',
+    service: 'Sarvam AI Webhook Endpoint for Sai Garden',
+    methodAllowed: ['POST', 'GET'],
+    targetAgent: 'Gayatari-0922c4e8-551f',
+    dashboardUrl: 'https://qualivo.duckdns.org/sarvam-dashboard',
+    timestamp: new Date().toISOString()
+  });
+}
+
+/**
  * Sarvam AI Webhook Endpoint:
  * Receives completed call webhooks from Sarvam Voice Agent / Instant Outbound.
  * Strictly checks outcome and retains ONLY 'Interested' and 'Site Visit' calls,
