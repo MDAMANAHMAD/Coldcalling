@@ -24,16 +24,13 @@ import {
   ShieldCheck,
   Search,
   FileDown,
-  PhoneForwarded,
-  CheckCircle2,
-  Sparkles,
-  Radio
+  Sparkles
 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function HomePage() {
   const [period, setPeriod] = useState<TimeFilterPeriod>('all');
-  const [activeTab, setActiveTab] = useState<'all' | 'site_visit' | 'interested' | 'connected'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'site_visit' | 'interested'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [analytics, setAnalytics] = useState<SarvamAnalyticsSummary | null>(null);
@@ -43,10 +40,11 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
 
+  // Home page strictly queries high_intent (Site Visits & Interested)
   const fetchDashboardData = async (filterPeriod: TimeFilterPeriod) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/calls?period=${filterPeriod}`);
+      const res = await fetch(`/api/calls?category=high_intent&period=${filterPeriod}`);
       const data = await res.json();
       setCalls(data.calls || []);
       setAnalytics(data.analytics || null);
@@ -149,7 +147,7 @@ export default function HomePage() {
     }
   };
 
-  // Filtered and searched calls
+  // Filtered priority leads
   const filteredCalls = useMemo(() => {
     let list = calls;
 
@@ -157,8 +155,6 @@ export default function HomePage() {
       list = list.filter(c => c.outcome === 'Site Visit');
     } else if (activeTab === 'interested') {
       list = list.filter(c => c.outcome === 'Interested');
-    } else if (activeTab === 'connected') {
-      list = list.filter(c => c.outcome === 'Connected');
     }
 
     if (searchQuery.trim()) {
@@ -175,7 +171,6 @@ export default function HomePage() {
 
   const siteVisitsCount = calls.filter(c => c.outcome === 'Site Visit').length;
   const interestedCount = calls.filter(c => c.outcome === 'Interested').length;
-  const connectedCount = calls.filter(c => c.outcome === 'Connected').length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -211,7 +206,7 @@ export default function HomePage() {
         onOpenCampaignConfig={() => setIsConfigModalOpen(true)}
       />
 
-      {/* Basic Metrics Overview with Time Filter */}
+      {/* Performance Overview KPI Cards */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -219,7 +214,7 @@ export default function HomePage() {
               Project Performance & Call Outcomes
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Live telephony records synced directly from voice agent Gayatri
+              Live aggregate metrics from outbound calling sheet
             </p>
           </div>
           <PeriodFilterBar currentPeriod={period} onPeriodChange={setPeriod} />
@@ -234,7 +229,7 @@ export default function HomePage() {
                 <PhoneCall className="w-4 h-4" />
               </div>
             </div>
-            <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || calls.length}</p>
+            <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || 0}</p>
             <span className="text-[11px] text-slate-400 font-medium">Avg Duration: {analytics?.avgDurationSeconds || 0}s</span>
           </div>
 
@@ -247,7 +242,7 @@ export default function HomePage() {
             </div>
             <p className="text-2xl font-black text-purple-600 dark:text-purple-400">{analytics?.siteVisitCount || siteVisitsCount}</p>
             <Link href="/site-visits" className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold hover:underline flex items-center gap-1 mt-1">
-              <span>View Site Visits</span>
+              <span>View Site Visits Schedule</span>
               <ArrowUpRight className="w-3 h-3" />
             </Link>
           </div>
@@ -289,18 +284,18 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Call Logs & Transcripts Section */}
+      {/* Priority Leads Call Logs (Exclusively Site Visits & Interested) */}
       <div className="space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Live Outbound Call Logs</span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-                {calls.length} Verified Calls
+              <span>Recent Priority Leads</span>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                {calls.length} Verified Prospects
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Complete call records with unmasked numbers, duration, audio recordings, and conversation summaries.
+              High-intent leads who booked site visits or inquired about Sai Garden 1 & 2 BHK apartments.
             </p>
           </div>
 
@@ -323,23 +318,22 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Filters and Search Bar */}
+        {/* Priority Tabs & Search Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
-          {/* Tabs */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               onClick={() => setActiveTab('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'all'
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
               }`}
             >
-              All Calls ({calls.length})
+              All Priority Leads ({calls.length})
             </button>
             <button
               onClick={() => setActiveTab('site_visit')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'site_visit'
                   ? 'bg-purple-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
@@ -349,23 +343,13 @@ export default function HomePage() {
             </button>
             <button
               onClick={() => setActiveTab('interested')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'interested'
                   ? 'bg-emerald-600 text-white shadow-sm'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
               }`}
             >
-              Interested ({interestedCount})
-            </button>
-            <button
-              onClick={() => setActiveTab('connected')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'connected'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              Connected ({connectedCount})
+              Interested Buyers ({interestedCount})
             </button>
           </div>
 
@@ -382,11 +366,11 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Calls List */}
+        {/* Priority Calls List */}
         {filteredCalls.length === 0 ? (
           <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
-            <p className="text-sm font-semibold text-slate-500">No calls found matching the selected filter.</p>
-            <p className="text-xs text-slate-400 mt-1">Try switching to &quot;All Calls&quot; or changing the time filter.</p>
+            <p className="text-sm font-semibold text-slate-500">No priority leads found for the selected period.</p>
+            <p className="text-xs text-slate-400 mt-1">Start an outbound campaign with your calling sheet to generate live site visits and buyer inquiries.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3.5">

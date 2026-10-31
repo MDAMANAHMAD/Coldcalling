@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import PeriodFilterBar from '@/components/sarvam/PeriodFilterBar';
+import FutureSiteVisitFilterBar, { FutureFilterPeriod } from '@/components/sarvam/FutureSiteVisitFilterBar';
 import RetainedCallCard from '@/components/sarvam/RetainedCallCard';
-import { SarvamCallRecord, TimeFilterPeriod } from '@/lib/sarvamTypes';
+import { SarvamCallRecord } from '@/lib/sarvamTypes';
 import { exportToCsv, exportToPdf } from '@/lib/sarvamExport';
-import { CalendarCheck, FileSpreadsheet, FileDown, MapPin } from 'lucide-react';
+import { CalendarCheck, FileSpreadsheet, FileDown, MapPin, Sparkles } from 'lucide-react';
 
 export default function SiteVisitsPage() {
-  const [period, setPeriod] = useState<TimeFilterPeriod>('all');
+  const [futurePeriod, setFuturePeriod] = useState<FutureFilterPeriod>('all_upcoming');
   const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -16,7 +16,7 @@ export default function SiteVisitsPage() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/calls?period=${period}&category=Site Visit`);
+        const res = await fetch(`/api/calls?category=Site Visit&futurePeriod=${futurePeriod}`);
         const data = await res.json();
         setCalls(data.calls || []);
       } catch (err) {
@@ -26,7 +26,7 @@ export default function SiteVisitsPage() {
       }
     }
     loadData();
-  }, [period]);
+  }, [futurePeriod]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -38,7 +38,7 @@ export default function SiteVisitsPage() {
             <span>Site Visit Scheduled Appointments</span>
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Prospects who confirmed an on-site visit to Sai Garden Sales Lounge, Lodha Heaven, Nilje, Dombivli East.
+            Confirmed buyer appointments for future on-site visits to Sai Garden Sales Lounge, Lodha Heaven, Nilje, Dombivli East.
           </p>
         </div>
 
@@ -54,7 +54,7 @@ export default function SiteVisitsPage() {
           </button>
 
           <button
-            onClick={() => exportToPdf(calls, 'Site Visit', period)}
+            onClick={() => exportToPdf(calls, 'Site Visit', 'all')}
             disabled={calls.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all disabled:opacity-50"
           >
@@ -64,11 +64,11 @@ export default function SiteVisitsPage() {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex items-center justify-between">
-        <PeriodFilterBar currentPeriod={period} onPeriodChange={setPeriod} />
+      {/* Future Visit Date Filter Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <FutureSiteVisitFilterBar currentPeriod={futurePeriod} onPeriodChange={setFuturePeriod} />
         <span className="text-xs font-semibold text-slate-500">
-          Showing {calls.length} Confirmed Appointments
+          Showing <strong>{calls.length}</strong> Confirmed Future Visits
         </span>
       </div>
 
@@ -89,8 +89,8 @@ export default function SiteVisitsPage() {
       {calls.length === 0 ? (
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
           <CalendarCheck className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No Site Visits Found</p>
-          <p className="text-xs text-slate-400 mt-1">Confirmed appointments from incoming call completions will appear here automatically.</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No Upcoming Site Visits Found for this Window</p>
+          <p className="text-xs text-slate-400 mt-1">Try switching to &quot;All Visits&quot; or start a campaign sheet to schedule new visits.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">

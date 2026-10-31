@@ -11,7 +11,8 @@ import {
   FileText, 
   CheckCircle2, 
   Globe2,
-  MessageSquare
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 
 interface RetainedCallCardProps {
@@ -20,6 +21,7 @@ interface RetainedCallCardProps {
 
 export default function RetainedCallCard({ call }: RetainedCallCardProps) {
   const [showTranscript, setShowTranscript] = useState(false);
+  const [audioError, setAudioError] = useState(false);
 
   const isSiteVisit = call.outcome === 'Site Visit';
   const isInterested = call.outcome === 'Interested';
@@ -76,7 +78,7 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
           <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400 pt-1">
             <div className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" />
-              <span>{new Date(call.callDate).toLocaleString()}</span>
+              <span>Call: {new Date(call.callDate).toLocaleString()}</span>
             </div>
             <div className="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300">
               <Clock className="w-3.5 h-3.5" />
@@ -86,16 +88,26 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
                   : `${call.durationSeconds}s`}
               </span>
             </div>
-            {isSiteVisit && call.siteVisitDay && (
-              <div className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-semibold">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Site Visit: {call.siteVisitDay}</span>
-              </div>
-            )}
           </div>
+
+          {/* FUTURE SITE VISIT APPOINTMENT HIGHLIGHT */}
+          {isSiteVisit && (call.siteVisitDay || call.scheduledVisitDate) && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-xs font-bold text-purple-700 dark:text-purple-300">
+              <CheckCircle2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span>
+                Scheduled Site Visit: <strong>{call.siteVisitDay || 'Upcoming Weekend'}</strong>
+                {call.siteVisitTime && ` @ ${call.siteVisitTime}`}
+                {call.scheduledVisitDate && (
+                  <span className="ml-1 text-[11px] font-normal opacity-90">
+                    ({new Date(call.scheduledVisitDate).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' })})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Action Buttons: Audio & Transcript */}
+        {/* Action Buttons: Dialogue Viewer */}
         <div className="flex items-center gap-2 self-start">
           <button
             onClick={() => setShowTranscript(!showTranscript)}
@@ -115,18 +127,29 @@ export default function RetainedCallCard({ call }: RetainedCallCardProps) {
         </div>
       )}
 
-      {/* Audio Player if recording exists */}
-      {call.recordingUrl && (
+      {/* Audio Player streaming from our proxy */}
+      {call.recordingUrl && !audioError && (
         <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2 mb-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
             <Volume2 className="w-3.5 h-3.5 text-blue-500" />
-            <span>Call Audio Recording</span>
+            <span>Call Audio Recording (Streamed)</span>
           </div>
-          <audio controls className="w-full h-8" preload="none">
+          <audio 
+            controls 
+            className="w-full h-8" 
+            preload="metadata"
+            onError={() => setAudioError(true)}
+          >
             <source src={call.recordingUrl} type="audio/wav" />
-            <source src={call.recordingUrl} type="audio/mpeg" />
             Your browser does not support audio playback.
           </audio>
+        </div>
+      )}
+
+      {audioError && (
+        <div className="mt-3 pt-2 text-[11px] text-slate-400 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+          <span>Audio recording was not archived on voice network for this short call.</span>
         </div>
       )}
 

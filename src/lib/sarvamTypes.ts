@@ -32,6 +32,7 @@ export interface SarvamCallRecord {
   bhkPreference?: '1 BHK' | '2 BHK' | 'Both' | 'None';
   siteVisitDay?: string;
   siteVisitTime?: string;
+  scheduledVisitDate?: string; // ISO string for scheduled appointment date
   budget?: string;
   transcript: string;
   recordingUrl?: string;
