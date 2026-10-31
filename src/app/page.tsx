@@ -279,7 +279,7 @@ export default function HomePage() {
                 <p className="text-lg font-bold text-slate-900 dark:text-white">{analytics?.twoBhkCount || 0}</p>
               </div>
             </div>
-            <span className="text-[11px] text-slate-400 font-medium">₹30L (1 BHK) | ₹45L (2 BHK)</span>
+            <span className="text-[11px] text-slate-400 font-medium">₹35L (1 BHK) | ₹45L (2 BHK)</span>
           </div>
         </div>
       </div>

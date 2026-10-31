@@ -320,7 +320,7 @@ HINDI_REAL_ESTATE_PROMPT = """# गायत्री (GAYATRI) — साई �
 - आप खुद गायत्री हैं, इसलिए अपने लिए महिला वाचक क्रिया का उपयोग करें ("मैं बात कर रही हूँ", "मैं बोल रही हूँ", "मैं भेज रही हूँ")।
 
 सत्यापित प्रॉपर्टी विवरण और मूल्य (VERIFIED PROPERTY DETAILS & PRICING):
-- 1 BHK: ₹30 लाख से शुरू। डाउन पेमेंट लगभग ₹3 से ₹5 लाख (लगभग 10-15%)। बैंक लोन (SBI, HDFC, ICICI, Axis) से 85-90% तक फाइनेंस। कारपेट एरिया लगभग 375 से 425 वर्ग फुट।
+- 1 BHK: ₹35 लाख से शुरू। डाउन पेमेंट लगभग ₹3.5 से ₹5.5 लाख (लगभग 10-15%)। बैंक लोन (SBI, HDFC, ICICI, Axis) से 85-90% तक फाइनेंस। कारपेट एरिया लगभग 375 से 425 वर्ग फुट।
 - 2 BHK: ₹45 लाख से शुरू। डाउन पेमेंट लगभग ₹4.5 से ₹7 लाख (लगभग 10-15%)। बैंक लोन (SBI, HDFC, ICICI, Axis) से 85-90% तक फाइनेंस। भव्य G+22 मंजिला टॉवर, 35+ लग्जरी एमिनिटीज के साथ। कारपेट एरिया लगभग 550 से 650 वर्ग फुट।
 - 3 BHK / 1 RK: उपलब्ध नहीं हैं। सीधे और स्पष्ट बताएं: "साई गार्डन में 3 BHK उपलब्ध नहीं है, हमारे यहाँ केवल 1 BHK और 2 BHK उपलब्ध हैं। अगर आप चाहें तो मैं 2 BHK की डिटेल्स बता सकती हूँ।"
 - पज़ेशन स्थिति (Property Status):
@@ -635,7 +635,7 @@ def send_whatsapp_background(customer_phone: str, customer_name: str, flat_type:
         "📍 *Location*: Directly opposite Xperia Mall, Kalyan-Shilphata Road, Dombivli East (1 min from Nilje Station)\n"
         "🏢 *Tower*: G+22 Storeyed Luxury Tower (MahaRERA: PR1330002501452)\n"
         "💰 *Pricing*:\n"
-        "• 1 BHK: Starts at 30 Lakh (Down payment 3 to 5 Lakh, Easy loans from SBI/HDFC/ICICI)\n"
+        "• 1 BHK: Starts at 35 Lakh (Down payment 3.5 to 5.5 Lakh, Easy loans from SBI/HDFC/ICICI)\n"
         "• 2 BHK: Starts at 45 Lakh (G+22 Tower, 35+ Luxury Amenities)\n\n"
         "🏊 *Amenities*: Modern Gym, Swimming Pool, Clubhouse, Children's Play Area, Landscaped Garden, 24/7 Security\n\n"
         "📍 *Site Office*: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Dombivli East - 421204\n"
@@ -862,8 +862,8 @@ class PriyaRealEstateAgent(Agent):
             f"STRICT RULES FOR THIS TURN:\n"
             f"1. DIRECTLY ANSWER CURRENT QUESTION FIRST: The customer just said: \"{raw_text}\". You must answer this specific question directly and factually before anything else!\n"
             f"2. 3 BHK INQUIRY: If customer asked about 3 BHK, explicitly say 3 BHK is NOT available in Sai Garden, and offer 2 BHK as the nearest spacious luxury alternative.\n"
-            f"3. 2 BHK CONTEXT PRESERVATION: If customer selected 2 BHK (or asked down payment for 2 BHK), 2 BHK starts at ₹45 Lakh and down payment is approx ₹4.5 to ₹7 Lakh (10-15%). NEVER quote 1 BHK values (₹30L or ₹3-5L)!\n"
-            f"4. 1 BHK CONTEXT PRESERVATION: If customer selected 1 BHK, 1 BHK starts at ₹30 Lakh and down payment is approx ₹3 to ₹5 Lakh.\n"
+            f"3. 2 BHK CONTEXT PRESERVATION: If customer selected 2 BHK (or asked down payment for 2 BHK), 2 BHK starts at ₹45 Lakh and down payment is approx ₹4.5 to ₹7 Lakh (10-15%). NEVER quote 1 BHK values (₹35L or ₹3.5-5.5L)!\n"
+            f"4. 1 BHK CONTEXT PRESERVATION: If customer selected 1 BHK, 1 BHK starts at ₹35 Lakh and down payment is approx ₹3.5 to ₹5.5 Lakh.\n"
             f"5. UNDER-CONSTRUCTION CONTEXT: If customer mentions under-construction, acknowledge it once and explain construction-linked stage payments. DO NOT ask if they want ready or under-construction again!\n"
             f"6. VASHI STATION: If customer asked about Vashi station, state clearly that Vashi is approx 22-25 km away, around 35-40 minutes drive via the Airoli-Katai Tunnel / freeway.\n"
             f"7. SCHOOLS & HOSPITALS: Cite Lodha World School (1.5 km), Pawar Public School (2 km), Neptune Super Speciality Hospital (3 km), AIMS Hospital (6 km).\n"
@@ -1055,7 +1055,7 @@ class PriyaRealEstateAgent(Agent):
                 "📍 *Location*: Directly opposite Xperia Mall, Kalyan-Shilphata Road, Dombivli East (1 min from Nilje Station)\n"
                 "🏢 *Tower*: G+22 Storeyed Luxury Tower (MahaRERA: PR1330002501452)\n"
                 "💰 *Pricing*:\n"
-                "• 1 BHK: Starts at 30 Lakh (Down payment 3 to 5 Lakh, Easy loans from SBI/HDFC/ICICI)\n"
+                "• 1 BHK: Starts at 35 Lakh (Down payment 3.5 to 5.5 Lakh, Easy loans from SBI/HDFC/ICICI)\n"
                 "• 2 BHK: Starts at 45 Lakh (G+22 Tower, 35+ Luxury Amenities)\n\n"
                 "🏊 *Amenities*: Modern Gym, Swimming Pool, Clubhouse, Children's Play Area, Landscaped Garden, 24/7 Security\n\n"
                 "📍 *Site Office*: Sai Garden, Casa Rio Gate No. 3, Near Nilaje Station, Niljepada, Dombivli East - 421204\n"

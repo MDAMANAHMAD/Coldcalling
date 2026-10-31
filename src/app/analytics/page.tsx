@@ -143,7 +143,7 @@ export default function AnalyticsPage() {
 
             <div>
               <div className="flex justify-between text-xs font-bold mb-1">
-                <span className="text-slate-700 dark:text-slate-300">1 BHK Compact Luxury (₹30 Lakh+)</span>
+                <span className="text-slate-700 dark:text-slate-300">1 BHK Compact Luxury (₹35 Lakh+)</span>
                 <span className="text-emerald-600 dark:text-emerald-400">{analytics?.oneBhkCount || 0} Inquiries</span>
               </div>
               <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
