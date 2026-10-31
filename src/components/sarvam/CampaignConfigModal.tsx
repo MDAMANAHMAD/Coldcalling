@@ -23,7 +23,9 @@ interface CampaignConfigModalProps {
   totalContacts?: number;
 }
 
-const DEFAULT_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const getCurrentDayName = () => DAYS_OF_WEEK[new Date().getDay()];
+
 const DAY_ABBR = [
   { full: 'Monday', label: 'M' },
   { full: 'Tuesday', label: 'T' },
@@ -46,7 +48,8 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
   const [customEndDate, setCustomEndDate] = useState('');
   const [allowedStartTime, setAllowedStartTime] = useState('09:00');
   const [allowedEndTime, setAllowedEndTime] = useState('18:00');
-  const [allowedDays, setAllowedDays] = useState<string[]>(DEFAULT_DAYS);
+  // Default strictly to current day only as requested
+  const [allowedDays, setAllowedDays] = useState<string[]>([getCurrentDayName()]);
   const [retryEnabled, setRetryEnabled] = useState(false);
   const [maxRetries, setMaxRetries] = useState(2);
   const [retryInterval, setRetryInterval] = useState(15);
@@ -56,6 +59,12 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
   const [testDialing, setTestDialing] = useState(false);
   const [testDialSuccess, setTestDialSuccess] = useState<string | null>(null);
   const [testDialError, setTestDialError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setAllowedDays([getCurrentDayName()]);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

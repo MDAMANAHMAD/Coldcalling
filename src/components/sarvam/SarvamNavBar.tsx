@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, BarChart3, CalendarCheck, HeartHandshake } from 'lucide-react';
+import { Home, BarChart3, CalendarCheck, HeartHandshake, PhoneCall } from 'lucide-react';
 
 export default function SarvamNavBar() {
   const pathname = usePathname();
@@ -11,7 +11,8 @@ export default function SarvamNavBar() {
     { href: '/', label: 'Home & Upload', icon: Home, exact: true },
     { href: '/analytics', label: 'Analytics', icon: BarChart3 },
     { href: '/site-visits', label: 'Site Visits', icon: CalendarCheck },
-    { href: '/interested', label: 'Interested Leads', icon: HeartHandshake }
+    { href: '/interested', label: 'Interested Leads', icon: HeartHandshake },
+    { href: '/call-logs', label: 'All Call Logs', icon: PhoneCall }
   ];
 
   return (

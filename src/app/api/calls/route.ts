@@ -194,7 +194,7 @@ export async function GET(req: NextRequest) {
       console.error('Error syncing live Sarvam interactions:', apiErr);
     }
 
-    // 2. Sync active campaign
+    // 2. Sync active campaign status without overwriting sheet pacing
     try {
       const campUrl = `https://apps.sarvam.ai/api/scheduling/v1/orgs/${ORG_ID}/workspaces/${WORKSPACE_ID}/campaigns?limit=5`;
       const campRes = await fetch(campUrl, {
@@ -203,22 +203,29 @@ export async function GET(req: NextRequest) {
       });
       if (campRes.ok) {
         const campData = await campRes.json();
-        const activeCamp = (campData.items || []).find((c: any) => c.status === 'active') || campData.items?.[0];
+        const activeCamp = (campData.items || []).find((c: any) => c.status === 'active');
         if (activeCamp) {
           if (!db.campaigns || db.campaigns.length === 0) {
             db.campaigns = [{} as any];
           }
-          db.campaigns[0] = {
-            ...db.campaigns[0],
-            campaignId: activeCamp.campaign_id,
-            campaignName: activeCamp.name || 'Sai Garden Calling Campaign',
-            status: activeCamp.status === 'active' ? 'running' : (activeCamp.status as any),
-            startedAt: activeCamp.start_timestamp || new Date().toISOString(),
-            updatedAt: activeCamp.updated_at || new Date().toISOString(),
-            totalContacts: activeCamp.stats?.total_users || db.campaigns[0]?.totalContacts || db.calls.length,
-            completedCalls: db.calls.length,
-            remainingCalls: Math.max(0, (activeCamp.stats?.total_users || db.calls.length) - db.calls.length)
-          };
+          // Only update if an external campaign is actively running
+          if (db.campaigns[0].status === 'running') {
+            db.campaigns[0].campaignName = activeCamp.name || db.campaigns[0].campaignName;
+          }
+        } else {
+          // No active campaign is running on voice platform: reset to 0 idle state
+          if (db.campaigns && db.campaigns.length > 0) {
+            if (db.campaigns[0].status === 'completed' || db.campaigns[0].status === 'idle') {
+              db.campaigns[0].totalContacts = 0;
+              db.campaigns[0].completedCalls = 0;
+              db.campaigns[0].remainingCalls = 0;
+              db.campaigns[0].ongoingCalls = 0;
+              db.campaigns[0].interestedCount = 0;
+              db.campaigns[0].siteVisitCount = 0;
+              db.campaigns[0].status = 'idle';
+              db.campaigns[0].currentBatchFile = '';
+            }
+          }
         }
       }
     } catch (cErr) {

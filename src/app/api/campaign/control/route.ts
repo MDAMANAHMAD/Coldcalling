@@ -81,31 +81,42 @@ export async function POST(req: NextRequest) {
     const campaign = db.campaigns[0];
 
     if (action === 'start') {
+      const contactCount = (Array.isArray(contacts) ? contacts.length : totalContacts) || 0;
       campaign.status = 'running';
+      campaign.totalContacts = contactCount;
+      campaign.completedCalls = 0;
+      campaign.remainingCalls = contactCount;
+      campaign.ongoingCalls = contactCount > 0 ? 1 : 0;
+      campaign.interestedCount = 0;
+      campaign.siteVisitCount = 0;
       if (settings?.campaignName) {
         campaign.campaignName = settings.campaignName;
       }
       if (settings) {
         campaign.settings = settings;
       }
-      if (totalContacts !== undefined && totalContacts > 0) {
-        campaign.totalContacts = totalContacts;
-        campaign.remainingCalls = totalContacts - campaign.completedCalls;
-      }
       if (batchFileName) {
         campaign.currentBatchFile = batchFileName;
       }
-      campaign.ongoingCalls = 1;
       campaign.updatedAt = new Date().toISOString();
+      saveSarvamDb(db);
 
-      // If contact numbers were passed from the verified CSV upload, trigger pacing dispatch
+      // Trigger pacing dispatch for contacts in this specific sheet
       if (Array.isArray(contacts) && contacts.length > 0) {
         const cps = settings?.attemptsPerSecond || 0.5;
         const delayBetweenCallsMs = Math.max(500, Math.round(1000 / cps));
         console.log(`🚀 [Campaign Trigger]: Triggering live outbound calls for ${contacts.length} numbers at ${cps} CPS (${delayBetweenCallsMs}ms delay)...`);
         
         (async () => {
+          let dialedCount = 0;
           for (const c of contacts) {
+            // Check if campaign was paused or stopped mid-way
+            const currentDb = getSarvamDb();
+            if (currentDb.campaigns?.[0]?.status !== 'running') {
+              console.log(`⏸️ Campaign was paused or stopped. Halting dialer loop.`);
+              break;
+            }
+
             const rawPhone = c.phone_number || c.phone || '';
             const cleanDigits = rawPhone.replace(/\D/g, '');
             if (cleanDigits.length < 10) continue;
@@ -147,8 +158,31 @@ export async function POST(req: NextRequest) {
               console.error(`❌ [Outbound Call Failed]: ${fullPhone}`, dialErr);
             }
 
+            dialedCount++;
+            const liveDb = getSarvamDb();
+            if (liveDb.campaigns?.[0]) {
+              liveDb.campaigns[0].completedCalls = dialedCount;
+              liveDb.campaigns[0].remainingCalls = Math.max(0, contactCount - dialedCount);
+              liveDb.campaigns[0].updatedAt = new Date().toISOString();
+              saveSarvamDb(liveDb);
+            }
+
             // Pacing delay based on attempts_per_second configuration
             await new Promise(r => setTimeout(r, delayBetweenCallsMs));
+          }
+
+          // When sheet dialing finishes completely, reset live dialer numbers to 0 as requested
+          const finalDb = getSarvamDb();
+          if (finalDb.campaigns?.[0]) {
+            finalDb.campaigns[0].status = 'idle';
+            finalDb.campaigns[0].completedCalls = 0;
+            finalDb.campaigns[0].remainingCalls = 0;
+            finalDb.campaigns[0].totalContacts = 0;
+            finalDb.campaigns[0].ongoingCalls = 0;
+            finalDb.campaigns[0].currentBatchFile = '';
+            finalDb.campaigns[0].updatedAt = new Date().toISOString();
+            saveSarvamDb(finalDb);
+            console.log(`🏁 [Campaign Finished]: All numbers in sheet dialed. Live controller reset to 0.`);
           }
         })().catch(err => console.error('Background batch dialer error:', err));
       }
@@ -157,11 +191,18 @@ export async function POST(req: NextRequest) {
       campaign.ongoingCalls = 0;
       campaign.updatedAt = new Date().toISOString();
       console.log(`⏸️ [Campaign Action]: Paused calling sheet.`);
-    } else if (action === 'stop') {
-      campaign.status = 'completed';
+    } else if (action === 'stop' || action === 'reset') {
+      // Reset live data to 0 as requested
+      campaign.status = 'idle';
       campaign.ongoingCalls = 0;
+      campaign.completedCalls = 0;
+      campaign.remainingCalls = 0;
+      campaign.totalContacts = 0;
+      campaign.interestedCount = 0;
+      campaign.siteVisitCount = 0;
+      campaign.currentBatchFile = '';
       campaign.updatedAt = new Date().toISOString();
-      console.log(`⏹️ [Campaign Action]: Stopped calling sheet.`);
+      console.log(`⏹️ [Campaign Action]: Stopped and reset live dialer to 0.`);
     }
 
     saveSarvamDb(db);

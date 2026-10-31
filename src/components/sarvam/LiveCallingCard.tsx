@@ -14,7 +14,8 @@ import {
   Square,
   Settings,
   Calendar,
-  Zap
+  Zap,
+  RotateCcw
 } from 'lucide-react';
 
 interface LiveCallingCardProps {
@@ -138,6 +139,18 @@ export default function LiveCallingCard({ campaign, onRefresh, isLoading = false
             <Square className="w-3.5 h-3.5 fill-current" />
             <span>Stop</span>
           </button>
+
+          {(status === 'completed' || totalContacts > 0) && !isRunning && (
+            <button
+              onClick={() => handleControl('reset' as any)}
+              disabled={actionLoading}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors border border-slate-200 dark:border-slate-700"
+              title="Reset live calling numbers to 0 for next sheet"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset to 0</span>
+            </button>
+          )}
 
           {onRefresh && (
             <button
