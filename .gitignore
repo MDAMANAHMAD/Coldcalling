@@ -52,3 +52,6 @@ public/recordings/*.ogg
 !bookings/.gitkeep
 !bookings/recordings/.gitkeep
 !public/recordings/.gitkeep
+
+# Locked Stamp directories
+STAMP_*
