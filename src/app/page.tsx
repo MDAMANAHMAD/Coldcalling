@@ -18,9 +18,7 @@ import {
   Calendar, 
   Flame, 
   ArrowUpRight, 
-  ShieldCheck, 
-  CheckCircle2,
-  FileSpreadsheet
+  ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -29,6 +27,7 @@ export default function HomePage() {
   const [calls, setCalls] = useState<SarvamCallRecord[]>([]);
   const [analytics, setAnalytics] = useState<SarvamAnalyticsSummary | null>(null);
   const [campaign, setCampaign] = useState<LiveCampaignProgress | null>(null);
+  const [uploadedContacts, setUploadedContacts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchDashboardData = async (filterPeriod: TimeFilterPeriod) => {
@@ -55,7 +54,10 @@ export default function HomePage() {
       const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ 
+          action,
+          contacts: uploadedContacts
+        })
       });
       const data = await res.json();
       if (data.campaign) {
@@ -68,6 +70,7 @@ export default function HomePage() {
 
   const handleCsvValidated = (result: CsvValidationResult, fileName: string) => {
     if (result.isValid && result.data.length > 0) {
+      setUploadedContacts(result.data);
       setCampaign(prev => ({
         campaignId: prev?.campaignId || `camp-${Date.now()}`,
         campaignName: 'Sai Garden 1 & 2 BHK Outreach',
@@ -89,13 +92,15 @@ export default function HomePage() {
 
   const handleStartImmediately = async (result: CsvValidationResult, fileName: string) => {
     try {
+      setUploadedContacts(result.data);
       const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'start',
           batchFileName: fileName,
-          totalContacts: result.data.length
+          totalContacts: result.data.length,
+          contacts: result.data
         })
       });
       const data = await res.json();
@@ -109,7 +114,7 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Hero Welcome Banner: Strictly Sai Garden & Qualivo */}
+      {/* Hero Welcome Banner */}
       <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="relative z-10 max-w-3xl space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
@@ -120,7 +125,7 @@ export default function HomePage() {
             Sai Garden — Calling & Lead Acquisition Command Center
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Dedicated automated calling suite for Sai Garden, Nilje, Dombivli East (opp. Xperia Mall). Upload calling sheets, start/pause live campaigns, track real-time pacing, and view high-intent buyers with full unmasked phone numbers.
+            Connected live to voice agent Gayatri. Upload calling sheets, start real outbound calling, track live progress, and review high-intent buyers with full unmasked phone numbers.
           </p>
         </div>
       </div>
@@ -163,7 +168,7 @@ export default function HomePage() {
               </div>
             </div>
             <p className="text-2xl font-black text-slate-900 dark:text-white">{analytics?.totalCalls || 0}</p>
-            <span className="text-[11px] text-slate-400 font-medium">Verified completed calls</span>
+            <span className="text-[11px] text-slate-400 font-medium">Live synced from voice platform</span>
           </div>
 
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">

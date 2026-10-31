@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { CsvValidationResult } from '@/lib/sarvamTypes';
-import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, ArrowRight, RefreshCw, Sparkles, Play } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, RefreshCw, Sparkles, Play } from 'lucide-react';
 
 interface CsvVerificationUploaderProps {
   onValidated: (result: CsvValidationResult, fileName: string) => void;
@@ -140,7 +140,7 @@ export default function CsvVerificationUploader({ onValidated, onStartCampaignIm
                   className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Start Campaign with this Sheet</span>
+                  <span>Start Outbound Calling with this Sheet</span>
                 </button>
               )}
 
