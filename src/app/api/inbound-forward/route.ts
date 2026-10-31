@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// Dedicated recipient for inbound calls: Asmita mam (+919819084472)
-const FORWARD_TO_NUMBER = '+919819084472';
+// Dedicated recipient for inbound calls: Raj (+918898022337)
+const FORWARD_TO_NUMBER = '+918898022337';
 const VOBIZ_CALLER_ID = '+918071580297';
 
 export async function POST(req: NextRequest) {
