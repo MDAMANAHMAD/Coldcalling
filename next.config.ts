@@ -1,7 +1,20 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  async redirects() {
+    return [
+      {
+        source: '/sarvam-dashboard/:path*',
+        destination: '/:path*',
+        permanent: false,
+      },
+      {
+        source: '/sarvam-dashboard',
+        destination: '/',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

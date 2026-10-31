@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import AppLayout from "@/components/AppLayout";
+import SarvamNavBar from "@/components/sarvam/SarvamNavBar";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Gayatri AI — Cold Calling",
-  description: "Gayatri AI Voice Agent for real estate cold calling. Dials customers, pitches Sai Complex Dombivli East, handles objections in Hindi, Marathi and English, and books site visits automatically.",
+  title: "Sai Garden — Qualivo Voice Calling Command Center",
+  description: "AI Telephony & Lead Acquisition Engine for Sai Garden, Nilje, Dombivli East.",
 };
 
 export default function RootLayout({
@@ -17,8 +18,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <body className={`${inter.className} h-full bg-slate-50 dark:bg-dark-bg text-slate-900 dark:text-slate-100 transition-colors duration-300`}>
-        <AppLayout>{children}</AppLayout>
+      <body className={`${inter.className} min-h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 flex flex-col`}>
+        <AppLayout>
+          <SarvamNavBar />
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {children}
+          </main>
+        </AppLayout>
       </body>
     </html>
   );
