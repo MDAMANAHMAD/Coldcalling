@@ -84,13 +84,13 @@ export default function CsvVerificationUploader({
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
       <div className="mb-4">
         <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-          <span>Upload Calling Sheet (CSV)</span>
+          <span>Upload Calling Sheet (Excel, CSV, XLSX)</span>
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
-            Auto Format Verification & Healing
+            Universal Format & Auto-Healing
           </span>
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Upload any contact list. Our engine automatically verifies headers, extracts 10-digit Indian phone numbers, repairs inverted fields, and validates the calling sheet.
+          Upload any contact list in Excel (.xlsx, .xls), CSV (.csv), or text format (.txt, .tsv). Our engine automatically detects interchanged name/number columns, handles different column arrangements, filters invalid numbers, and validates all records.
         </p>
       </div>
 
@@ -109,7 +109,7 @@ export default function CsvVerificationUploader({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,.txt"
+          accept=".csv,.xlsx,.xls,.txt,.tsv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain"
           onChange={e => {
             const f = e.target.files?.[0];
             if (f) processFile(f);
@@ -132,14 +132,14 @@ export default function CsvVerificationUploader({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Click box to choose a different CSV file, or remove below
+                Click box to choose a different spreadsheet file, or remove below
               </p>
             </div>
             <button
               type="button"
               onClick={handleRemoveFile}
               className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800/80 transition-all shadow-sm"
-              title="Remove this CSV file"
+              title="Remove this file"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Remove File</span>
@@ -156,10 +156,10 @@ export default function CsvVerificationUploader({
             </div>
             <div>
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                {isVerifying ? 'Verifying & Healing CSV Format...' : 'Click to Browse or Drag & Drop CSV'}
+                {isVerifying ? 'Verifying & Healing Sheet Format...' : 'Click to Browse or Drag & Drop File'}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">
-                Supports CSVs, Excel contact exports, and comma-delimited text files
+                Supports Excel (.xlsx, .xls), CSV (.csv), and text contact lists (.txt, .tsv)
               </p>
             </div>
           </div>

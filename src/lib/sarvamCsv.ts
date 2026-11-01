@@ -85,10 +85,29 @@ export function formatFullPhoneNumber(phone: string): string {
 }
 
 /**
- * Parses raw CSV text into rows and columns
+ * Parses raw CSV or spreadsheet text into rows and columns.
+ * Automatically detects delimiters: comma, semicolon, tab (TSV), or pipe.
  */
 function parseCsvLines(csvText: string): string[][] {
   const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  // Auto-detect delimiter from the first few non-empty lines
+  const sample = lines.slice(0, 5).join('\n');
+  const commaCount = (sample.match(/,/g) || []).length;
+  const semiCount = (sample.match(/;/g) || []).length;
+  const tabCount = (sample.match(/\t/g) || []).length;
+  const pipeCount = (sample.match(/\|/g) || []).length;
+
+  let delimiter = ',';
+  if (tabCount > commaCount && tabCount > semiCount) {
+    delimiter = '\t';
+  } else if (semiCount > commaCount && semiCount > tabCount) {
+    delimiter = ';';
+  } else if (pipeCount > commaCount && pipeCount > semiCount) {
+    delimiter = '|';
+  }
+
   const rows: string[][] = [];
 
   for (const line of lines) {
@@ -100,7 +119,7 @@ function parseCsvLines(csvText: string): string[][] {
       const char = line[i];
       if (char === '"') {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
+      } else if (char === delimiter && !inQuotes) {
         row.push(field.trim());
         field = '';
       } else {
@@ -115,8 +134,9 @@ function parseCsvLines(csvText: string): string[][] {
 }
 
 /**
- * Validates whether uploaded CSV matches Sarvam AI's requirements,
- * and automatically transforms/heals any misplaced, misnamed, or unformatted columns!
+ * Validates whether uploaded calling sheet matches requirements,
+ * and automatically transforms, repairs, and handles interchanged columns, inverted fields,
+ * and any column structure (Name-Phone, Phone-Name, multi-column, or no headers)!
  */
 export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
   const parsedRows = parseCsvLines(rawCsv);
@@ -127,7 +147,7 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
       validRows: 0,
       fixedRows: 0,
       invalidRows: 0,
-      errors: ['The uploaded CSV file is empty.'],
+      errors: ['The uploaded calling sheet is empty.'],
       warnings: [],
       data: [],
       originalHeaders: [],
@@ -135,52 +155,106 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
     };
   }
 
-  const rawHeaders = parsedRows[0];
-  const normalizedHeaders = rawHeaders.map(h => h.toLowerCase().trim().replace(/[\s\-_]+/g, '_'));
+  const firstRow = parsedRows[0];
+  // Check if first row is actually data (contains a valid 10-digit phone number)
+  const firstRowHasPhone = firstRow.some(cell => isValidIndianMobile(sanitizePhoneNumber(cell)).isValid);
+  const isFirstRowHeader = !firstRowHasPhone;
+  const rawHeaders = isFirstRowHeader ? firstRow : [];
 
-  // Detect column indexes
-  let phoneIdx = normalizedHeaders.findIndex(h => 
-    h === 'phone_number' || h === 'phone' || h === 'mobile' || h === 'contact' || h === 'number' || h === 'mobile_number'
-  );
-  let nameIdx = normalizedHeaders.findIndex(h => 
-    h === 'user_name' || h === 'name' || h === 'customer_name' || h === 'client_name' || h === 'lead_name'
-  );
-  let botMsgIdx = normalizedHeaders.findIndex(h => 
-    h === 'initial_bot_message' || h === 'bot_message' || h === 'message' || h === 'greeting'
-  );
-  let stateIdx = normalizedHeaders.findIndex(h => 
-    h === 'initial_state_name' || h === 'state_name' || h === 'state'
-  );
-  let langIdx = normalizedHeaders.findIndex(h => 
-    h === 'initial_language_name' || h === 'language_name' || h === 'language' || h === 'lang'
-  );
+  let phoneIdx = -1;
+  let nameIdx = -1;
+  let botMsgIdx = -1;
+  let stateIdx = -1;
+  let langIdx = -1;
 
-  const errors: string[] = [];
-  const warnings: string[] = [];
+  const phoneKeywords = [
+    'phone_number', 'phone', 'mobile', 'mobile_number', 'contact', 'contact_number',
+    'number', 'cell', 'cellular', 'tel', 'telephone', 'ph_no', 'phone_no', 'mobile_no',
+    'contact_no', 'wa_number', 'whatsapp', 'call', 'caller_id', 'cust_phone', 'client_phone'
+  ];
 
-  // If header wasn't found, check if first row itself is data
-  let isFirstRowHeader = true;
-  if (phoneIdx === -1 && nameIdx === -1) {
-    const firstRowDigits0 = sanitizePhoneNumber(parsedRows[0][0]);
-    const firstRowDigits1 = parsedRows[0].length > 1 ? sanitizePhoneNumber(parsedRows[0][1]) : '';
-    if (firstRowDigits0.length === 10 || firstRowDigits1.length === 10) {
-      isFirstRowHeader = false;
-      warnings.push('Header row was missing. Column types were automatically detected from row values.');
-      if (firstRowDigits0.length === 10) {
-        phoneIdx = 0;
-        nameIdx = parsedRows[0].length > 1 ? 1 : -1;
-      } else {
-        phoneIdx = 1;
-        nameIdx = 0;
+  const nameKeywords = [
+    'user_name', 'name', 'customer_name', 'client_name', 'lead_name', 'buyer_name',
+    'contact_name', 'person', 'first_name', 'full_name', 'client', 'customer', 'lead', 'buyer'
+  ];
+
+  if (isFirstRowHeader) {
+    const normalizedHeaders = firstRow.map(h => h.toLowerCase().trim().replace(/[\s\-_]+/g, '_'));
+
+    phoneIdx = normalizedHeaders.findIndex(h => phoneKeywords.some(pk => h === pk || h.includes(pk)));
+    nameIdx = normalizedHeaders.findIndex(h => nameKeywords.some(nk => h === nk || (h.includes(nk) && !phoneKeywords.some(pk => h.includes(pk)))));
+    
+    botMsgIdx = normalizedHeaders.findIndex(h => 
+      h === 'initial_bot_message' || h === 'bot_message' || h === 'message' || h === 'greeting'
+    );
+    stateIdx = normalizedHeaders.findIndex(h => 
+      h === 'initial_state_name' || h === 'state_name' || h === 'state'
+    );
+    langIdx = normalizedHeaders.findIndex(h => 
+      h === 'initial_language_name' || h === 'language_name' || h === 'language' || h === 'lang'
+    );
+  }
+
+  const dataRows = isFirstRowHeader ? parsedRows.slice(1) : parsedRows;
+  const colCount = Math.max(...parsedRows.map(r => r.length), 1);
+
+  // Column Value Scoring: Analyze sample of data rows to discover which column actually holds phone & name
+  const phoneScores = new Array(colCount).fill(0);
+  const nameScores = new Array(colCount).fill(0);
+  const sampleLimit = Math.min(dataRows.length, 25);
+
+  for (let i = 0; i < sampleLimit; i++) {
+    const row = dataRows[i];
+    for (let c = 0; c < row.length; c++) {
+      const cell = String(row[c] || '').trim();
+      const digits = sanitizePhoneNumber(cell);
+      if (isValidIndianMobile(digits).isValid) {
+        phoneScores[c]++;
+      } else if (/[a-zA-Z\u0900-\u097F]{2,}/.test(cell) && !cell.toLowerCase().includes('http')) {
+        nameScores[c]++;
       }
     }
   }
 
-  if (phoneIdx === -1) {
-    errors.push('Could not detect a Phone Number column. Please ensure there is a phone column in the CSV.');
+  // Find column with highest phone score
+  let maxPhoneScore = 0;
+  let bestPhoneCol = -1;
+  for (let c = 0; c < colCount; c++) {
+    if (phoneScores[c] > maxPhoneScore) {
+      maxPhoneScore = phoneScores[c];
+      bestPhoneCol = c;
+    }
   }
 
-  const dataRows = isFirstRowHeader ? parsedRows.slice(1) : parsedRows;
+  if (bestPhoneCol !== -1 && (phoneIdx === -1 || phoneScores[bestPhoneCol] > (phoneScores[phoneIdx] || 0))) {
+    phoneIdx = bestPhoneCol;
+  }
+
+  // Find column with highest name score that isn't the phone column
+  let maxNameScore = 0;
+  let bestNameCol = -1;
+  for (let c = 0; c < colCount; c++) {
+    if (c !== phoneIdx && nameScores[c] > maxNameScore) {
+      maxNameScore = nameScores[c];
+      bestNameCol = c;
+    }
+  }
+
+  if (bestNameCol !== -1 && (nameIdx === -1 || nameIdx === phoneIdx || nameScores[bestNameCol] > (nameScores[nameIdx] || 0))) {
+    nameIdx = bestNameCol;
+  }
+
+  // Fallbacks if still not determined
+  if (phoneIdx === -1) phoneIdx = 0;
+  if (nameIdx === -1) nameIdx = phoneIdx === 0 ? (colCount > 1 ? 1 : -1) : 0;
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (!isFirstRowHeader) {
+    warnings.push('Header row was absent. Column types were automatically detected from row content.');
+  }
+
   const cleanedData: SarvamCsvRow[] = [];
   const seenPhoneNumbers = new Set<string>();
   const skippedDetails: CsvSkippedRowDetail[] = [];
@@ -207,43 +281,54 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
     let rawPhone = phoneIdx !== -1 && row[phoneIdx] !== undefined ? String(row[phoneIdx]).trim() : '';
     let rawName = nameIdx !== -1 && row[nameIdx] !== undefined ? String(row[nameIdx]).trim() : '';
 
-    // 2. Check if phone column has missing or placeholder data
-    const isMissingPhone = !rawPhone || ['n/a', 'na', 'null', 'none', 'undefined', '-', '--', 'nil'].includes(rawPhone.toLowerCase());
-    if (isMissingPhone) {
-      // Check if maybe swapped with name column
-      if (rawName && sanitizePhoneNumber(rawName)) {
-        const temp = rawPhone;
-        rawPhone = rawName;
-        rawName = temp;
-        fixedCount++;
-      } else {
-        missingDataCount++;
-        invalidCount++;
-        skippedDetails.push({
-          rowNumber: rowNum,
-          rawPhone,
-          rawName,
-          reason: 'Missing phone number (empty data cell)'
-        });
-        warnings.push(`Row ${rowNum}: Skipped due to missing phone number.`);
-        continue;
-      }
-    }
+    // 2. Check for interchanged Name and Phone in this row
+    let cleanPhone = sanitizePhoneNumber(rawPhone);
+    let isPhoneValid = isValidIndianMobile(cleanPhone).isValid;
 
-    // Auto-detect if name and phone are swapped
-    const candidatePhoneDigits = sanitizePhoneNumber(rawPhone);
-    const candidateNameDigits = sanitizePhoneNumber(rawName);
-    if (!isValidIndianMobile(candidatePhoneDigits).isValid && isValidIndianMobile(candidateNameDigits).isValid) {
+    let cleanNameAsPhone = sanitizePhoneNumber(rawName);
+    let isNameValidPhone = isValidIndianMobile(cleanNameAsPhone).isValid;
+
+    if (!isPhoneValid && isNameValidPhone) {
+      // Swapped columns in this row!
       const temp = rawPhone;
       rawPhone = rawName;
       rawName = temp;
+      cleanPhone = cleanNameAsPhone;
+      isPhoneValid = true;
       fixedCount++;
     }
 
-    const cleanDigits = sanitizePhoneNumber(rawPhone);
-    const phoneCheck = isValidIndianMobile(cleanDigits);
+    // 3. Dynamic row-level cell scanning: If still not a valid phone, scan ALL cells in the row!
+    if (!isPhoneValid) {
+      for (let c = 0; c < row.length; c++) {
+        const cellValue = String(row[c] || '').trim();
+        const cellDigits = sanitizePhoneNumber(cellValue);
+        if (isValidIndianMobile(cellDigits).isValid) {
+          cleanPhone = cellDigits;
+          rawPhone = cellValue;
+          isPhoneValid = true;
 
-    // 3. Strict filter: If invalid number, SKIP and do not try this number
+          // If current candidate name is digits or empty, search for a cell with text
+          if (!rawName || /^\d+$/.test(rawName.replace(/\D/g, ''))) {
+            for (let nc = 0; nc < row.length; nc++) {
+              if (nc !== c) {
+                const textVal = String(row[nc] || '').trim();
+                if (/[a-zA-Z\u0900-\u097F]{2,}/.test(textVal) && !textVal.toLowerCase().includes('http')) {
+                  rawName = textVal;
+                  break;
+                }
+              }
+            }
+          }
+          fixedCount++;
+          break;
+        }
+      }
+    }
+
+    const phoneCheck = isValidIndianMobile(cleanPhone);
+
+    // 4. Strict filter: If invalid or missing phone anywhere in row, SKIP and do not try this number
     if (!phoneCheck.isValid) {
       invalidCount++;
       skippedDetails.push({
@@ -256,8 +341,8 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
       continue;
     }
 
-    // 4. Duplicate prevention: Skip if number was already seen in this batch
-    if (seenPhoneNumbers.has(cleanDigits)) {
+    // 5. Duplicate prevention: Skip if number was already seen in this batch
+    if (seenPhoneNumbers.has(cleanPhone)) {
       duplicateCount++;
       skippedDetails.push({
         rowNumber: rowNum,
@@ -265,27 +350,27 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
         rawName,
         reason: 'Duplicate phone number in sheet (already queued)'
       });
-      warnings.push(`Row ${rowNum}: Skipped duplicate phone '+91 ${cleanDigits}'.`);
+      warnings.push(`Row ${rowNum}: Skipped duplicate phone '+91 ${cleanPhone}'.`);
       continue;
     }
 
-    seenPhoneNumbers.add(cleanDigits);
+    seenPhoneNumbers.add(cleanPhone);
 
     // Clean customer name or provide polite fallback if missing
     let cleanName = rawName.replace(/^[.,_\-'"\s]+|[.,_\-'"\s]+$/g, '').trim();
     if (!cleanName || ['n/a', 'na', 'null', 'none', 'undefined', '-', '--', 'nil'].includes(cleanName.toLowerCase())) {
-      cleanName = `Buyer ${cleanDigits.slice(-4)}`;
+      cleanName = `Buyer ${cleanPhone.slice(-4)}`;
       fixedCount++;
     }
 
-    if (cleanDigits !== rawPhone.trim()) {
+    if (cleanPhone !== rawPhone.trim()) {
       fixedCount++;
     } else {
       validCount++;
     }
 
     cleanedData.push({
-      phone_number: cleanDigits,
+      phone_number: cleanPhone,
       user_name: cleanName,
       initial_bot_message: botMsgIdx !== -1 && row[botMsgIdx] ? row[botMsgIdx] : '',
       initial_state_name: stateIdx !== -1 && row[stateIdx] ? row[stateIdx] : '',
