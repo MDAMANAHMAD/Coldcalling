@@ -102,6 +102,30 @@ export default function HomePage() {
     }
   };
 
+  const handleRemoveCsv = async () => {
+    setUploadedContacts([]);
+    setUploadedFileName('');
+    setCampaign(prev => prev ? ({
+      ...prev,
+      totalContacts: 0,
+      completedCalls: 0,
+      remainingCalls: 0,
+      ongoingCalls: 0,
+      status: 'idle',
+      currentBatchFile: ''
+    }) : null);
+
+    try {
+      await fetch('/api/campaign/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'stop' })
+      });
+    } catch (e) {
+      console.error('Error resetting campaign on CSV removal:', e);
+    }
+  };
+
   const handleStartImmediately = async (result: CsvValidationResult, fileName: string) => {
     try {
       setUploadedContacts(result.data);
@@ -204,6 +228,7 @@ export default function HomePage() {
         onValidated={handleCsvValidated}
         onStartCampaignImmediately={handleStartImmediately}
         onOpenCampaignConfig={() => setIsConfigModalOpen(true)}
+        onRemoveFile={handleRemoveCsv}
       />
 
       {/* Performance Overview KPI Cards */}

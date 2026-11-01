@@ -2,18 +2,20 @@
 
 import { useState, useRef } from 'react';
 import { CsvValidationResult } from '@/lib/sarvamTypes';
-import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, RefreshCw, Sparkles, Play, Settings, ShieldCheck, ChevronDown, ChevronUp, Ban } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, RefreshCw, Sparkles, Play, Settings, ShieldCheck, ChevronDown, ChevronUp, Ban, Trash2, FileSpreadsheet } from 'lucide-react';
 
 interface CsvVerificationUploaderProps {
   onValidated: (result: CsvValidationResult, fileName: string) => void;
   onStartCampaignImmediately?: (result: CsvValidationResult, fileName: string) => void;
   onOpenCampaignConfig?: (result: CsvValidationResult, fileName: string) => void;
+  onRemoveFile?: () => void;
 }
 
 export default function CsvVerificationUploader({ 
   onValidated, 
   onStartCampaignImmediately,
-  onOpenCampaignConfig 
+  onOpenCampaignConfig,
+  onRemoveFile
 }: CsvVerificationUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -21,6 +23,19 @@ export default function CsvVerificationUploader({
   const [fileName, setFileName] = useState<string>('');
   const [showSkippedDetails, setShowSkippedDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleRemoveFile = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setFileName('');
+    setResult(null);
+    setShowSkippedDetails(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (onRemoveFile) {
+      onRemoveFile();
+    }
+  };
 
   const processFile = async (file: File) => {
     if (!file) return;
@@ -102,23 +117,53 @@ export default function CsvVerificationUploader({
           className="hidden"
         />
 
-        <div className="flex flex-col items-center justify-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-            {isVerifying ? (
-              <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
-            ) : (
-              <UploadCloud className="w-6 h-6" />
-            )}
+        {fileName ? (
+          <div className="flex flex-col items-center justify-center gap-2.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <FileSpreadsheet className="w-6 h-6" />
+            </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                  {fileName}
+                </p>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  Loaded
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Click box to choose a different CSV file, or remove below
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRemoveFile}
+              className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800/80 transition-all shadow-sm"
+              title="Remove this CSV file"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Remove File</span>
+            </button>
           </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              {isVerifying ? 'Verifying & Healing CSV Format...' : fileName ? fileName : 'Click to Browse or Drag & Drop CSV'}
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Supports CSVs, Excel contact exports, and comma-delimited text files
-            </p>
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              {isVerifying ? (
+                <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+              ) : (
+                <UploadCloud className="w-6 h-6" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                {isVerifying ? 'Verifying & Healing CSV Format...' : 'Click to Browse or Drag & Drop CSV'}
+              </p>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Supports CSVs, Excel contact exports, and comma-delimited text files
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Verification Results Panel */}
@@ -166,6 +211,16 @@ export default function CsvVerificationUploader({
               >
                 <FileDown className="w-3.5 h-3.5" />
                 <span>Download Cleaned CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRemoveFile}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-rose-200 dark:border-rose-800/80 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 shadow-sm transition-all"
+                title="Remove uploaded CSV file"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove File</span>
               </button>
             </div>
           </div>
