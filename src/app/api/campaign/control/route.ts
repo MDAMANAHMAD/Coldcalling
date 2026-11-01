@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSarvamDb, saveSarvamDb } from '@/lib/sarvamDb';
 import { CampaignSettings } from '@/lib/sarvamTypes';
+import { sanitizePhoneNumber, isValidIndianMobile } from '@/lib/sarvamCsv';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,8 +23,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'testPhoneNumber is required for test dial' }, { status: 400 });
       }
 
-      const cleanDigits = testPhoneNumber.replace(/\D/g, '');
-      const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : testPhoneNumber.startsWith('+') ? testPhoneNumber : `+${cleanDigits}`;
+      const cleanDigits = sanitizePhoneNumber(testPhoneNumber);
+      const validation = isValidIndianMobile(cleanDigits);
+      if (!validation.isValid) {
+        return NextResponse.json({ error: `Invalid phone number: ${validation.reason}` }, { status: 400 });
+      }
+
+      const fullPhone = `+91${cleanDigits}`;
 
       const outboundUrl = `https://apps.sarvam.ai/api/outbounds/v1/orgs/${ORG_ID}/workspaces/${WORKSPACE_ID}/outbounds`;
       const payload = {
@@ -81,7 +87,16 @@ export async function POST(req: NextRequest) {
     const campaign = db.campaigns[0];
 
     if (action === 'start') {
-      const contactCount = (Array.isArray(contacts) ? contacts.length : totalContacts) || 0;
+      // Pre-filter contacts strictly to valid Indian mobile numbers with complete data
+      const validContacts = Array.isArray(contacts) 
+        ? contacts.filter(c => {
+            const raw = c.phone_number || c.phone || '';
+            const clean = sanitizePhoneNumber(raw);
+            return isValidIndianMobile(clean).isValid;
+          })
+        : [];
+
+      const contactCount = validContacts.length > 0 ? validContacts.length : (totalContacts || 0);
       campaign.status = 'running';
       campaign.totalContacts = contactCount;
       campaign.completedCalls = 0;
@@ -102,14 +117,14 @@ export async function POST(req: NextRequest) {
       saveSarvamDb(db);
 
       // Trigger pacing dispatch for contacts in this specific sheet
-      if (Array.isArray(contacts) && contacts.length > 0) {
+      if (validContacts.length > 0) {
         const cps = settings?.attemptsPerSecond || 0.5;
         const delayBetweenCallsMs = Math.max(500, Math.round(1000 / cps));
-        console.log(`🚀 [Campaign Trigger]: Triggering live outbound calls for ${contacts.length} numbers at ${cps} CPS (${delayBetweenCallsMs}ms delay)...`);
+        console.log(`🚀 [Campaign Trigger]: Triggering live outbound calls for ${validContacts.length} verified numbers at ${cps} CPS (${delayBetweenCallsMs}ms delay)...`);
         
         (async () => {
           let dialedCount = 0;
-          for (const c of contacts) {
+          for (const c of validContacts) {
             // Check if campaign was paused or stopped mid-way
             const currentDb = getSarvamDb();
             if (currentDb.campaigns?.[0]?.status !== 'running') {
@@ -118,9 +133,16 @@ export async function POST(req: NextRequest) {
             }
 
             const rawPhone = c.phone_number || c.phone || '';
-            const cleanDigits = rawPhone.replace(/\D/g, '');
-            if (cleanDigits.length < 10) continue;
-            const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : rawPhone.startsWith('+') ? rawPhone : `+${cleanDigits}`;
+            const cleanDigits = sanitizePhoneNumber(rawPhone);
+            const validation = isValidIndianMobile(cleanDigits);
+
+            // Double check safety: never dial invalid numbers or missing data
+            if (!validation.isValid) {
+              console.log(`⏩ [Skipped Invalid / Missing Contact]: '${rawPhone}' - ${validation.reason}. Skipping dial attempt.`);
+              continue;
+            }
+
+            const fullPhone = `+91${cleanDigits}`;
 
             try {
               const outboundUrl = `https://apps.sarvam.ai/api/outbounds/v1/orgs/${ORG_ID}/workspaces/${WORKSPACE_ID}/outbounds`;

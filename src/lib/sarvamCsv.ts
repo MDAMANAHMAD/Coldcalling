@@ -1,4 +1,4 @@
-import { SarvamCsvRow, CsvValidationResult } from './sarvamTypes';
+import { SarvamCsvRow, CsvValidationResult, CsvSkippedRowDetail } from './sarvamTypes';
 
 /**
  * Standard Sarvam AI Samvaad Campaign Header format:
@@ -13,11 +13,13 @@ export const SARVAM_EXPECTED_HEADERS = [
 ];
 
 /**
- * Normalizes phone number to standard 10-digit or +91 standard format
+ * Normalizes phone number to standard 10-digit Indian mobile format.
+ * Strips whitespace, country codes (+91, 91), leading 0, Excel .0 decimals, and special characters.
  */
-export function sanitizePhoneNumber(raw: string): string {
-  if (!raw) return '';
-  const digits = raw.replace(/\D/g, '');
+export function sanitizePhoneNumber(raw: any): string {
+  if (raw === null || raw === undefined) return '';
+  let str = String(raw).trim().replace(/\.0+$/, '');
+  const digits = str.replace(/\D/g, '');
   if (digits.length === 12 && digits.startsWith('91')) {
     return digits.slice(2);
   }
@@ -25,6 +27,49 @@ export function sanitizePhoneNumber(raw: string): string {
     return digits.slice(1);
   }
   return digits;
+}
+
+/**
+ * Validates whether a sanitized phone number is a valid, callable Indian mobile number.
+ * Strict rules to guarantee invalid numbers or missing data are never dialed:
+ * 1. Must not be empty or null
+ * 2. Must be exactly 10 digits
+ * 3. Must start with 6, 7, 8, or 9
+ * 4. Must not be repeating dummy digits (0000000000, 9999999999, etc.)
+ * 5. Must not be sequential dummy sequences (1234567890, etc.)
+ */
+export function isValidIndianMobile(cleanDigits: string): { isValid: boolean; reason?: string } {
+  if (!cleanDigits || cleanDigits.trim().length === 0) {
+    return { isValid: false, reason: 'Phone number is missing or empty' };
+  }
+
+  if (cleanDigits.length !== 10) {
+    return { 
+      isValid: false, 
+      reason: cleanDigits.length < 10 
+        ? `Incomplete phone number (${cleanDigits.length} digits, must be 10)` 
+        : `Invalid phone length (${cleanDigits.length} digits, must be 10)` 
+    };
+  }
+
+  if (!/^[6-9]/.test(cleanDigits)) {
+    return { 
+      isValid: false, 
+      reason: `Invalid starting digit '${cleanDigits[0]}'. Indian mobile numbers must start with 6, 7, 8, or 9` 
+    };
+  }
+
+  // Reject repeating dummy numbers like 0000000000, 1111111111, ..., 9999999999
+  if (/^(\d)\1{9}$/.test(cleanDigits)) {
+    return { isValid: false, reason: 'Dummy/test repeating digits' };
+  }
+
+  // Reject sequential test sequences
+  if (cleanDigits === '1234567890' || cleanDigits === '0123456789' || cleanDigits === '9876543210') {
+    return { isValid: false, reason: 'Dummy sequential test number' };
+  }
+
+  return { isValid: true };
 }
 
 /**
@@ -137,19 +182,58 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
 
   const dataRows = isFirstRowHeader ? parsedRows.slice(1) : parsedRows;
   const cleanedData: SarvamCsvRow[] = [];
+  const seenPhoneNumbers = new Set<string>();
+  const skippedDetails: CsvSkippedRowDetail[] = [];
   let validCount = 0;
   let fixedCount = 0;
   let invalidCount = 0;
+  let missingDataCount = 0;
+  let duplicateCount = 0;
 
   for (let i = 0; i < dataRows.length; i++) {
     const row = dataRows[i];
-    if (row.length === 0 || row.every(cell => cell === '')) continue;
+    const rowNum = isFirstRowHeader ? i + 2 : i + 1; // 1-indexed row number in original file
 
-    let rawPhone = phoneIdx !== -1 && row[phoneIdx] !== undefined ? row[phoneIdx] : '';
-    let rawName = nameIdx !== -1 && row[nameIdx] !== undefined ? row[nameIdx] : '';
+    // 1. Check if row is completely empty
+    if (row.length === 0 || row.every(cell => !cell || cell.trim() === '')) {
+      missingDataCount++;
+      skippedDetails.push({
+        rowNumber: rowNum,
+        reason: 'Entire row is blank or missing data'
+      });
+      continue;
+    }
+
+    let rawPhone = phoneIdx !== -1 && row[phoneIdx] !== undefined ? String(row[phoneIdx]).trim() : '';
+    let rawName = nameIdx !== -1 && row[nameIdx] !== undefined ? String(row[nameIdx]).trim() : '';
+
+    // 2. Check if phone column has missing or placeholder data
+    const isMissingPhone = !rawPhone || ['n/a', 'na', 'null', 'none', 'undefined', '-', '--', 'nil'].includes(rawPhone.toLowerCase());
+    if (isMissingPhone) {
+      // Check if maybe swapped with name column
+      if (rawName && sanitizePhoneNumber(rawName)) {
+        const temp = rawPhone;
+        rawPhone = rawName;
+        rawName = temp;
+        fixedCount++;
+      } else {
+        missingDataCount++;
+        invalidCount++;
+        skippedDetails.push({
+          rowNumber: rowNum,
+          rawPhone,
+          rawName,
+          reason: 'Missing phone number (empty data cell)'
+        });
+        warnings.push(`Row ${rowNum}: Skipped due to missing phone number.`);
+        continue;
+      }
+    }
 
     // Auto-detect if name and phone are swapped
-    if (rawPhone && !sanitizePhoneNumber(rawPhone) && rawName && sanitizePhoneNumber(rawName)) {
+    const candidatePhoneDigits = sanitizePhoneNumber(rawPhone);
+    const candidateNameDigits = sanitizePhoneNumber(rawName);
+    if (!isValidIndianMobile(candidatePhoneDigits).isValid && isValidIndianMobile(candidateNameDigits).isValid) {
       const temp = rawPhone;
       rawPhone = rawName;
       rawName = temp;
@@ -157,26 +241,56 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
     }
 
     const cleanDigits = sanitizePhoneNumber(rawPhone);
-    const cleanName = rawName.trim().replace(/^[.,_\-'"\s]+|[.,_\-'"\s]+$/g, '') || 'Valued Customer';
+    const phoneCheck = isValidIndianMobile(cleanDigits);
 
-    if (cleanDigits.length === 10) {
-      if (cleanDigits !== rawPhone) {
-        fixedCount++;
-      } else {
-        validCount++;
-      }
-
-      cleanedData.push({
-        phone_number: cleanDigits,
-        user_name: cleanName,
-        initial_bot_message: botMsgIdx !== -1 && row[botMsgIdx] ? row[botMsgIdx] : '',
-        initial_state_name: stateIdx !== -1 && row[stateIdx] ? row[stateIdx] : '',
-        initial_language_name: langIdx !== -1 && row[langIdx] ? row[langIdx] : ''
-      });
-    } else {
+    // 3. Strict filter: If invalid number, SKIP and do not try this number
+    if (!phoneCheck.isValid) {
       invalidCount++;
-      warnings.push(`Row ${i + 1}: Skipped invalid phone '${rawPhone}'. Must be a 10-digit Indian phone number.`);
+      skippedDetails.push({
+        rowNumber: rowNum,
+        rawPhone,
+        rawName,
+        reason: phoneCheck.reason || 'Invalid phone number'
+      });
+      warnings.push(`Row ${rowNum}: Skipped invalid phone '${rawPhone}'. Reason: ${phoneCheck.reason}.`);
+      continue;
     }
+
+    // 4. Duplicate prevention: Skip if number was already seen in this batch
+    if (seenPhoneNumbers.has(cleanDigits)) {
+      duplicateCount++;
+      skippedDetails.push({
+        rowNumber: rowNum,
+        rawPhone,
+        rawName,
+        reason: 'Duplicate phone number in sheet (already queued)'
+      });
+      warnings.push(`Row ${rowNum}: Skipped duplicate phone '+91 ${cleanDigits}'.`);
+      continue;
+    }
+
+    seenPhoneNumbers.add(cleanDigits);
+
+    // Clean customer name or provide polite fallback if missing
+    let cleanName = rawName.replace(/^[.,_\-'"\s]+|[.,_\-'"\s]+$/g, '').trim();
+    if (!cleanName || ['n/a', 'na', 'null', 'none', 'undefined', '-', '--', 'nil'].includes(cleanName.toLowerCase())) {
+      cleanName = `Buyer ${cleanDigits.slice(-4)}`;
+      fixedCount++;
+    }
+
+    if (cleanDigits !== rawPhone.trim()) {
+      fixedCount++;
+    } else {
+      validCount++;
+    }
+
+    cleanedData.push({
+      phone_number: cleanDigits,
+      user_name: cleanName,
+      initial_bot_message: botMsgIdx !== -1 && row[botMsgIdx] ? row[botMsgIdx] : '',
+      initial_state_name: stateIdx !== -1 && row[stateIdx] ? row[stateIdx] : '',
+      initial_language_name: langIdx !== -1 && row[langIdx] ? row[langIdx] : ''
+    });
   }
 
   // Generate verified Sarvam AI CSV string
@@ -196,6 +310,9 @@ export function validateAndFixSarvamCsv(rawCsv: string): CsvValidationResult {
     validRows: validCount,
     fixedRows: fixedCount,
     invalidRows: invalidCount,
+    missingDataRows: missingDataCount,
+    duplicateRows: duplicateCount,
+    skippedDetails,
     errors,
     warnings,
     data: cleanedData,

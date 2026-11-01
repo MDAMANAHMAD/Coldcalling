@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { CsvValidationResult } from '@/lib/sarvamTypes';
-import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, RefreshCw, Sparkles, Play, Settings } from 'lucide-react';
+import { UploadCloud, CheckCircle2, AlertTriangle, FileDown, RefreshCw, Sparkles, Play, Settings, ShieldCheck, ChevronDown, ChevronUp, Ban } from 'lucide-react';
 
 interface CsvVerificationUploaderProps {
   onValidated: (result: CsvValidationResult, fileName: string) => void;
@@ -19,6 +19,7 @@ export default function CsvVerificationUploader({
   const [isVerifying, setIsVerifying] = useState(false);
   const [result, setResult] = useState<CsvValidationResult | null>(null);
   const [fileName, setFileName] = useState<string>('');
+  const [showSkippedDetails, setShowSkippedDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
@@ -172,22 +173,67 @@ export default function CsvVerificationUploader({
           {/* Quick Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
-              <span className="text-[11px] text-slate-500 font-medium">Total Contacts</span>
+              <span className="text-[11px] text-slate-500 font-medium">Total In File</span>
               <p className="text-lg font-extrabold text-slate-900 dark:text-white">{result.totalRows}</p>
             </div>
             <div className="p-3 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/40">
-              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">Valid Phone Numbers</span>
-              <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{result.validRows}</p>
+              <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">Valid (Will Be Dialed)</span>
+              <p className="text-lg font-extrabold text-emerald-700 dark:text-emerald-400">{result.data.length}</p>
             </div>
             <div className="p-3 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40">
-              <span className="text-[11px] text-blue-700 dark:text-blue-400 font-medium">Auto-Repaired</span>
+              <span className="text-[11px] text-blue-700 dark:text-blue-400 font-medium">Auto-Repaired / Cleaned</span>
               <p className="text-lg font-extrabold text-blue-700 dark:text-blue-400">{result.fixedRows}</p>
             </div>
             <div className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40">
-              <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">Skipped (Invalid)</span>
-              <p className="text-lg font-extrabold text-amber-700 dark:text-amber-400">{result.invalidRows}</p>
+              <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">Skipped (Not Dialed)</span>
+              <p className="text-lg font-extrabold text-amber-700 dark:text-amber-400">
+                {(result.invalidRows || 0) + (result.missingDataRows || 0) + (result.duplicateRows || 0)}
+              </p>
             </div>
           </div>
+
+          {/* Safety Protection Notice */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Automatic Safety Filter Active</p>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                Any invalid numbers, dummy test sequences, missing phone cells, or duplicate entries are automatically detected and omitted. The campaign will <strong>strictly dial only the {result.data.length} verified valid contacts</strong>.
+              </p>
+            </div>
+          </div>
+
+          {/* Detailed Skipped Rows Breakdown */}
+          {result.skippedDetails && result.skippedDetails.length > 0 && (
+            <div className="border border-amber-200 dark:border-amber-900/50 rounded-2xl bg-amber-50/30 dark:bg-amber-950/10 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowSkippedDetails(!showSkippedDetails)}
+                className="w-full flex items-center justify-between p-3 text-xs font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Ban className="w-3.5 h-3.5 text-amber-600" />
+                  <span>View Omitted Contacts ({result.skippedDetails.length}) — These will NOT be called</span>
+                </div>
+                {showSkippedDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+
+              {showSkippedDetails && (
+                <div className="p-3 pt-0 border-t border-amber-200/60 dark:border-amber-900/40 max-h-48 overflow-y-auto space-y-1 text-[11px]">
+                  {result.skippedDetails.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-1 border-b border-amber-100/60 dark:border-amber-900/20 last:border-0 text-slate-700 dark:text-slate-300">
+                      <span>
+                        <strong className="text-amber-700 dark:text-amber-400">Row {item.rowNumber}:</strong> {item.rawPhone ? `'${item.rawPhone}'` : '(Missing/Empty)'} {item.rawName ? `(${item.rawName})` : ''}
+                      </span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium text-[10px] px-2 py-0.5 bg-amber-100/70 dark:bg-amber-900/40 rounded-md">
+                        {item.reason}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Warnings / Healing Notices */}
           {result.warnings.length > 0 && (

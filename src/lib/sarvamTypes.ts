@@ -7,12 +7,22 @@ export interface SarvamCsvRow {
   [key: string]: any;
 }
 
+export interface CsvSkippedRowDetail {
+  rowNumber: number;
+  rawPhone?: string;
+  rawName?: string;
+  reason: string;
+}
+
 export interface CsvValidationResult {
   isValid: boolean;
   totalRows: number;
   validRows: number;
   fixedRows: number;
   invalidRows: number;
+  missingDataRows?: number;
+  duplicateRows?: number;
+  skippedDetails?: CsvSkippedRowDetail[];
   errors: string[];
   warnings: string[];
   data: SarvamCsvRow[];
