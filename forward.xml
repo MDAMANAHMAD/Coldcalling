@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Response>
+    <Speak voice="WOMAN" language="hi-IN">Connecting your call to Raj, please hold.</Speak>
     <Dial callerId="+918071580297" timeout="35">
         <Number>+918898022337</Number>
     </Dial>
