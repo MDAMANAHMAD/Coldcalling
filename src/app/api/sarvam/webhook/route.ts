@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSarvamDb, saveSarvamDb } from '@/lib/sarvamDb';
 import { SarvamCallRecord } from '@/lib/sarvamTypes';
+import { calculateScheduledDate } from '@/app/api/calls/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,18 +98,25 @@ export async function POST(req: NextRequest) {
       const cleanDigits = userPhone.replace(/\D/g, '');
       const fullPhone = cleanDigits.length === 10 ? `+91${cleanDigits}` : userPhone.startsWith('+') ? userPhone : `+${cleanDigits}`;
 
+      const nowIso = new Date().toISOString();
+      let scheduledVisitDate: string | undefined = undefined;
+      if (outcome === 'Site Visit') {
+        scheduledVisitDate = calculateScheduledDate(nowIso, siteVisitDay, siteVisitTime, payload.summary || transcriptText);
+      }
+
       const newRecord: SarvamCallRecord = {
         id: `sarvam-${Date.now()}`,
         interactionId,
         customerName: payload.user_name || payload.customerName || 'Valued Client',
         customerPhone: fullPhone, // Always FULL unmasked phone number
-        callDate: new Date().toISOString(),
+        callDate: nowIso,
         durationSeconds: duration,
         status: 'completed',
         outcome,
         bhkPreference,
         siteVisitDay,
         siteVisitTime,
+        scheduledVisitDate,
         transcript: transcriptText,
         recordingUrl: payload.recording_url || payload.audio_url || '',
         summary: payload.summary || `Client showed strong intent (${outcome}) during Sarvam automated call.`,

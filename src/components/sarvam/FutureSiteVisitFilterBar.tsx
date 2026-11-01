@@ -2,7 +2,7 @@
 
 import { Calendar, Sparkles } from 'lucide-react';
 
-export type FutureFilterPeriod = 'all_upcoming' | 'this_weekend' | 'next_7_days' | 'next_30_days' | 'all';
+export type FutureFilterPeriod = 'all_upcoming' | 'this_weekend' | 'next_weekend' | 'next_7_days' | 'next_30_days' | 'all';
 
 interface FutureSiteVisitFilterBarProps {
   currentPeriod: FutureFilterPeriod;
@@ -12,9 +12,9 @@ interface FutureSiteVisitFilterBarProps {
 const FILTER_OPTIONS: { id: FutureFilterPeriod; label: string }[] = [
   { id: 'all_upcoming', label: 'All Upcoming Visits' },
   { id: 'this_weekend', label: 'This Weekend (Sat/Sun)' },
+  { id: 'next_weekend', label: 'Next Weekend' },
   { id: 'next_7_days', label: 'Next 7 Days' },
   { id: 'next_30_days', label: 'Next 30 Days' },
-  { id: 'all', label: 'All Visits' }
 ];
 
 export default function FutureSiteVisitFilterBar({ currentPeriod, onPeriodChange }: FutureSiteVisitFilterBarProps) {

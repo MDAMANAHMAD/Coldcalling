@@ -17,7 +17,13 @@ export async function GET(req: NextRequest) {
     if (category === 'Interested') {
       calls = calls.filter(c => c.outcome === 'Interested');
     } else if (category === 'Site Visit') {
-      calls = calls.filter(c => c.outcome === 'Site Visit');
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      calls = calls.filter(c => {
+        if (c.outcome !== 'Site Visit') return false;
+        if (!c.scheduledVisitDate) return true;
+        return new Date(c.scheduledVisitDate).getTime() >= startOfToday;
+      });
     }
 
     const analytics = computeAnalytics(db.calls);

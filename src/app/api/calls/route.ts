@@ -11,14 +11,15 @@ const WORKSPACE_ID = process.env.SARVAM_WORKSPACE_ID || '01a16c8c-0d68-778c-b5f4
 const FROM_NUMBER = process.env.SARVAM_FROM_NUMBER || '+918071580297';
 
 /**
- * Calculates a realistic future scheduled appointment date from the day string or summary
+ * Calculates a realistic scheduled appointment date from the call date and summary/day string.
+ * Strictly anchored to callDateStr (the timestamp the call was made).
  */
-function calculateScheduledDate(callDateStr: string, dayStr: string, timeStr?: string): string {
+export function calculateScheduledDate(callDateStr: string, dayStr?: string, timeStr?: string, summaryText?: string): string {
   const callDate = new Date(callDateStr);
-  const now = new Date();
+  const baseDate = isNaN(callDate.getTime()) ? new Date() : callDate;
   
   // Parse hour & min from timeStr e.g. "03:00 PM" or "11:00 AM"
-  let hour = 11;
+  let hour = 14; // Default to 2:00 PM
   let minute = 0;
   if (timeStr) {
     const match = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
@@ -33,26 +34,61 @@ function calculateScheduledDate(callDateStr: string, dayStr: string, timeStr?: s
     }
   }
 
-  // Calculate upcoming target day
-  const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0);
-  const currentDayOfWeek = targetDate.getDay(); // 0 is Sunday, 6 is Saturday
+  const combinedText = `${dayStr || ''} ${summaryText || ''}`.toLowerCase();
 
-  if (dayStr === 'Sunday') {
-    const daysUntilSunday = (7 - currentDayOfWeek) % 7 || 7;
-    targetDate.setDate(targetDate.getDate() + daysUntilSunday);
-  } else if (dayStr === 'Saturday') {
-    const daysUntilSaturday = (6 - currentDayOfWeek + 7) % 7 || 7;
-    targetDate.setDate(targetDate.getDate() + daysUntilSaturday);
-  } else if (dayStr.includes('Monday')) {
-    const daysUntilMonday = (1 - currentDayOfWeek + 7) % 7 || 7;
-    targetDate.setDate(targetDate.getDate() + daysUntilMonday);
-  } else {
-    // Default to upcoming Saturday
-    const daysUntilWeekend = (6 - currentDayOfWeek + 7) % 7 || 7;
-    targetDate.setDate(targetDate.getDate() + daysUntilWeekend);
+  // 1. Check for explicit date in the text e.g. "28th October", "2nd November", "Nov 5"
+  const monthNames: Record<string, number> = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const expMatch1 = combinedText.match(/(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
+  const expMatch2 = combinedText.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?/i);
+
+  if (expMatch1) {
+    const day = parseInt(expMatch1[1], 10);
+    const month = monthNames[expMatch1[2].toLowerCase().slice(0, 3)];
+    let year = baseDate.getFullYear();
+    if (month < baseDate.getMonth() - 2) year += 1;
+    return new Date(year, month, day, hour, minute, 0).toISOString();
+  } else if (expMatch2) {
+    const month = monthNames[expMatch2[1].toLowerCase().slice(0, 3)];
+    const day = parseInt(expMatch2[2], 10);
+    let year = baseDate.getFullYear();
+    if (month < baseDate.getMonth() - 2) year += 1;
+    return new Date(year, month, day, hour, minute, 0).toISOString();
   }
 
-  return targetDate.toISOString();
+  // 2. Relative calculation anchored strictly to baseDate (callDate)
+  const callDay = baseDate.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const isNextWeekend = combinedText.includes('next weekend') || combinedText.includes('अगले वीकेंड') || combinedText.includes('following weekend') || combinedText.includes('next sat') || combinedText.includes('next sun');
+  const isTomorrow = combinedText.includes('tomorrow') || combinedText.includes('कल');
+
+  let daysToAdd = 0;
+
+  if (isTomorrow) {
+    daysToAdd = 1;
+  } else if (combinedText.includes('sunday') || combinedText.includes('रविवार')) {
+    const daysUntilSun = (7 - callDay) % 7 || 7;
+    daysToAdd = daysUntilSun + (isNextWeekend ? 7 : 0);
+  } else if (combinedText.includes('saturday') || combinedText.includes('शनिवार')) {
+    const daysUntilSat = (6 - callDay + 7) % 7 || 7;
+    daysToAdd = daysUntilSat + (isNextWeekend ? 7 : 0);
+  } else if (combinedText.includes('monday') || combinedText.includes('सोमवार')) {
+    daysToAdd = (1 - callDay + 7) % 7 || 7;
+  } else {
+    // Default: Weekend (Saturday)
+    if (callDay === 6) {
+      daysToAdd = isNextWeekend ? 7 : 0;
+    } else if (callDay === 0) {
+      daysToAdd = isNextWeekend ? 6 : 0;
+    } else {
+      const daysUntilSat = 6 - callDay;
+      daysToAdd = daysUntilSat + (isNextWeekend ? 7 : 0);
+    }
+  }
+
+  const target = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + daysToAdd, hour, minute, 0);
+  return target.toISOString();
 }
 
 export async function GET(req: NextRequest) {
@@ -116,7 +152,8 @@ export async function GET(req: NextRequest) {
 
           if (isConfirmedVisit && !isDeclinedVisit) {
             outcome = 'Site Visit';
-            if (lowerSummary.includes('sunday')) siteVisitDay = 'Sunday';
+            if (lowerSummary.includes('next weekend') || lowerSummary.includes('अगले वीकेंड')) siteVisitDay = 'Next Weekend';
+            else if (lowerSummary.includes('sunday')) siteVisitDay = 'Sunday';
             else if (lowerSummary.includes('saturday')) siteVisitDay = 'Saturday';
             else if (lowerSummary.includes('monday')) siteVisitDay = 'Monday';
             else siteVisitDay = 'Upcoming Weekend';
@@ -133,7 +170,7 @@ export async function GET(req: NextRequest) {
               siteVisitTime = '02:00 PM';
             }
 
-            scheduledVisitDate = calculateScheduledDate(item.start_datetime || new Date().toISOString(), siteVisitDay, siteVisitTime);
+            scheduledVisitDate = calculateScheduledDate(item.start_datetime || new Date().toISOString(), siteVisitDay, siteVisitTime, callSummary);
           } else if (
             lowerSummary.includes('inquired') ||
             lowerSummary.includes('interested') ||
@@ -232,6 +269,13 @@ export async function GET(req: NextRequest) {
       console.error('Error syncing active campaigns:', cErr);
     }
 
+    // Ensure all stored site visit records have their scheduledVisitDate properly anchored to their callDate
+    for (const c of db.calls) {
+      if (c.outcome === 'Site Visit') {
+        c.scheduledVisitDate = calculateScheduledDate(c.callDate, c.siteVisitDay, c.siteVisitTime, c.summary || c.transcript);
+      }
+    }
+
     saveSarvamDb(db);
 
     // Compute overall analytics summary
@@ -239,39 +283,97 @@ export async function GET(req: NextRequest) {
 
     let filteredCalls = db.calls;
 
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const currentDay = now.getDay(); // 0 is Sunday, 6 is Saturday
+
     // Handle Category Filter
     if (category === 'Site Visit') {
       filteredCalls = filteredCalls.filter(c => c.outcome === 'Site Visit');
-      
-      // Future filter for site visits (since site visits happen in future dates)
-      if (futurePeriod && futurePeriod !== 'all') {
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        const in7Days = startOfToday + 7 * 86400000;
-        const in30Days = startOfToday + 30 * 86400000;
 
-        filteredCalls = filteredCalls.filter(c => {
-          if (!c.scheduledVisitDate) return true;
-          const visitTime = new Date(c.scheduledVisitDate).getTime();
-
-          if (futurePeriod === 'all_upcoming') {
-            return visitTime >= startOfToday;
-          } else if (futurePeriod === 'this_weekend') {
-            return c.siteVisitDay === 'Saturday' || c.siteVisitDay === 'Sunday' || c.siteVisitDay === 'Upcoming Weekend';
-          } else if (futurePeriod === 'next_7_days') {
-            return visitTime >= startOfToday && visitTime <= in7Days;
-          } else if (futurePeriod === 'next_30_days') {
-            return visitTime >= startOfToday && visitTime <= in30Days;
-          }
-          return true;
-        });
+      // Calculate this weekend bounds (upcoming Sat/Sun relative to today)
+      let thisWeekendStart: number;
+      let thisWeekendEnd: number;
+      if (currentDay === 0) {
+        // Today is Sunday of this weekend
+        thisWeekendStart = startOfToday;
+        thisWeekendEnd = startOfToday + 86400000 - 1;
+      } else if (currentDay === 6) {
+        // Today is Saturday of this weekend
+        thisWeekendStart = startOfToday;
+        thisWeekendEnd = startOfToday + 2 * 86400000 - 1;
+      } else {
+        // Monday to Friday
+        const daysToSat = 6 - currentDay;
+        thisWeekendStart = startOfToday + daysToSat * 86400000;
+        thisWeekendEnd = thisWeekendStart + 2 * 86400000 - 1;
       }
+
+      // Calculate next weekend bounds (following week's Sat/Sun)
+      let nextWeekendStart: number;
+      let nextWeekendEnd: number;
+      if (currentDay === 0) {
+        nextWeekendStart = startOfToday + 6 * 86400000;
+        nextWeekendEnd = nextWeekendStart + 2 * 86400000 - 1;
+      } else if (currentDay === 6) {
+        nextWeekendStart = startOfToday + 7 * 86400000;
+        nextWeekendEnd = nextWeekendStart + 2 * 86400000 - 1;
+      } else {
+        const daysToNextSat = (6 - currentDay) + 7;
+        nextWeekendStart = startOfToday + daysToNextSat * 86400000;
+        nextWeekendEnd = nextWeekendStart + 2 * 86400000 - 1;
+      }
+
+      const in7Days = startOfToday + 7 * 86400000;
+      const in30Days = startOfToday + 30 * 86400000;
+
+      // Filter site visits: strictly exclude visits whose date has already passed!
+      filteredCalls = filteredCalls.filter(c => {
+        const visitDateStr = c.scheduledVisitDate || calculateScheduledDate(c.callDate, c.siteVisitDay, c.siteVisitTime, c.summary);
+        if (!visitDateStr) return false;
+        const visitTime = new Date(visitDateStr).getTime();
+
+        // STRICT RULE: "and the data whose site visit date is already passed then its data should be not visible"
+        if (visitTime < startOfToday) {
+          return false;
+        }
+
+        if (futurePeriod === 'this_weekend') {
+          return visitTime >= thisWeekendStart && visitTime <= thisWeekendEnd;
+        } else if (futurePeriod === 'next_weekend') {
+          return visitTime >= nextWeekendStart && visitTime <= nextWeekendEnd;
+        } else if (futurePeriod === 'next_7_days') {
+          return visitTime >= startOfToday && visitTime <= in7Days;
+        } else if (futurePeriod === 'next_30_days') {
+          return visitTime >= startOfToday && visitTime <= in30Days;
+        }
+
+        // Default ('all_upcoming' or 'all'): all future visits whose date is not passed
+        return visitTime >= startOfToday;
+      });
+
+      // Sort upcoming visits so the closest upcoming date is shown first
+      filteredCalls.sort((a, b) => {
+        const tA = a.scheduledVisitDate ? new Date(a.scheduledVisitDate).getTime() : 0;
+        const tB = b.scheduledVisitDate ? new Date(b.scheduledVisitDate).getTime() : 0;
+        return tA - tB;
+      });
     } else if (category === 'Interested') {
       filteredCalls = filteredCalls.filter(c => c.outcome === 'Interested');
       filteredCalls = filterCallsByPeriod(filteredCalls, period);
     } else if (category === 'high_intent') {
       // ONLY Site Visits and Interested Leads (for Home Page)
-      filteredCalls = filteredCalls.filter(c => c.outcome === 'Site Visit' || c.outcome === 'Interested');
+      // Exclude site visits whose appointment date has already passed
+      filteredCalls = filteredCalls.filter(c => {
+        if (c.outcome === 'Interested') return true;
+        if (c.outcome === 'Site Visit') {
+          const visitDateStr = c.scheduledVisitDate || calculateScheduledDate(c.callDate, c.siteVisitDay, c.siteVisitTime, c.summary);
+          if (!visitDateStr) return false;
+          const visitTime = new Date(visitDateStr).getTime();
+          return visitTime >= startOfToday;
+        }
+        return false;
+      });
       filteredCalls = filterCallsByPeriod(filteredCalls, period);
     } else if (category === 'Connected') {
       filteredCalls = filteredCalls.filter(c => c.outcome === 'Connected');

@@ -90,7 +90,7 @@ export default function SiteVisitsPage() {
         <div className="p-12 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
           <CalendarCheck className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
           <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No Upcoming Site Visits Found for this Window</p>
-          <p className="text-xs text-slate-400 mt-1">Try switching to &quot;All Visits&quot; or start a campaign sheet to schedule new visits.</p>
+          <p className="text-xs text-slate-400 mt-1">Try switching to &quot;All Upcoming Visits&quot; or start a campaign sheet to schedule new visits.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
