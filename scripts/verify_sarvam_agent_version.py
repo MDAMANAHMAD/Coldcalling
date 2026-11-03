@@ -84,6 +84,11 @@ def verify_version_availability(target_version=LATEST_VERSION):
             print(f"[SUCCESS] Agent Version v{target_version} is ACTIVE and VALIDATED on Sarvam!")
             print(f"          Probe attempt_id: {attempt_id}")
             return True
+        elif res.status_code == 402:
+            print(f"[ALERT: INSUFFICIENT CREDITS] Sarvam AI account credits are EXHAUSTED (HTTP 402)!")
+            print(f"Details: {res.text}")
+            print(f"--> Diagnostic Finding: Agent Gayatri v{target_version} is configured properly, but Sarvam is refusing outbound calls until the account balance is topped up on apps.sarvam.ai.")
+            return False
         elif res.status_code == 404:
             print(f"[NOT FOUND] Version v{target_version} was not found on Sarvam API: {res.text}")
             return False
@@ -144,6 +149,11 @@ def initiate_test_call(phone_number, version=LATEST_VERSION):
             print(f"Agent Ver  : v{version} (Gayatri Latest)")
             print(f"Phone should ring within 5-10 seconds.")
             return attempt_id
+        elif res.status_code == 402:
+            print(f"\n[CRITICAL FAILURE] Dial blocked by Sarvam due to INSUFFICIENT CREDITS (HTTP 402).")
+            print(f"Sarvam Response: {res.text}")
+            print(f"Action Required: Top up your credits on https://apps.sarvam.ai to resume calls.")
+            return None
         else:
             print(f"[FAIL] Dial failed ({res.status_code}): {res.text}")
             return None

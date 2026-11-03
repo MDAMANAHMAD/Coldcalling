@@ -82,7 +82,9 @@ export default function LiveCallingCard({ campaign, onRefresh, isLoading = false
               </h3>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border ${
-                  isRunning
+                  status === 'error'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-300 dark:border-rose-800'
+                    : isRunning
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
                     : isPaused
                     ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-300 dark:border-amber-800'
@@ -165,6 +167,21 @@ export default function LiveCallingCard({ campaign, onRefresh, isLoading = false
           )}
         </div>
       </div>
+
+      {/* High-visibility Error / Insufficient Balance Notice */}
+      {campaign?.errorMessage && (
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs font-medium flex items-start gap-3 shadow-xs animate-in fade-in">
+          <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+          <div className="flex-1 space-y-1">
+            <span className="font-extrabold text-sm block text-rose-800 dark:text-rose-200">
+              Dialer Notice / Account Attention Required
+            </span>
+            <p className="leading-relaxed">
+              {campaign.errorMessage}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Quick Settings Pill Summary */}
       <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500 dark:text-slate-400">

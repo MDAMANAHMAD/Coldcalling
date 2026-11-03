@@ -75,7 +75,11 @@ export async function POST(req: NextRequest) {
 
       if (!res.ok) {
         const errText = await res.text();
-        return NextResponse.json({ error: `Test dial failed (${res.status}): ${errText}` }, { status: res.status });
+        let userMsg = `Test dial failed (${res.status}): ${errText}`;
+        if (res.status === 402 || errText.includes('insufficient_balance') || errText.includes('Insufficient Balance')) {
+          userMsg = `Sarvam AI Insufficient Credits (HTTP 402): Outbound calls cannot be placed. Please top up your credits on apps.sarvam.ai to resume calling.`;
+        }
+        return NextResponse.json({ error: userMsg }, { status: res.status });
       }
 
       const resData = await res.json();
@@ -116,6 +120,7 @@ export async function POST(req: NextRequest) {
 
       const contactCount = validContacts.length > 0 ? validContacts.length : (totalContacts || 0);
       campaign.status = 'running';
+      campaign.errorMessage = undefined;
       campaign.totalContacts = contactCount;
       campaign.completedCalls = 0;
       campaign.remainingCalls = contactCount;
@@ -214,6 +219,18 @@ export async function POST(req: NextRequest) {
               } else {
                 const errText = await res.text();
                 console.warn(`⚠️ [Outbound Call Warning]: ${fullPhone} status: ${res.status} - ${errText}`);
+                if (res.status === 402 || errText.includes('insufficient_balance') || errText.includes('Insufficient Balance')) {
+                  const errorDb = getSarvamDb();
+                  if (errorDb.campaigns?.[0]) {
+                    errorDb.campaigns[0].status = 'error';
+                    errorDb.campaigns[0].errorMessage = 'Sarvam AI Insufficient Credits (HTTP 402): Outbound calls cannot be placed. Please top up your balance in the Sarvam AI console to resume calling.';
+                    errorDb.campaigns[0].ongoingCalls = 0;
+                    errorDb.campaigns[0].updatedAt = new Date().toISOString();
+                    saveSarvamDb(errorDb);
+                  }
+                  console.error(`🚨 [HALT]: Sarvam AI credits exhausted (402 Insufficient Balance). Stopping dialer loop.`);
+                  break;
+                }
               }
             } catch (dialErr) {
               console.error(`❌ [Outbound Call Failed]: ${fullPhone}`, dialErr);

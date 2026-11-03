@@ -87,8 +87,9 @@ export interface LiveCampaignProgress {
   siteVisitCount: number;
   startedAt: string;
   updatedAt: string;
-  status: 'running' | 'paused' | 'completed' | 'idle' | 'active';
+  status: 'running' | 'paused' | 'completed' | 'idle' | 'active' | 'error';
   currentBatchFile?: string;
+  errorMessage?: string;
   settings?: CampaignSettings;
 }
 
