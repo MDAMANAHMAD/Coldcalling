@@ -15,12 +15,29 @@
       "startedAt": "2026-10-31T00:00:00.000Z",
       "updatedAt": "2026-10-31T00:00:00.000Z",
       "status": "idle",
-      "currentBatchFile": ""
+      "currentBatchFile": "",
+      "settings": {
+        "campaignName": "Sai Garden Calling Sheet",
+        "appType": "agent",
+        "agentId": "Gayatari-0922c4e8-551f",
+        "agentVersion": 26,
+        "connectionId": "Vobiz-MD-s--9a5a5823-1853",
+        "fromNumber": "+918071580297",
+        "attemptsPerSecond": 0.5,
+        "allowedStartTime": "09:00",
+        "allowedEndTime": "18:00",
+        "allowedDays": ["Tuesday"],
+        "startDateType": "now",
+        "endDateType": "today",
+        "retryEnabled": false,
+        "phoneRotation": false
+      }
     }
   ],
   "config": {
     "apiKey": "sk_samvaad_zwb1zcz6_1iukvGXfgQG21wlwTrclbhJI",
     "agentId": "Gayatari-0922c4e8-551f",
-    "fromNumber": "+918071580297"
+    "fromNumber": "+918071580297",
+    "agentVersion": 26
   }
 }

@@ -12,13 +12,15 @@ export interface SarvamDbSchema {
     apiKey: string;
     agentId: string;
     fromNumber: string;
+    agentVersion?: number;
   };
 }
 
 const DEFAULT_CONFIG = {
   apiKey: process.env.SARVAM_API_KEY || 'sk_samvaad_zwb1zcz6_1iukvGXfgQG21wlwTrclbhJI',
   agentId: process.env.SARVAM_AGENT_ID || 'Gayatari-0922c4e8-551f',
-  fromNumber: process.env.SARVAM_FROM_NUMBER || '+918071580297'
+  fromNumber: process.env.SARVAM_FROM_NUMBER || '+918071580297',
+  agentVersion: Number(process.env.SARVAM_AGENT_VERSION || 26)
 };
 
 /**

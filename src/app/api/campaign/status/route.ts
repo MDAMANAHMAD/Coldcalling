@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const db = getSarvamDb();
     const campaign = db.campaigns[0] || null;
-    return NextResponse.json({ campaign });
+    return NextResponse.json({ campaign, config: db.config });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

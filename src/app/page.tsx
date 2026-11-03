@@ -67,7 +67,10 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           action,
-          contacts: uploadedContacts
+          contacts: uploadedContacts,
+          settings: {
+            agentVersion: campaign?.settings?.agentVersion || 26
+          }
         })
       });
       const data = await res.json();
@@ -137,7 +140,10 @@ export default function HomePage() {
           action: 'start',
           batchFileName: fileName,
           totalContacts: result.data.length,
-          contacts: result.data
+          contacts: result.data,
+          settings: {
+            agentVersion: campaign?.settings?.agentVersion || 26
+          }
         })
       });
       const data = await res.json();
@@ -209,7 +215,7 @@ export default function HomePage() {
             Sai Garden — Calling & Lead Acquisition Command Center
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Connected live to voice agent Gayatri (v2). Upload calling sheets, adjust schedule & telephony pacing, track live progress, and review verified buyer conversations with unmasked phone numbers.
+            Connected live to voice agent Gayatri (v{campaign?.settings?.agentVersion || 26} - Latest). Upload calling sheets, adjust schedule & telephony pacing, track live progress, and review verified buyer conversations with unmasked phone numbers.
           </p>
         </div>
       </div>
