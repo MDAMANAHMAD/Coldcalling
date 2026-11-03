@@ -187,7 +187,7 @@ export default function LiveCallingCard({ campaign, onRefresh, isLoading = false
       <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40 font-semibold">
           <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-          <span>Agent: <strong>Gayatri (v{campaign?.settings?.agentVersion || 26} - Latest)</strong></span>
+          <span>Agent: <strong>Gayatri (v{campaign?.settings?.agentVersion || 27} - Latest)</strong></span>
         </span>
         <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 font-medium">
           <Zap className="w-3 h-3 text-blue-500" />

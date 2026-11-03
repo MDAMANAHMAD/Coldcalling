@@ -69,7 +69,7 @@ export default function HomePage() {
           action,
           contacts: uploadedContacts,
           settings: {
-            agentVersion: campaign?.settings?.agentVersion || 26
+            agentVersion: campaign?.settings?.agentVersion || 27
           }
         })
       });
@@ -142,7 +142,7 @@ export default function HomePage() {
           totalContacts: result.data.length,
           contacts: result.data,
           settings: {
-            agentVersion: campaign?.settings?.agentVersion || 26
+            agentVersion: campaign?.settings?.agentVersion || 27
           }
         })
       });
@@ -215,7 +215,7 @@ export default function HomePage() {
             Sai Garden — Calling & Lead Acquisition Command Center
           </h1>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Connected live to voice agent Gayatri (v{campaign?.settings?.agentVersion || 26} - Latest). Upload calling sheets, adjust schedule & telephony pacing, track live progress, and review verified buyer conversations with unmasked phone numbers.
+            Connected live to voice agent Gayatri (v{campaign?.settings?.agentVersion || 27} - Latest). Upload calling sheets, adjust schedule & telephony pacing, track live progress, and review verified buyer conversations with unmasked phone numbers.
           </p>
         </div>
       </div>

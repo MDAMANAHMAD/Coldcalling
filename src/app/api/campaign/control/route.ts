@@ -11,7 +11,7 @@ const ORG_ID = process.env.SARVAM_ORG_ID || '01a16c8c-0d2f-7ded-b3cb-6dedfbcc168
 const WORKSPACE_ID = process.env.SARVAM_WORKSPACE_ID || '01a16c8c-0d68-778c-b5f4-fcd65dd809e6';
 const CONNECTION_ID = 'Vobiz-MD-s--9a5a5823-1853';
 const FROM_NUMBER = '+918071580297';
-const DEFAULT_AGENT_VERSION = Number(process.env.SARVAM_AGENT_VERSION || 26);
+const DEFAULT_AGENT_VERSION = Number(process.env.SARVAM_AGENT_VERSION || 27);
 
 function resolveAgentVersion(settings?: any, db?: any): number {
   if (settings?.agentVersion) {
