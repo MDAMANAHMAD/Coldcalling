@@ -281,6 +281,19 @@ export async function POST(req: NextRequest) {
       campaign.currentBatchFile = '';
       campaign.updatedAt = new Date().toISOString();
       console.log(`⏹️ [Campaign Action]: Stopped and reset live dialer to 0.`);
+    } else if (action === 'update-settings') {
+      const resolvedVersion = resolveAgentVersion(settings, db);
+      if (settings) {
+        campaign.settings = { ...campaign.settings, ...settings, agentVersion: resolvedVersion };
+        if (settings.campaignName) {
+          campaign.campaignName = settings.campaignName;
+        }
+      }
+      if (db.config) {
+        db.config.agentVersion = resolvedVersion;
+      }
+      campaign.updatedAt = new Date().toISOString();
+      console.log(`⚙️ [Settings Updated]: Campaign settings saved. Active Gayatri agent version: v${resolvedVersion}`);
     }
 
     saveSarvamDb(db);

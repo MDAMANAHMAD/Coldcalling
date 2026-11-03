@@ -429,6 +429,10 @@ export default function HomePage() {
         isOpen={isConfigModalOpen}
         onClose={() => setIsConfigModalOpen(false)}
         onLaunch={handleLaunchWithCustomSettings}
+        onSettingsUpdated={(newSettings) => {
+          setCampaign(prev => prev ? ({ ...prev, settings: newSettings }) : null);
+        }}
+        initialSettings={campaign?.settings}
         totalContacts={uploadedContacts.length || campaign?.totalContacts || 0}
       />
     </div>

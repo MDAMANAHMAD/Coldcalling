@@ -20,6 +20,8 @@ interface CampaignConfigModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLaunch: (settings: CampaignSettings) => void;
+  onSettingsUpdated?: (settings: CampaignSettings) => void;
+  initialSettings?: CampaignSettings;
   totalContacts?: number;
 }
 
@@ -36,13 +38,13 @@ const DAY_ABBR = [
   { full: 'Sunday', label: 'S' }
 ];
 
-export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalContacts = 0 }: CampaignConfigModalProps) {
+export default function CampaignConfigModal({ isOpen, onClose, onLaunch, onSettingsUpdated, initialSettings, totalContacts = 0 }: CampaignConfigModalProps) {
   const [activeTab, setActiveTab] = useState<'agent' | 'schedule' | 'advanced'>('agent');
   
   // Settings with exact Sarvam defaults
-  const [campaignName, setCampaignName] = useState(`Sai Garden Outreach - ${new Date().toLocaleDateString('en-GB')}`);
-  const [agentVersion, setAgentVersion] = useState<number>(27);
-  const [cps, setCps] = useState<number>(0.5);
+  const [campaignName, setCampaignName] = useState(initialSettings?.campaignName || `Sai Garden Outreach - ${new Date().toLocaleDateString('en-GB')}`);
+  const [agentVersion, setAgentVersion] = useState<number>(initialSettings?.agentVersion || 27);
+  const [cps, setCps] = useState<number>(initialSettings?.attemptsPerSecond || 0.5);
   const [startDateType, setStartDateType] = useState<'now' | 'custom'>('now');
   const [endDateType, setEndDateType] = useState<'today' | 'custom'>('today');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -55,6 +57,10 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
   const [maxRetries, setMaxRetries] = useState(2);
   const [retryInterval, setRetryInterval] = useState(15);
   
+  // Save settings state
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
   // Test dial states
   const [testNumber, setTestNumber] = useState('');
   const [testDialing, setTestDialing] = useState(false);
@@ -64,8 +70,14 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
   React.useEffect(() => {
     if (isOpen) {
       setAllowedDays([getCurrentDayName()]);
+      if (initialSettings?.agentVersion) {
+        setAgentVersion(Number(initialSettings.agentVersion));
+      }
+      if (initialSettings?.campaignName) {
+        setCampaignName(initialSettings.campaignName);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialSettings]);
 
   if (!isOpen) return null;
 
@@ -117,28 +129,59 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
     }
   };
 
-  const handleLaunch = () => {
-    const settings: CampaignSettings = {
-      campaignName,
-      appType: 'agent',
-      agentId: 'Gayatari-0922c4e8-551f',
-      agentVersion: agentVersion || 27,
-      connectionId: 'Vobiz-MD-s--9a5a5823-1853',
-      fromNumber: '+918071580297',
-      attemptsPerSecond: cps,
-      allowedStartTime,
-      allowedEndTime,
-      allowedDays,
-      startDateType,
-      endDateType,
-      customStartDate,
-      customEndDate,
-      retryEnabled,
-      maxRetries,
-      retryIntervalMinutes: retryInterval,
-      phoneRotation: false
-    };
+  const getSettingsPayload = (): CampaignSettings => ({
+    campaignName,
+    appType: 'agent',
+    agentId: 'Gayatari-0922c4e8-551f',
+    agentVersion: agentVersion || 27,
+    connectionId: 'Vobiz-MD-s--9a5a5823-1853',
+    fromNumber: '+918071580297',
+    attemptsPerSecond: cps,
+    allowedStartTime,
+    allowedEndTime,
+    allowedDays,
+    startDateType,
+    endDateType,
+    customStartDate,
+    customEndDate,
+    retryEnabled,
+    maxRetries,
+    retryIntervalMinutes: retryInterval,
+    phoneRotation: false
+  });
 
+  const handleSaveOnly = async () => {
+    setSavingSettings(true);
+    setSaveSuccess(false);
+    try {
+      const payload = getSettingsPayload();
+      const res = await fetch('/api/campaign/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update-settings',
+          settings: payload
+        })
+      });
+      if (res.ok) {
+        setSaveSuccess(true);
+        if (onSettingsUpdated) {
+          onSettingsUpdated(payload);
+        }
+        setTimeout(() => {
+          setSaveSuccess(false);
+          onClose();
+        }, 1200);
+      }
+    } catch (e) {
+      console.error('Error saving campaign settings:', e);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleLaunch = () => {
+    const settings = getSettingsPayload();
     onLaunch(settings);
     onClose();
   };
@@ -559,6 +602,21 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
               className="px-4 py-2 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveOnly}
+              disabled={savingSettings}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 transition-all disabled:opacity-50"
+            >
+              {saveSuccess ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-600">Saved v{agentVersion}!</span>
+                </>
+              ) : (
+                <span>{savingSettings ? 'Saving...' : `Save Settings (v${agentVersion})`}</span>
+              )}
             </button>
             <button
               type="button"
