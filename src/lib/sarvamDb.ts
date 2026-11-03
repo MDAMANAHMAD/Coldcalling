@@ -63,6 +63,36 @@ export function getSarvamDb(): SarvamDbSchema {
 
     const content = fs.readFileSync(DB_PATH, 'utf-8');
     const parsed = JSON.parse(content);
+
+    // Self-healing migration: Any legacy version (< 26) must be automatically upgraded to v27 (Latest Gayatri with Ishita voice)
+    let needsSave = false;
+    if (!parsed.config) {
+      parsed.config = { ...DEFAULT_CONFIG };
+      needsSave = true;
+    } else if (!parsed.config.agentVersion || Number(parsed.config.agentVersion) < 26) {
+      parsed.config.agentVersion = 27;
+      needsSave = true;
+    }
+
+    if (Array.isArray(parsed.campaigns)) {
+      for (const camp of parsed.campaigns) {
+        if (camp.settings) {
+          if (!camp.settings.agentVersion || Number(camp.settings.agentVersion) < 26) {
+            camp.settings.agentVersion = 27;
+            needsSave = true;
+          }
+        }
+      }
+    }
+
+    if (needsSave) {
+      try {
+        fs.writeFileSync(DB_PATH, JSON.stringify(parsed, null, 2), 'utf-8');
+      } catch (saveErr) {
+        console.error('Failed to auto-heal sarvam_db.json on disk:', saveErr);
+      }
+    }
+
     return parsed;
   } catch (err) {
     console.error('Error reading sarvam_db.json:', err);

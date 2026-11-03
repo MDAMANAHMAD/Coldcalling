@@ -62,6 +62,9 @@ export default function HomePage() {
 
   const handleCampaignAction = async (action: 'start' | 'pause' | 'stop') => {
     try {
+      const activeVersion = (campaign?.settings?.agentVersion && Number(campaign.settings.agentVersion) >= 26)
+        ? Number(campaign.settings.agentVersion)
+        : 27;
       const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,7 +72,7 @@ export default function HomePage() {
           action,
           contacts: uploadedContacts,
           settings: {
-            agentVersion: campaign?.settings?.agentVersion || 27
+            agentVersion: activeVersion
           }
         })
       });
@@ -131,6 +134,9 @@ export default function HomePage() {
 
   const handleStartImmediately = async (result: CsvValidationResult, fileName: string) => {
     try {
+      const activeVersion = (campaign?.settings?.agentVersion && Number(campaign.settings.agentVersion) >= 26)
+        ? Number(campaign.settings.agentVersion)
+        : 27;
       setUploadedContacts(result.data);
       setUploadedFileName(fileName);
       const res = await fetch('/api/campaign/control', {
@@ -142,7 +148,7 @@ export default function HomePage() {
           totalContacts: result.data.length,
           contacts: result.data,
           settings: {
-            agentVersion: campaign?.settings?.agentVersion || 27
+            agentVersion: activeVersion
           }
         })
       });
@@ -157,6 +163,9 @@ export default function HomePage() {
 
   const handleLaunchWithCustomSettings = async (settings: CampaignSettings) => {
     try {
+      const activeVersion = (settings?.agentVersion && Number(settings.agentVersion) >= 26)
+        ? Number(settings.agentVersion)
+        : 27;
       const res = await fetch('/api/campaign/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -165,7 +174,10 @@ export default function HomePage() {
           batchFileName: uploadedFileName || 'Direct Campaign',
           totalContacts: uploadedContacts.length || campaign?.totalContacts || 0,
           contacts: uploadedContacts,
-          settings
+          settings: {
+            ...settings,
+            agentVersion: activeVersion
+          }
         })
       });
       const data = await res.json();

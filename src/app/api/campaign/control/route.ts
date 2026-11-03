@@ -16,15 +16,15 @@ const DEFAULT_AGENT_VERSION = Number(process.env.SARVAM_AGENT_VERSION || 27);
 function resolveAgentVersion(settings?: any, db?: any): number {
   if (settings?.agentVersion) {
     const v = Number(settings.agentVersion);
-    if (!isNaN(v) && v > 0) return v;
+    if (!isNaN(v) && v >= 26) return v;
   }
   if (db?.campaigns?.[0]?.settings?.agentVersion) {
     const v = Number(db.campaigns[0].settings.agentVersion);
-    if (!isNaN(v) && v > 0) return v;
+    if (!isNaN(v) && v >= 26) return v;
   }
   if (db?.config?.agentVersion) {
     const v = Number(db.config.agentVersion);
-    if (!isNaN(v) && v > 0) return v;
+    if (!isNaN(v) && v >= 26) return v;
   }
   return DEFAULT_AGENT_VERSION;
 }

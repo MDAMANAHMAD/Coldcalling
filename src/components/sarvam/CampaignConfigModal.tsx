@@ -97,7 +97,7 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
           testPhoneNumber: testNumber,
           settings: {
             agentId: 'Gayatari-0922c4e8-551f',
-            agentVersion: agentVersion || 26,
+            agentVersion: agentVersion || 27,
             connectionId: 'Vobiz-MD-s--9a5a5823-1853',
             fromNumber: '+918071580297'
           }
@@ -122,7 +122,7 @@ export default function CampaignConfigModal({ isOpen, onClose, onLaunch, totalCo
       campaignName,
       appType: 'agent',
       agentId: 'Gayatari-0922c4e8-551f',
-      agentVersion: agentVersion || 26,
+      agentVersion: agentVersion || 27,
       connectionId: 'Vobiz-MD-s--9a5a5823-1853',
       fromNumber: '+918071580297',
       attemptsPerSecond: cps,
