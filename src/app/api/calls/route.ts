@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSarvamDb, saveSarvamDb, filterCallsByPeriod, computeAnalytics } from '@/lib/sarvamDb';
+import { getSarvamDb, saveSarvamDb, filterCallsByPeriod, computeAnalytics, getIstDateString } from '@/lib/sarvamDb';
 import { SarvamCallRecord, TimeFilterPeriod } from '@/lib/sarvamTypes';
 
 export const dynamic = 'force-dynamic';
@@ -103,15 +103,15 @@ export async function GET(req: NextRequest) {
     // 1. Sync live interactions directly from Sarvam AI Analytics API
     try {
       const startDate = '2026-10-01T00:00:00Z';
-      const endDate = '2026-11-05T23:59:59Z';
-      const sarvamUrl = `https://apps.sarvam.ai/api/analytics/v1/${ORG_ID}/${WORKSPACE_ID}/${AGENT_ID}/interactions?start_datetime=${startDate}&end_datetime=${endDate}&limit=250`;
+      const endDate = new Date(Date.now() + 86400000).toISOString();
+      const sarvamUrl = `https://apps.sarvam.ai/api/analytics/v1/${ORG_ID}/${WORKSPACE_ID}/${AGENT_ID}/interactions?start_datetime=${startDate}&end_datetime=${endDate}&limit=1000`;
 
       const sarvamRes = await fetch(sarvamUrl, {
         headers: {
           'X-API-Key': API_KEY,
           'Content-Type': 'application/json'
         },
-        next: { revalidate: 15 }
+        cache: 'no-store'
       });
 
       if (sarvamRes.ok) {
@@ -141,7 +141,12 @@ export async function GET(req: NextRequest) {
           let siteVisitTime: string | undefined = undefined;
           let scheduledVisitDate: string | undefined = undefined;
 
-          if (lowerSummary.includes('2 bhk') || lowerSummary.includes('2bhk')) {
+          if (lowerSummary.includes('1 bhk') && lowerSummary.includes('2 bhk')) {
+            // If both mentioned, prioritize the last preference mentioned in conversation
+            const idx1 = lowerSummary.lastIndexOf('1 bhk');
+            const idx2 = lowerSummary.lastIndexOf('2 bhk');
+            bhkPref = idx1 > idx2 ? '1 BHK' : '2 BHK';
+          } else if (lowerSummary.includes('2 bhk') || lowerSummary.includes('2bhk')) {
             bhkPref = '2 BHK';
           } else if (lowerSummary.includes('1 bhk') || lowerSummary.includes('1bhk')) {
             bhkPref = '1 BHK';
@@ -193,6 +198,7 @@ export async function GET(req: NextRequest) {
           // Use our direct proxy endpoint for authenticated audio streaming
           const recordingUrl = `/api/recording?id=${encodeURIComponent(interactionId)}`;
 
+          const isConnected = durationSeconds > 0 && outcome !== 'No Answer';
           const existingIdx = db.calls.findIndex(c => c.id === interactionId || c.interactionId === interactionId);
           const callRecord: SarvamCallRecord = {
             id: interactionId,
@@ -203,7 +209,7 @@ export async function GET(req: NextRequest) {
             customerPhone: fullPhone, // Always FULL unmasked phone
             callDate: item.start_datetime ? new Date(item.start_datetime).toISOString() : new Date().toISOString(),
             durationSeconds,
-            status: 'completed',
+            status: isConnected ? 'completed' : 'no-answer',
             outcome,
             bhkPreference: bhkPref,
             siteVisitDay,
@@ -278,20 +284,27 @@ export async function GET(req: NextRequest) {
 
     saveSarvamDb(db);
 
-    // Compute overall analytics summary
-    const analytics = computeAnalytics(db.calls);
+    // 1. Strictly filter calls for the user-selected period (Today, Yesterday, Last 7 Days, Last 30 Days, All Time)
+    const periodCalls = filterCallsByPeriod(db.calls, period);
 
-    let filteredCalls = db.calls;
+    // 2. Compute analytics dynamically matching the selected time window!
+    const analytics = computeAnalytics(periodCalls);
 
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const currentDay = now.getDay(); // 0 is Sunday, 6 is Saturday
+    let filteredCalls = periodCalls;
+
+    // Use IST today for appointment and date bound calculations
+    const todayIst = getIstDateString();
+    const startOfToday = new Date(`${todayIst}T00:00:00+05:30`).getTime();
+    const nowIst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const currentDay = nowIst.getDay(); // 0 is Sunday, 6 is Saturday
 
     // Handle Category Filter
     if (category === 'Site Visit') {
-      filteredCalls = filteredCalls.filter(c => c.outcome === 'Site Visit');
+      // Upcoming site visits are drawn from db.calls (or periodCalls if specific period requested)
+      const baseSiteVisitCalls = period === 'all' ? db.calls : periodCalls;
+      filteredCalls = baseSiteVisitCalls.filter(c => c.outcome === 'Site Visit');
 
-      // Calculate this weekend bounds (upcoming Sat/Sun relative to today)
+      // Calculate this weekend bounds (upcoming Sat/Sun relative to today in IST)
       let thisWeekendStart: number;
       let thisWeekendEnd: number;
       if (currentDay === 0) {
@@ -327,7 +340,7 @@ export async function GET(req: NextRequest) {
       const in7Days = startOfToday + 7 * 86400000;
       const in30Days = startOfToday + 30 * 86400000;
 
-      // Filter site visits: strictly exclude visits whose date has already passed!
+      // Filter site visits: strictly exclude visits whose appointment date has already passed!
       filteredCalls = filteredCalls.filter(c => {
         const visitDateStr = c.scheduledVisitDate || calculateScheduledDate(c.callDate, c.siteVisitDay, c.siteVisitTime, c.summary);
         if (!visitDateStr) return false;
@@ -359,12 +372,11 @@ export async function GET(req: NextRequest) {
         return tA - tB;
       });
     } else if (category === 'Interested') {
-      filteredCalls = filteredCalls.filter(c => c.outcome === 'Interested');
-      filteredCalls = filterCallsByPeriod(filteredCalls, period);
+      filteredCalls = periodCalls.filter(c => c.outcome === 'Interested');
     } else if (category === 'high_intent') {
       // ONLY Site Visits and Interested Leads (for Home Page)
       // Exclude site visits whose appointment date has already passed
-      filteredCalls = filteredCalls.filter(c => {
+      filteredCalls = periodCalls.filter(c => {
         if (c.outcome === 'Interested') return true;
         if (c.outcome === 'Site Visit') {
           const visitDateStr = c.scheduledVisitDate || calculateScheduledDate(c.callDate, c.siteVisitDay, c.siteVisitTime, c.summary);
@@ -374,13 +386,11 @@ export async function GET(req: NextRequest) {
         }
         return false;
       });
-      filteredCalls = filterCallsByPeriod(filteredCalls, period);
     } else if (category === 'Connected') {
-      filteredCalls = filteredCalls.filter(c => c.outcome === 'Connected');
-      filteredCalls = filterCallsByPeriod(filteredCalls, period);
+      filteredCalls = periodCalls.filter(c => c.outcome === 'Connected');
     } else {
-      // Default to period filtering
-      filteredCalls = filterCallsByPeriod(filteredCalls, period);
+      // Default to all period calls
+      filteredCalls = periodCalls;
     }
 
     const liveCampaign = db.campaigns[0] || null;
@@ -388,6 +398,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       calls: filteredCalls,
       analytics,
+      allTimeAnalytics: computeAnalytics(db.calls),
       liveCampaign,
       totalCallsCount: db.calls.length,
       config: {

@@ -98,6 +98,7 @@ export interface SarvamAnalyticsSummary {
   totalDurationSeconds: number;
   avgDurationSeconds: number;
   connectionRate: number;
+  connectedCallsCount?: number;
   interestedCount: number;
   interestedRate: number;
   siteVisitCount: number;

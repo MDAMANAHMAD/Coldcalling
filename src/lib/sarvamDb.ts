@@ -120,16 +120,31 @@ export function saveSarvamDb(db: SarvamDbSchema): void {
 }
 
 /**
- * Time filter helper: filters call records based on user selected time window
+ * Returns Indian Standard Time (IST) date string: "YYYY-MM-DD"
+ */
+export function getIstDateString(isoDateStr?: string | Date): string {
+  try {
+    const d = isoDateStr ? new Date(isoDateStr) : new Date();
+    if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  } catch {
+    return (typeof isoDateStr === 'string' ? isoDateStr : new Date().toISOString()).slice(0, 10);
+  }
+}
+
+/**
+ * Time filter helper: filters call records based on user selected time window in Indian Standard Time (IST)
  */
 export function filterCallsByPeriod(calls: SarvamCallRecord[], period: TimeFilterPeriod): SarvamCallRecord[] {
   if (period === 'all') return calls;
 
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  // Compute midnight IST for precise Indian timezone filtering
+  const todayIst = getIstDateString(); // e.g. "2026-11-05"
+  const startOfToday = new Date(`${todayIst}T00:00:00+05:30`).getTime();
   const startOfYesterday = startOfToday - 86400000;
-  const start7DaysAgo = now.getTime() - 7 * 86400000;
-  const start30DaysAgo = now.getTime() - 30 * 86400000;
+  const endOfYesterday = startOfToday;
+  const start7DaysAgo = startOfToday - 6 * 86400000; // Past 7 full calendar days
+  const start30DaysAgo = startOfToday - 29 * 86400000; // Past 30 full calendar days
 
   return calls.filter(c => {
     const callTime = new Date(c.callDate).getTime();
@@ -137,7 +152,7 @@ export function filterCallsByPeriod(calls: SarvamCallRecord[], period: TimeFilte
       case 'today':
         return callTime >= startOfToday;
       case 'yesterday':
-        return callTime >= startOfYesterday && callTime < startOfToday;
+        return callTime >= startOfYesterday && callTime < endOfYesterday;
       case 'last_7_days':
         return callTime >= start7DaysAgo;
       case 'last_30_days':
@@ -153,8 +168,8 @@ export function filterCallsByPeriod(calls: SarvamCallRecord[], period: TimeFilte
  */
 export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSummary {
   const totalCalls = calls.length;
-  // A call is considered connected if durationSeconds > 0 or status is completed
-  const connectedCalls = calls.filter(c => (c.durationSeconds && c.durationSeconds > 0) || c.status === 'completed');
+  // A call is considered connected if durationSeconds > 0 and not marked No Answer
+  const connectedCalls = calls.filter(c => (c.durationSeconds && c.durationSeconds > 0) && c.outcome !== 'No Answer');
   const totalDuration = connectedCalls.reduce((acc, c) => acc + (c.durationSeconds || 0), 0);
   const avgDuration = connectedCalls.length > 0 ? Math.round(totalDuration / connectedCalls.length) : 0;
   const connectionRate = totalCalls > 0 ? Math.round((connectedCalls.length / totalCalls) * 100) : 0;
@@ -168,7 +183,7 @@ export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSumm
 
   const trendMap: Record<string, { calls: number; interested: number; siteVisits: number }> = {};
   for (const c of calls) {
-    const dateStr = c.callDate ? c.callDate.slice(0, 10) : 'Unknown';
+    const dateStr = getIstDateString(c.callDate);
     if (!trendMap[dateStr]) {
       trendMap[dateStr] = { calls: 0, interested: 0, siteVisits: 0 };
     }
@@ -177,8 +192,9 @@ export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSumm
     if (c.outcome === 'Site Visit') trendMap[dateStr].siteVisits++;
   }
 
+  // Sort daily trends DESCENDING so the most recent dates (Today / Yesterday) appear at the top!
   const dailyTrends = Object.entries(trendMap)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => b.localeCompare(a))
     .map(([date, counts]) => ({ date, ...counts }));
 
   return {
@@ -186,6 +202,7 @@ export function computeAnalytics(calls: SarvamCallRecord[]): SarvamAnalyticsSumm
     totalDurationSeconds: Math.round(totalDuration),
     avgDurationSeconds: avgDuration,
     connectionRate,
+    connectedCallsCount: connectedCalls.length,
     interestedCount: interestedCalls.length,
     interestedRate: totalCalls > 0 ? Math.round((interestedCalls.length / totalCalls) * 100) : 0,
     siteVisitCount: siteVisitCalls.length,
